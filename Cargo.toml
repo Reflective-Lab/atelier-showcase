@@ -1,0 +1,105 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/atelier-domain",
+    "crates/example-hello-convergence",
+    "crates/example-custom-agent",
+    "crates/example-custom-provider",
+    "crates/example-meeting-scheduler",
+    "crates/example-expense-approval",
+    "crates/example-vendor-selection",
+    "crates/example-loan-application",
+    "crates/example-formation-mixed",
+    "crates/example-live-formation",
+    "crates/example-intent-codec-loop",
+    "crates/example-adaptive-gap-loop",
+    "crates/example-fixed-point-vs-budget",
+    "crates/example-reconciliation-loop",
+]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2024"
+rust-version = "1.94.0"
+license = "MIT"
+repository = "https://github.com/Reflective-Lab/atelier"
+
+[workspace.dependencies]
+# Atelier internal
+atelier-domain = { path = "crates/atelier-domain" }
+
+# Converge platform
+converge-pack = "3.7.6"
+converge-core = "3.7.6"
+converge-kernel = "3.7.6"
+converge-model = "3.7.6"
+converge-policy = "3.7.6"
+converge-provider = "3.7.6"
+converge-provider-api = "3.7.6"
+converge-optimization = "3.7.6"
+converge-domain = "3.7.6"
+converge-runtime = "3.7.6"
+converge-experience = "3.7.6"
+converge-protocol = "3.7.6"
+converge-client = "3.7.6"
+converge-storage = { version = "3.7.6", default-features = false }
+
+# Common
+anyhow = "1"
+async-trait = "0.1"
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+serde_yaml = "0.9"
+tokio = { version = "1.48", features = ["full", "macros", "sync"] }
+futures = "0.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+thiserror = "2"
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1.11", features = ["v4", "serde"] }
+clap = { version = "4.5", features = ["derive", "env", "wrap_help"] }
+reqwest = { version = "0.12", features = ["blocking", "json"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+too_many_lines = "allow"
+similar_names = "allow"
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
+cast_lossless = "allow"
+cast_precision_loss = "allow"
+must_use_candidate = "allow"
+doc_markdown = "allow"
+uninlined_format_args = "allow"
+needless_pass_by_value = "allow"
+unused_self = "allow"
+wildcard_imports = "allow"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+# Track unreleased Converge platform head until each crate ships to crates.io.
+[patch.crates-io]
+converge-pack = { path = "../work/converge/crates/pack" }
+converge-core = { path = "../work/converge/crates/core" }
+converge-kernel = { path = "../work/converge/crates/kernel" }
+converge-model = { path = "../work/converge/crates/model" }
+converge-policy = { path = "../work/converge/crates/policy" }
+converge-provider = { path = "../work/converge/crates/provider" }
+converge-provider-api = { path = "../work/converge/crates/provider-api" }
+converge-optimization = { path = "../work/converge/crates/optimization" }
+converge-runtime = { path = "../work/converge/crates/runtime" }
+converge-experience = { path = "../work/converge/crates/experience" }
+converge-protocol = { path = "../work/converge/crates/protocol" }
+converge-client = { path = "../work/converge/crates/client" }
+converge-storage = { path = "../work/converge/crates/storage" }

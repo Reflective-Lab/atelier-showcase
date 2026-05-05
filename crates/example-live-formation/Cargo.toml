@@ -1,0 +1,17 @@
+[package]
+name = "example-live-formation"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+converge-kernel.workspace = true
+converge-core.workspace = true
+converge-pack.workspace = true
+converge-optimization.workspace = true
+converge-provider.workspace = true
+converge-provider-api.workspace = true
+converge-policy.workspace = true
+async-trait = "0.1"
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }

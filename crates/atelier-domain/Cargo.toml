@@ -1,0 +1,28 @@
+[package]
+name = "atelier-domain"
+version.workspace = true
+publish = false
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license.workspace = true
+description = "Built-in domain packs (trust, money, delivery, data_metrics) and reference domain agents for the Converge platform."
+
+[dependencies]
+converge-core.workspace = true
+converge-policy.workspace = true
+converge-provider.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+tracing.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tracing-test = "0.2"
+dotenv = "0.15"
+proptest = "1.5"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[lints]
+workspace = true

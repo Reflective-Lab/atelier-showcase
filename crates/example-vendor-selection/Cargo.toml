@@ -1,0 +1,15 @@
+[package]
+name = "example-vendor-selection"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+converge-kernel.workspace = true
+converge-pack.workspace = true
+converge-policy.workspace = true
+atelier-domain.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+serde = { workspace = true }
+serde_json = { workspace = true }
