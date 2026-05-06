@@ -11,6 +11,11 @@ Knowledge base for the `atelier` Converge extension.
 
 **Meta:** [[INDEX]] — entity catalog | [[LOG]] — mutation log
 
+## Philosophy
+
+- [[Philosophy/From Instructions to Intent]] — the higher-order frame: why this work exists
+- [[Philosophy/Systems of Outcome]] — how this reshapes SaaS, architecture, and ownership
+
 ## Architecture
 
 - [[Architecture/Surface]] — public crate surface and contract shape

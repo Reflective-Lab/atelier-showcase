@@ -487,7 +487,7 @@ impl converge_pack::Suggestor for BudgetSimulationSuggestor {
                 budget_decision_payload(&budget_decision).to_string(),
                 self.name(),
             )
-            .with_confidence(budget_decision.result.overall_confidence),
+            .with_confidence(budget_decision.result.overall_confidence.as_f64()),
         )
     }
 }

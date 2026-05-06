@@ -11,6 +11,36 @@ seed a new engagement, or prove out an architectural idea.
 This is the workshop. Where Converge says *what's possible*, atelier says
 *here's how it looks*.
 
+## Why this exists
+
+> We are moving from writing explicit instructions upfront to designing
+> systems that can turn intent into decisions at runtime — safely.
+
+The old stack existed because machines needed unambiguous instructions, so
+all ambiguity had to be resolved before execution. That constraint has
+shifted: ambiguity can now be resolved at runtime, under guardrails. The
+work is not to remove structure but to **relocate it** — from hardcoded
+flows into contracts, constraints, evaluation loops, and orchestration.
+
+That relocation is the reason Converge, the extensions, and this repo
+exist. Every worked exemplar in `crates/example-*` is a small proof that
+the relocation works for a concrete outcome — expense approval, vendor
+selection, loan underwriting, scheduling — without giving up
+correctness or auditability.
+
+It also reframes what we are selling and how we organize to build it.
+SaaS shifts from *tools that wrap workflows* to *systems that deliver
+outcomes under constraints*; engineering shifts from feature teams around
+UIs to substrate, domain, and adaptive-surface layers with different
+change rates and different ownership.
+
+For the full framing:
+
+- [`kb/Philosophy/From Instructions to Intent`](kb/Philosophy/From%20Instructions%20to%20Intent.md)
+  — the higher-order frame
+- [`kb/Philosophy/Systems of Outcome`](kb/Philosophy/Systems%20of%20Outcome.md)
+  — implications for SaaS, architecture, and ownership
+
 ## Layout
 
 - `crates/atelier-domain` — built-in domain packs (trust, money, delivery,
