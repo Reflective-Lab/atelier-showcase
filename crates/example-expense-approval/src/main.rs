@@ -9,13 +9,13 @@
 //! This is a Converge kernel fixture, not the canonical expense workflow.
 //! Reusable spend-approval semantics live downstream in Organism domain packs.
 
+use arbiter::PolicyEngine;
 use converge_kernel::{
     AgentEffect, AuthorityLevel, Context, ContextKey, ContextState, Engine, EngineHitlPolicy,
     FlowAction, FlowGateAuthorizer, FlowGateContext, FlowGateInput, FlowGateOutcome,
     FlowGatePrincipal, FlowGateResource, FlowPhase, GateDecision, ProposedFact, RunResult,
     Suggestor, TimeoutAction, TimeoutPolicy,
 };
-use converge_policy::PolicyEngine;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -85,7 +85,7 @@ fn load_expense_policy_engine() -> Arc<dyn FlowGateAuthorizer> {
     let policy_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../crates/policy/policies/expense_approval.cedar");
     let policy = std::fs::read_to_string(policy_path)
-        .expect("expense approval Cedar policy should exist in converge-policy");
+        .expect("expense approval Cedar policy should exist in arbiter");
     Arc::new(PolicyEngine::from_policy_str(&policy).expect("expense approval policy should parse"))
 }
 

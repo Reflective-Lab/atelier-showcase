@@ -25,7 +25,7 @@ use converge_kernel::{
         ProviderSelectionSuggestor, SuggestorCapability, SuggestorProfile, SuggestorRole,
     },
 };
-use converge_provider_api::{Backend, BackendKind};
+use converge_provider::{Backend, BackendKind};
 use serde::{Deserialize, Serialize};
 
 const SPEC_PREFIX: &str = "intent-spec:";

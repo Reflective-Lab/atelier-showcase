@@ -7,7 +7,7 @@ use converge_kernel::formation::{
     FormationTemplateQuery, ProfileSnapshot, SuggestorCapability, SuggestorRole,
 };
 use converge_kernel::{AgentEffect, Context, ContextKey, ProposedFact, Suggestor};
-use converge_provider_api::{
+use converge_provider::{
     BackendKind, BackendRequirements, Capability, ComplianceLevel, CostClass, DataSovereignty,
     LatencyClass,
 };

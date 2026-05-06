@@ -9,12 +9,12 @@
 //!
 //! All converge in ONE Engine run. Same contract, same governance.
 
+use arbiter::{engine::PolicyEngine, suggestor::PolicyGateSuggestor};
 use converge_kernel::{
     AgentEffect, Budget, Context, ContextKey, ContextState, Engine, ProposedFact, Suggestor,
 };
 use converge_optimization::packs::budget_allocation::BudgetAllocationPack;
 use converge_pack::PackSuggestor;
-use converge_policy::{engine::PolicyEngine, suggestor::PolicyGateSuggestor};
 use std::sync::Arc;
 
 // ── Seed Agent ────────────────────────────────────────────────────────

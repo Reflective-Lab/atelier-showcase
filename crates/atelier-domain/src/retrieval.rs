@@ -36,9 +36,9 @@
 //!
 //! ```ignore
 //! use atelier_domain::retrieval::{RetrievalAgent, RetrievalConfig};
-//! use converge_provider::vector::InMemoryVectorStore;
-//! use converge_provider::embedding::QwenVLEmbedding;
-//! use converge_provider::reranker::QwenVLReranker;
+//! use manifold::vector::InMemoryVectorStore;
+//! use manifold::embedding::QwenVLEmbedding;
+//! use manifold::reranker::QwenVLReranker;
 //! use std::sync::Arc;
 //!
 //! // Create components
@@ -574,7 +574,77 @@ impl RetrievalQuery {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use converge_provider::vector::InMemoryVectorStore;
+    use converge_core::capability::VectorMatch;
+    use std::sync::RwLock;
+
+    struct TestVectorStore {
+        records: RwLock<Vec<VectorRecord>>,
+    }
+
+    impl TestVectorStore {
+        fn new() -> Self {
+            Self {
+                records: RwLock::new(Vec::new()),
+            }
+        }
+    }
+
+    impl VectorRecall for TestVectorStore {
+        fn name(&self) -> &str {
+            "test-vector-store"
+        }
+
+        fn upsert(&self, record: &VectorRecord) -> Result<(), CapabilityError> {
+            let mut records = self
+                .records
+                .write()
+                .expect("test vector store lock poisoned");
+            records.retain(|existing| existing.id != record.id);
+            records.push(record.clone());
+            Ok(())
+        }
+
+        fn query(&self, query: &VectorQuery) -> Result<Vec<VectorMatch>, CapabilityError> {
+            let mut matches: Vec<VectorMatch> = self
+                .records
+                .read()
+                .expect("test vector store lock poisoned")
+                .iter()
+                .map(|record| VectorMatch {
+                    id: record.id.clone(),
+                    score: 1.0,
+                    payload: record.payload.clone(),
+                })
+                .collect();
+            matches.truncate(query.top_k);
+            Ok(matches)
+        }
+
+        fn delete(&self, id: &str) -> Result<(), CapabilityError> {
+            let mut records = self
+                .records
+                .write()
+                .expect("test vector store lock poisoned");
+            records.retain(|record| record.id != id);
+            Ok(())
+        }
+
+        fn clear(&self) -> Result<(), CapabilityError> {
+            self.records
+                .write()
+                .expect("test vector store lock poisoned")
+                .clear();
+            Ok(())
+        }
+
+        fn count(&self) -> Result<usize, CapabilityError> {
+            Ok(self
+                .records
+                .read()
+                .expect("test vector store lock poisoned")
+                .len())
+        }
+    }
 
     /// Mock embedder for testing.
     struct MockEmbedder;
@@ -673,7 +743,7 @@ mod tests {
     #[test]
     fn index_and_retrieve() {
         let embedder = Arc::new(MockEmbedder);
-        let store = Arc::new(InMemoryVectorStore::new());
+        let store = Arc::new(TestVectorStore::new());
         let reranker = Arc::new(MockReranker);
 
         let agent = RetrievalAgent::new(embedder, store)
@@ -713,7 +783,7 @@ mod tests {
     #[test]
     fn retrieve_as_proposals() {
         let embedder = Arc::new(MockEmbedder);
-        let store = Arc::new(InMemoryVectorStore::new());
+        let store = Arc::new(TestVectorStore::new());
         let reranker = Arc::new(MockReranker);
 
         let agent = RetrievalAgent::new(embedder, store)
@@ -740,7 +810,7 @@ mod tests {
     #[test]
     fn without_reranker() {
         let embedder = Arc::new(MockEmbedder);
-        let store = Arc::new(InMemoryVectorStore::new());
+        let store = Arc::new(TestVectorStore::new());
 
         // Create agent without reranker
         let agent = RetrievalAgent::new(embedder, store).with_config(RetrievalConfig {
@@ -764,7 +834,7 @@ mod tests {
     #[test]
     fn min_score_filter() {
         let embedder = Arc::new(MockEmbedder);
-        let store = Arc::new(InMemoryVectorStore::new());
+        let store = Arc::new(TestVectorStore::new());
         let reranker = Arc::new(MockReranker);
 
         let agent = RetrievalAgent::new(embedder, store)

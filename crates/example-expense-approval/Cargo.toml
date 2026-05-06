@@ -7,7 +7,7 @@ publish = false
 [dependencies]
 converge-kernel.workspace = true
 converge-pack.workspace = true
-converge-policy.workspace = true
+arbiter.workspace = true
 atelier-domain.workspace = true
 async-trait.workspace = true
 tokio.workspace = true

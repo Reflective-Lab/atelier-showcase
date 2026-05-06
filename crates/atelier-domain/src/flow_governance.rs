@@ -1,10 +1,10 @@
 use std::sync::Arc;
 
+use arbiter::{FLOW_GOVERNANCE_POLICY, PolicyEngine};
 use converge_core::{
     AuthorityLevel, Context, ContextKey, FlowAction, FlowGateAuthorizer, FlowGateContext,
     FlowGateInput, FlowGatePrincipal, FlowGateResource, FlowPhase,
 };
-use converge_policy::{FLOW_GOVERNANCE_POLICY, PolicyEngine};
 
 pub(crate) fn default_flow_authorizer() -> Arc<dyn FlowGateAuthorizer> {
     Arc::new(

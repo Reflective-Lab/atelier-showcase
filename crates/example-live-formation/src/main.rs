@@ -35,7 +35,7 @@ use converge_kernel::{
         ProviderSelectionSuggestor, SuggestorCapability, SuggestorRole,
     },
 };
-use converge_provider_api::{Backend, BackendKind, Capability};
+use converge_provider::{Backend, BackendKind, Capability};
 
 const MARKET_ENTRY_TEMPLATE_ID: &str = "market-entry";
 

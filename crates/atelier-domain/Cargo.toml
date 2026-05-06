@@ -14,7 +14,7 @@ path = "src/lib.rs"
 
 [dependencies]
 converge-core.workspace = true
-converge-policy.workspace = true
+arbiter.workspace = true
 converge-provider.workspace = true
 async-trait.workspace = true
 futures.workspace = true
