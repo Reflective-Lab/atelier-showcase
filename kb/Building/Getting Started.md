@@ -5,8 +5,8 @@ source: mixed
 # Getting Started
 
 ```bash
-git clone https://github.com/Reflective-Lab/atelier.git
-cd atelier
+git clone https://github.com/Reflective-Lab/atelier-showcase.git atelier-showcase
+cd atelier-showcase
 just                # check + lint + test
 ```
 

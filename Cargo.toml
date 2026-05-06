@@ -23,7 +23,7 @@ version = "1.0.0"
 edition = "2024"
 rust-version = "1.94.0"
 license = "MIT"
-repository = "https://github.com/Reflective-Lab/atelier"
+repository = "https://github.com/Reflective-Lab/atelier-showcase"
 
 [workspace.dependencies]
 # Atelier internal
@@ -34,7 +34,7 @@ converge-pack = "3.8.1"
 converge-core = "3.8.1"
 converge-kernel = "3.8.1"
 converge-model = "3.8.1"
-converge-policy = { package = "arbiter", path = "../extensions/arbiter/crates/arbiter" }
+converge-policy = { package = "arbiter", path = "../arbiter-policy/crates/arbiter" }
 converge-provider = "3.8.1"
 converge-provider-api = "3.8.1"
 converge-optimization = "3.8.1"
@@ -94,4 +94,4 @@ codegen-units = 1
 
 # Local Organism development override.
 [patch.crates-io]
-organism-pack = { path = "../work/organism/crates/pack" }
+organism-pack = { path = "../../work/organism/crates/pack" }

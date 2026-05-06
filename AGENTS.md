@@ -16,7 +16,7 @@ versioning) before tagging.
 ## Topology
 
 - **Foundation:** `~/dev/work/converge`
-- **Sibling extensions:** `~/dev/extensions/{atelier, mnemos, prism, arbiter, embassy, ferrox, manifold}`
+- **Sibling checkouts:** `~/dev/extensions/{atelier-showcase, arbiter-policy, embassy-ports, ferrox-solvers, manifold-adapters, mnemos-knowledge, prism-analytics}`
 - **Templates:** `~/dev/templates/converge-extension` (this scaffold)
 
 The dependency arrow is one-way: foundation contracts ← extensions ← products.

@@ -8,7 +8,7 @@
 
 ## Reporting a Vulnerability
 
-Report through [GitHub Security Advisories](https://github.com/Reflective-Lab/atelier/security/advisories/new) or by emailing **Kenneth Pernyer** at [kenneth@reflective.se](mailto:kenneth@reflective.se).
+Report through [GitHub Security Advisories](https://github.com/Reflective-Lab/atelier-showcase/security/advisories/new) or by emailing **Kenneth Pernyer** at [kenneth@reflective.se](mailto:kenneth@reflective.se).
 
 You should receive a response within 48 hours.
 
