@@ -34,7 +34,7 @@ converge-pack = "3.8.1"
 converge-core = "3.8.1"
 converge-kernel = "3.8.1"
 converge-model = "3.8.1"
-arbiter = { package = "converge-arbiter-policy", path = "../arbiter-policy/crates/arbiter" }
+arbiter = { package = "converge-arbiter-policy", path = "../arbiter-policy/crates/arbiter", version = "1.0.0" }
 converge-provider = "3.8.1"
 converge-optimization = "3.8.1"
 converge-runtime = "3.8.1"
