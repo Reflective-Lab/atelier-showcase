@@ -1,5 +1,5 @@
 [package]
-name = "atelier-domain"
+name = "converge-atelier-domain"
 version.workspace = true
 publish = false
 edition.workspace = true
@@ -7,6 +7,10 @@ rust-version.workspace = true
 repository.workspace = true
 license.workspace = true
 description = "Built-in domain packs (trust, money, delivery, data_metrics) and reference domain agents for the Converge platform."
+
+[lib]
+name = "atelier_domain"
+path = "src/lib.rs"
 
 [dependencies]
 converge-core.workspace = true

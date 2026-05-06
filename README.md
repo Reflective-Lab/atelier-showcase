@@ -1,5 +1,14 @@
 # atelier
 
+[![CI](https://github.com/Reflective-Lab/atelier-showcase/actions/workflows/ci.yml/badge.svg)](https://github.com/Reflective-Lab/atelier-showcase/actions/workflows/ci.yml)
+[![Security](https://github.com/Reflective-Lab/atelier-showcase/actions/workflows/security.yml/badge.svg)](https://github.com/Reflective-Lab/atelier-showcase/actions/workflows/security.yml)
+[![Crates.io](https://img.shields.io/crates/v/converge-atelier-domain.svg)](https://crates.io/crates/converge-atelier-domain)
+[![docs.rs](https://docs.rs/converge-atelier-domain/badge.svg)](https://docs.rs/converge-atelier-domain)
+[![dependency status](https://deps.rs/repo/github/Reflective-Lab/atelier-showcase/status.svg)](https://deps.rs/repo/github/Reflective-Lab/atelier-showcase)
+![MSRV](https://img.shields.io/badge/MSRV-1.94.0-blue)
+<img alt="gitleaks badge" src="https://img.shields.io/badge/protected%20by-gitleaks-blue">
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Worked exemplars for the Converge platform — domain packs and runnable examples
 that demonstrate what the platform makes possible.
 
@@ -10,6 +19,9 @@ seed a new engagement, or prove out an architectural idea.
 
 This is the workshop. Where Converge says *what's possible*, atelier says
 *here's how it looks*.
+
+Cargo package: `converge-atelier-domain`. Rust library name remains
+`atelier_domain`.
 
 ## Why this exists
 
@@ -62,8 +74,8 @@ for the Reflective Labs ecosystem.
 ## Status
 
 Extracted from `converge/crates/domain` and `converge/examples/` on 2026-05-05
-as part of the v3.8 foundation cleanup (ADR-008). Pre-1.0 — no published
-versions yet.
+as part of the v3.8 foundation cleanup (ADR-008). The workspace is versioned
+from 1.0.0.
 
 ## Build
 

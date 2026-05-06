@@ -4,6 +4,11 @@ All notable changes to atelier will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+
+- Cargo package renamed from `atelier-domain` to `converge-atelier-domain`;
+  Rust library name remains `atelier_domain`.
+
 ## [1.0.0] - 2026-05-05
 
 ### Added
