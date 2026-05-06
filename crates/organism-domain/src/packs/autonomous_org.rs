@@ -262,7 +262,10 @@ impl converge_pack::Suggestor for ApprovalRoutingSuggestor {
 
     async fn execute(&self, ctx: &dyn converge_pack::Context) -> converge_pack::AgentEffect {
         let signals = ctx.get(converge_pack::ContextKey::Signals);
-        let Some(expense_fact) = signals.iter().find(|fact| fact.id().as_str() == "expense:parsed") else {
+        let Some(expense_fact) = signals
+            .iter()
+            .find(|fact| fact.id().as_str() == "expense:parsed")
+        else {
             return converge_pack::AgentEffect::empty();
         };
 
@@ -328,7 +331,10 @@ impl converge_pack::Suggestor for ApprovalPolicySkepticSuggestor {
 
     async fn execute(&self, ctx: &dyn converge_pack::Context) -> converge_pack::AgentEffect {
         let strategies = ctx.get(converge_pack::ContextKey::Strategies);
-        let Some(plan_fact) = strategies.iter().find(|fact| fact.id().as_str() == "approval:plan") else {
+        let Some(plan_fact) = strategies
+            .iter()
+            .find(|fact| fact.id().as_str() == "approval:plan")
+        else {
             return converge_pack::AgentEffect::empty();
         };
         let plan: serde_json::Value = serde_json::from_str(plan_fact.content()).unwrap_or_default();
@@ -445,7 +451,10 @@ impl converge_pack::Suggestor for BudgetSimulationSuggestor {
 
     async fn execute(&self, ctx: &dyn converge_pack::Context) -> converge_pack::AgentEffect {
         let strategies = ctx.get(converge_pack::ContextKey::Strategies);
-        let Some(plan_fact) = strategies.iter().find(|fact| fact.id().as_str() == "approval:plan") else {
+        let Some(plan_fact) = strategies
+            .iter()
+            .find(|fact| fact.id().as_str() == "approval:plan")
+        else {
             return converge_pack::AgentEffect::empty();
         };
         let plan: serde_json::Value = serde_json::from_str(plan_fact.content()).unwrap_or_default();
@@ -650,6 +659,10 @@ mod tests {
             json.get("feasible").and_then(serde_json::Value::as_bool),
             Some(false)
         );
-        assert!(!signals.iter().any(|fact| fact.id().as_str() == "expense:parsed"));
+        assert!(
+            !signals
+                .iter()
+                .any(|fact| fact.id().as_str() == "expense:parsed")
+        );
     }
 }

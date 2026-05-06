@@ -25,16 +25,7 @@ cargo test --workspace
 cargo clippy --workspace -- -D warnings
 ```
 
-While the Converge platform is unreleased, this workspace patches the
-relevant crates to local checkouts via `[patch.crates-io]`. You need the
-sibling repos checked out:
-
-```
-~/dev/
-├── work/converge/
-├── extensions/{mnemos,prism,manifold,arbiter}/
-└── atelier/   <- you are here
-```
+Converge platform crates resolve from crates.io. Keep local `[patch.crates-io]` overrides out of this repo unless a task explicitly requires testing unpublished foundation changes.
 
 ## License
 

@@ -30,20 +30,20 @@ repository = "https://github.com/Reflective-Lab/atelier"
 atelier-domain = { path = "crates/atelier-domain" }
 
 # Converge platform
-converge-pack = "3.7.6"
-converge-core = "3.7.6"
-converge-kernel = "3.7.6"
-converge-model = "3.7.6"
+converge-pack = "3.8.1"
+converge-core = "3.8.1"
+converge-kernel = "3.8.1"
+converge-model = "3.8.1"
 converge-policy = { package = "arbiter", path = "../extensions/arbiter/crates/arbiter" }
-converge-provider = "3.7.6"
-converge-provider-api = "3.7.6"
-converge-optimization = "3.7.6"
-converge-domain = "3.7.6"
-converge-runtime = "3.7.6"
-converge-experience = "3.7.6"
-converge-protocol = "3.7.6"
-converge-client = "3.7.6"
-converge-storage = { version = "3.7.6", default-features = false }
+converge-provider = "3.8.1"
+converge-provider-api = "3.8.1"
+converge-optimization = "3.8.1"
+converge-domain = "3.8.1"
+converge-runtime = "3.8.1"
+converge-experience = "3.8.1"
+converge-protocol = "3.8.1"
+converge-client = "3.8.1"
+converge-storage = { version = "3.8.1", default-features = false }
 
 # Organism platform (also patched while unreleased)
 organism-pack = "1.5.0"
@@ -92,18 +92,6 @@ opt-level = 3
 lto = true
 codegen-units = 1
 
-# Track unreleased Converge platform head until each crate ships to crates.io.
+# Local Organism development override.
 [patch.crates-io]
-converge-pack = { path = "../work/converge/crates/pack" }
-converge-core = { path = "../work/converge/crates/core" }
-converge-kernel = { path = "../work/converge/crates/kernel" }
-converge-model = { path = "../work/converge/crates/model" }
-converge-provider = { path = "../work/converge/crates/provider" }
-converge-provider-api = { path = "../work/converge/crates/provider-api" }
-converge-optimization = { path = "../work/converge/crates/optimization" }
-converge-runtime = { path = "../work/converge/crates/runtime" }
-converge-experience = { path = "../work/converge/crates/experience" }
-converge-protocol = { path = "../work/converge/crates/protocol" }
-converge-client = { path = "../work/converge/crates/client" }
-converge-storage = { path = "../work/converge/crates/storage" }
 organism-pack = { path = "../work/organism/crates/pack" }

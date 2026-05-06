@@ -41,9 +41,7 @@ versions yet.
 cargo check --workspace
 ```
 
-While Converge platform crates are unreleased, this workspace patches them to
-the local checkout via `[patch.crates-io]`. You need converge checked out at
-`~/dev/work/converge`.
+Converge platform crates resolve from crates.io. Do not add local `[patch.crates-io]` overrides unless a task explicitly requires testing unpublished foundation changes.
 
 ## License
 
