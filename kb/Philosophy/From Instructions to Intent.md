@@ -102,7 +102,7 @@ build the substrate it needs:
 - **Loops** (intent-codec, adaptive-gap, fixed-point, reconciliation)
   so ambiguity is resolved through bounded iteration, not upfront design.
 
-Each runnable example in `crates/example-*` is a small proof that the
+Each runnable example in `tutorials/` and `scenarios/` is a small proof that the
 relocation works for a concrete scenario.
 
 ## What this guides

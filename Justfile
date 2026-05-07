@@ -101,7 +101,7 @@ coverage:
     set -euo pipefail
     out_dir="target/coverage"
     mkdir -p "${out_dir}/html"
-    ignore_re='(^|/)(tests|benches|examples)/|/crates/example-(custom-agent|custom-provider|expense-approval|formation-mixed|hello-convergence|live-formation|loan-application|meeting-scheduler|vendor-selection)/'
+    ignore_re='(^|/)(tests|benches|tutorials|scenarios)/'
     common=(--workspace --lib --tests --ignore-filename-regex "${ignore_re}")
     cargo llvm-cov clean --workspace
     rm -rf target/tests/trybuild

@@ -1,7 +1,29 @@
 # Agents Entrypoint
 
-This is a Converge extension. It depends on stable Converge contracts and
-ships an implementation downstream of the foundation.
+This is the **Converge showcase**: a tutorial spine plus a scenario
+gallery for builders new to Converge and the wider stack.
+
+The repo wears two reader-facing hats and one library-facing hat:
+
+- `tutorials/01-…` through `tutorials/19-…` — the numbered learning
+  spine. A Rust dev who knows nothing about Converge walks 01 → 19 and
+  ends understanding the stack. Tutorials 01–10 stay inside Converge
+  primitives; from 11 onward they pull in the organism layer.
+- `scenarios/` — full end-to-end domain demos. Browsable, no required
+  order. Today: expense approval, loan application, vendor selection,
+  meeting scheduling.
+- `truths/` — reserved slot for the domain-expert track at the
+  `axiom-truth` / `helms` layer (Truths and Gherkin specifications).
+  Empty today; the directory holds the position so contributions land
+  here rather than scattering across `tutorials/` or `scenarios/`.
+
+The publishable libraries live in `crates/`: `atelier-domain` (built-in
+domain packs and reference agents) and `organism-domain` (organisational
+packs and blueprints). Everything in `tutorials/` and `scenarios/` is
+`publish = false`.
+
+The dependency arrow stays one-way: foundation contracts ← extensions ←
+products ← showcase.
 
 ## Standards
 
@@ -17,9 +39,10 @@ versioning) before tagging.
 
 - **Foundation:** `~/dev/work/converge`
 - **Sibling checkouts:** `~/dev/extensions/{atelier-showcase, arbiter-policy, embassy-ports, ferrox-solvers, manifold-adapters, mnemos-knowledge, prism-analytics}`
+- **Organism platform:** `~/dev/work/organism` (path-patched into this
+  workspace via `[patch.crates-io]` while organism crates remain
+  unreleased)
 - **Templates:** `~/dev/templates/converge-extension` (this scaffold)
-
-The dependency arrow is one-way: foundation contracts ← extensions ← products.
 
 ## The five-command release ritual
 
@@ -56,3 +79,7 @@ Every kb/ page carries `source:` frontmatter (`human` / `llm` / `mixed`).
   reusable library and mark the shell `publish = false`.
 - Not exempt from the checklist. The bar applies to small repos and large
   repos equally.
+- Not a dumping ground for orphan example code. New examples must land
+  in `tutorials/` (with a number that fits the reading order) or
+  `scenarios/` (named by domain), and must compile against the current
+  Converge version.

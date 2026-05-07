@@ -9,19 +9,26 @@
 <img alt="gitleaks badge" src="https://img.shields.io/badge/protected%20by-gitleaks-blue">
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Worked exemplars for the Converge platform — domain packs and runnable examples
-that demonstrate what the platform makes possible.
+The Converge **showcase** — a numbered tutorial spine plus a gallery of
+end-to-end domain demos for builders new to Converge and the wider stack.
 
-`atelier` is a **showcase** repo, not an extension. It depends on Converge
-contracts (and on extension repos like `mnemos`, `prism`, `manifold` where
-relevant) to demonstrate end-to-end patterns. Use it to learn the platform,
-seed a new engagement, or prove out an architectural idea.
+Where Converge says *what's possible*, atelier says *here's how it looks*.
+Use it to learn the platform, seed a new engagement, or prove out an
+architectural idea.
 
-This is the workshop. Where Converge says *what's possible*, atelier says
-*here's how it looks*.
+## Where to start
 
-Cargo package: `converge-atelier-domain`. Rust library name remains
-`atelier_domain`.
+- **New to Converge?** Walk `tutorials/` in order, starting at
+  [`tutorials/01-hello-convergence`](tutorials/01-hello-convergence). Each
+  step builds on the last; the spine carries you from a minimal Converge
+  program to organism-layer collaboration patterns.
+- **Want a full domain demo?** Browse [`scenarios/`](scenarios) — pick by
+  interest. No required order.
+- **Domain expert (Truths / Gherkins)?** That track lives in
+  [`truths/`](truths). Reserved slot, contributions welcome.
+
+Cargo package for the core domain library: `converge-atelier-domain`.
+Rust library name remains `atelier_domain`.
 
 ## Why this exists
 
@@ -35,10 +42,10 @@ work is not to remove structure but to **relocate it** — from hardcoded
 flows into contracts, constraints, evaluation loops, and orchestration.
 
 That relocation is the reason Converge, the extensions, and this repo
-exist. Every worked exemplar in `crates/example-*` is a small proof that
-the relocation works for a concrete outcome — expense approval, vendor
-selection, loan underwriting, scheduling — without giving up
-correctness or auditability.
+exist. Every worked exemplar in `tutorials/` and `scenarios/` is a small
+proof that the relocation works for a concrete outcome — expense
+approval, vendor selection, loan underwriting, scheduling — without
+giving up correctness or auditability.
 
 It also reframes what we are selling and how we organize to build it.
 SaaS shifts from *tools that wrap workflows* to *systems that deliver
@@ -55,21 +62,18 @@ For the full framing:
 
 ## Layout
 
-- `crates/atelier-domain` — built-in domain packs (trust, money, delivery,
-  data_metrics) and reference domain agents
-- `crates/example-*` — runnable demonstrations:
-  - `hello-convergence`, `custom-agent`, `custom-provider`
-  - `meeting-scheduler`, `expense-approval`, `vendor-selection`,
-    `loan-application`
-  - `formation-mixed`, `live-formation`
-  - `intent-codec-loop`, `adaptive-gap-loop`, `fixed-point-vs-budget`,
-    `reconciliation-loop`
-
-## Future contents
-
-Future releases will gather worked exemplars from `organism` and `axiom`
-alongside the converge-side material. Atelier is the cross-platform showcase
-for the Reflective Labs ecosystem.
+- `crates/` — publishable libraries
+  - `atelier-domain` — built-in domain packs (trust, money, delivery,
+    data_metrics) and reference domain agents
+  - `organism-domain` — organisational domain packs and blueprints
+- `tutorials/` — the numbered learning spine. Read 01 → 19 to learn the
+  stack. The 10/11 break is the point where the converge-only tutorials
+  hand off to the organism layer.
+- `scenarios/` — full end-to-end domain demos. Browse by interest:
+  expense approval, loan application, vendor selection, meeting
+  scheduling.
+- `truths/` — reserved slot for the domain-expert track
+  (axiom-truth / helms layer).
 
 ## Status
 
