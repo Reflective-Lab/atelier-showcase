@@ -428,3 +428,223 @@ where
 
     converge_pack::AgentEffect::with_proposals(evaluations)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        AGENTS, INVARIANTS, PROFILE, VendorComplianceEvaluatorSuggestor, VendorConsensusSuggestor,
+        VendorDataSuggestor, VendorPriceEvaluatorSuggestor, VendorRiskEvaluatorSuggestor,
+        VendorTimelineEvaluatorSuggestor,
+    };
+    use converge_kernel::{ContextKey, ContextState, Engine};
+
+    fn rfp(vendors: serde_json::Value) -> String {
+        serde_json::json!({ "vendors": vendors }).to_string()
+    }
+
+    fn score_for(facts: &[converge_pack::ContextFact], id: &str) -> f64 {
+        let fact = facts
+            .iter()
+            .find(|f| f.id().as_str() == id)
+            .unwrap_or_else(|| panic!("missing evaluation {id}"));
+        let json: serde_json::Value =
+            serde_json::from_str(fact.content()).expect("evaluation json");
+        json.get("score")
+            .and_then(serde_json::Value::as_f64)
+            .expect("score field")
+    }
+
+    #[test]
+    fn metadata_constants_are_populated() {
+        assert!(!AGENTS.is_empty());
+        assert!(!INVARIANTS.is_empty());
+        assert!(!PROFILE.entities.is_empty());
+        assert!(PROFILE.requires_hitl);
+        assert!(!PROFILE.uses_llm);
+    }
+
+    #[tokio::test]
+    async fn vendor_data_parses_rfp_seed() {
+        let mut engine = Engine::new();
+        engine.register_suggestor(VendorDataSuggestor);
+
+        let mut ctx = ContextState::new();
+        let _ = ctx.add_input(
+            ContextKey::Seeds,
+            "rfp",
+            rfp(serde_json::json!([
+                { "id": "alpha", "price": 5_000.0 },
+                { "id": "bravo", "price": 50_000.0 },
+            ])),
+        );
+
+        let result = engine.run(ctx).await.expect("converge");
+        let signals = result.context.get(ContextKey::Signals);
+        assert_eq!(signals.len(), 2);
+        assert!(signals.iter().any(|f| f.id().as_str() == "vendor:alpha"));
+        assert!(signals.iter().any(|f| f.id().as_str() == "vendor:bravo"));
+    }
+
+    #[tokio::test]
+    async fn vendor_data_with_no_vendors_emits_nothing() {
+        let mut engine = Engine::new();
+        engine.register_suggestor(VendorDataSuggestor);
+
+        let mut ctx = ContextState::new();
+        let _ = ctx.add_input(ContextKey::Seeds, "rfp", "{}".to_string());
+
+        let result = engine.run(ctx).await.expect("converge");
+        assert!(result.context.get(ContextKey::Signals).is_empty());
+    }
+
+    #[tokio::test]
+    async fn price_evaluator_buckets_match_thresholds() {
+        let mut engine = Engine::new();
+        engine.register_suggestor(VendorDataSuggestor);
+        engine.register_suggestor(VendorPriceEvaluatorSuggestor);
+
+        let mut ctx = ContextState::new();
+        let _ = ctx.add_input(
+            ContextKey::Seeds,
+            "rfp",
+            rfp(serde_json::json!([
+                { "id": "cheap",  "price": 5_000.0 },
+                { "id": "mid",    "price": 20_000.0 },
+                { "id": "high",   "price": 40_000.0 },
+                { "id": "lux",    "price": 100_000.0 },
+            ])),
+        );
+
+        let result = engine.run(ctx).await.expect("converge");
+        let evals = result.context.get(ContextKey::Evaluations);
+        assert!((score_for(evals, "price:cheap") - 1.0).abs() < 1e-9);
+        assert!((score_for(evals, "price:mid") - 0.7).abs() < 1e-9);
+        assert!((score_for(evals, "price:high") - 0.4).abs() < 1e-9);
+        assert!((score_for(evals, "price:lux") - 0.1).abs() < 1e-9);
+    }
+
+    #[tokio::test]
+    async fn risk_evaluator_buckets_match_thresholds() {
+        let mut engine = Engine::new();
+        engine.register_suggestor(VendorDataSuggestor);
+        engine.register_suggestor(VendorRiskEvaluatorSuggestor);
+
+        let mut ctx = ContextState::new();
+        let _ = ctx.add_input(
+            ContextKey::Seeds,
+            "rfp",
+            rfp(serde_json::json!([
+                { "id": "established", "years_in_business": 15 },
+                { "id": "mature",      "years_in_business": 7 },
+                { "id": "growing",     "years_in_business": 3 },
+                { "id": "startup",     "years_in_business": 1 },
+            ])),
+        );
+
+        let result = engine.run(ctx).await.expect("converge");
+        let evals = result.context.get(ContextKey::Evaluations);
+        assert!((score_for(evals, "risk:established") - 1.0).abs() < 1e-9);
+        assert!((score_for(evals, "risk:mature") - 0.7).abs() < 1e-9);
+        assert!((score_for(evals, "risk:growing") - 0.4).abs() < 1e-9);
+        assert!((score_for(evals, "risk:startup") - 0.1).abs() < 1e-9);
+    }
+
+    #[tokio::test]
+    async fn timeline_evaluator_buckets_match_thresholds() {
+        let mut engine = Engine::new();
+        engine.register_suggestor(VendorDataSuggestor);
+        engine.register_suggestor(VendorTimelineEvaluatorSuggestor);
+
+        let mut ctx = ContextState::new();
+        let _ = ctx.add_input(
+            ContextKey::Seeds,
+            "rfp",
+            rfp(serde_json::json!([
+                { "id": "fast",    "delivery_weeks": 3 },
+                { "id": "med",     "delivery_weeks": 8 },
+                { "id": "slow",    "delivery_weeks": 12 },
+                { "id": "glacial", "delivery_weeks": 26 },
+            ])),
+        );
+
+        let result = engine.run(ctx).await.expect("converge");
+        let evals = result.context.get(ContextKey::Evaluations);
+        assert!((score_for(evals, "timeline:fast") - 1.0).abs() < 1e-9);
+        assert!((score_for(evals, "timeline:med") - 0.8).abs() < 1e-9);
+        assert!((score_for(evals, "timeline:slow") - 0.5).abs() < 1e-9);
+        assert!((score_for(evals, "timeline:glacial") - 0.2).abs() < 1e-9);
+    }
+
+    #[tokio::test]
+    async fn compliance_evaluator_pass_fail() {
+        let mut engine = Engine::new();
+        engine.register_suggestor(VendorDataSuggestor);
+        engine.register_suggestor(VendorComplianceEvaluatorSuggestor);
+
+        let mut ctx = ContextState::new();
+        let _ = ctx.add_input(
+            ContextKey::Seeds,
+            "rfp",
+            rfp(serde_json::json!([
+                { "id": "good", "compliant": true },
+                { "id": "bad",  "compliant": false },
+            ])),
+        );
+
+        let result = engine.run(ctx).await.expect("converge");
+        let evals = result.context.get(ContextKey::Evaluations);
+        assert!((score_for(evals, "compliance:good") - 1.0).abs() < 1e-9);
+        assert!((score_for(evals, "compliance:bad") - 0.0).abs() < 1e-9);
+    }
+
+    #[tokio::test]
+    async fn full_pipeline_ranks_best_vendor_first() {
+        let mut engine = Engine::new();
+        engine.register_suggestor(VendorDataSuggestor);
+        engine.register_suggestor(VendorPriceEvaluatorSuggestor);
+        engine.register_suggestor(VendorComplianceEvaluatorSuggestor);
+        engine.register_suggestor(VendorRiskEvaluatorSuggestor);
+        engine.register_suggestor(VendorTimelineEvaluatorSuggestor);
+        engine.register_suggestor(VendorConsensusSuggestor);
+
+        let mut ctx = ContextState::new();
+        let _ = ctx.add_input(
+            ContextKey::Seeds,
+            "rfp",
+            rfp(serde_json::json!([
+                {
+                    "id": "winner",
+                    "price": 5_000.0,
+                    "compliant": true,
+                    "years_in_business": 15,
+                    "delivery_weeks": 3
+                },
+                {
+                    "id": "loser",
+                    "price": 100_000.0,
+                    "compliant": false,
+                    "years_in_business": 1,
+                    "delivery_weeks": 30
+                },
+            ])),
+        );
+
+        let result = engine.run(ctx).await.expect("converge");
+        let proposals = result.context.get(ContextKey::Proposals);
+        let rec1 = proposals
+            .iter()
+            .find(|f| f.id().as_str() == "recommendation:1")
+            .expect("recommendation:1");
+        let json: serde_json::Value =
+            serde_json::from_str(rec1.content()).expect("recommendation json");
+        assert_eq!(
+            json.get("vendor_id").and_then(serde_json::Value::as_str),
+            Some("winner")
+        );
+        assert_eq!(
+            json.get("recommendation").and_then(serde_json::Value::as_str),
+            Some("recommended")
+        );
+        assert_eq!(json.get("rank").and_then(serde_json::Value::as_u64), Some(1));
+    }
+}
