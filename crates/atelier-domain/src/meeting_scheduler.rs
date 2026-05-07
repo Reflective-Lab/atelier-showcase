@@ -714,19 +714,26 @@ mod tests {
         let r1 = run().await;
         let r2 = run().await;
 
-        // Same number of cycles
+        // Determinism here means same shape, same ids, same content —
+        // not bit-identical timestamps. The engine stamps facts with
+        // wall-clock time, so two runs separated by a tick boundary
+        // would otherwise diff on `created_at` / `promoted_at` even
+        // though every other field matches.
+        let project = |facts: &[ContextFact]| -> Vec<(ContextKey, String, String)> {
+            facts
+                .iter()
+                .map(|f| (f.key(), f.id().as_str().to_string(), f.content().to_string()))
+                .collect()
+        };
+
         assert_eq!(r1.cycles, r2.cycles);
-
-        // Same slots
         assert_eq!(
-            r1.context.get(ContextKey::Strategies),
-            r2.context.get(ContextKey::Strategies)
+            project(r1.context.get(ContextKey::Strategies)),
+            project(r2.context.get(ContextKey::Strategies))
         );
-
-        // Same evaluations
         assert_eq!(
-            r1.context.get(ContextKey::Evaluations),
-            r2.context.get(ContextKey::Evaluations)
+            project(r1.context.get(ContextKey::Evaluations)),
+            project(r2.context.get(ContextKey::Evaluations))
         );
     }
 }
