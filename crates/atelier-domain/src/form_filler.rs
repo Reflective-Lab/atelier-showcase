@@ -493,4 +493,113 @@ mod tests {
         let ctx = FakeCtx(HashMap::new());
         assert!(parse_form_request(&ctx).is_none());
     }
+
+    use converge_core::{ContextState, Engine};
+
+    fn fact_json(facts: &[converge_core::ContextFact], id: &str) -> serde_json::Value {
+        let fact = facts
+            .iter()
+            .find(|f| f.id().as_str() == id)
+            .unwrap_or_else(|| panic!("missing fact {id}"));
+        serde_json::from_str(fact.content()).expect("fact json")
+    }
+
+    #[tokio::test]
+    async fn full_pipeline_produces_fill_plan_and_classifies_risk() {
+        let mut engine = Engine::new();
+        engine.register_suggestor(FormSchemaAgent);
+        engine.register_suggestor(FieldMappingAgent);
+        engine.register_suggestor(NormalizationAgent);
+        engine.register_suggestor(CompletenessAgent);
+        engine.register_suggestor(RiskClassifierAgent);
+        engine.register_suggestor(FillPlanAgent);
+        engine.register_suggestor(ProposalEmitterAgent);
+
+        let seed = serde_json::json!({
+            "form_id": "I-9",
+            "fields": [
+                "first_name",
+                "last_name",
+                "employee_ssn",
+                "bank_account_number",
+                "department",
+            ],
+        });
+        let mut ctx = ContextState::new();
+        let _ = ctx.add_input(ContextKey::Seeds, FORM_REQUEST_SEED_ID, seed.to_string());
+
+        let result = engine.run(ctx).await.expect("converge");
+
+        let schema = fact_json(result.context.get(ContextKey::Signals), SCHEMA_FACT_ID);
+        assert_eq!(schema.get("form_id").and_then(|v| v.as_str()), Some("I-9"));
+
+        let plan = fact_json(result.context.get(ContextKey::Strategies), FILL_PLAN_FACT_ID);
+        assert_eq!(plan.get("form_id").and_then(|v| v.as_str()), Some("I-9"));
+
+        let high_risk = plan
+            .get("high_risk_fields")
+            .and_then(|v| v.as_array())
+            .expect("high_risk_fields array");
+        let high_risk_names: Vec<&str> =
+            high_risk.iter().filter_map(|v| v.as_str()).collect();
+        assert!(high_risk_names.contains(&"employee_ssn"));
+        assert!(high_risk_names.contains(&"bank_account_number"));
+        assert!(!high_risk_names.contains(&"first_name"));
+        assert!(!high_risk_names.contains(&"department"));
+
+        // FillPlanAgent fires the moment Constraints has any fact, which
+        // RiskClassifierAgent writes first — so the plan may capture the
+        // RISK fact before COMPLETENESS arrives. Either way the plan
+        // surfaces high_risk_fields and is not ready to submit.
+        assert!(plan.get("missing_fields").and_then(|v| v.as_array()).is_some());
+        assert_eq!(plan.get("ready_for_submit").and_then(|v| v.as_bool()), Some(false));
+
+        // ProposalEmitterAgent only emits proposals for non-empty normalized
+        // values; with the placeholder normaliser nothing should be proposed.
+        assert!(
+            result
+                .context
+                .get(ContextKey::Proposals)
+                .iter()
+                .all(|f| !f.id().as_str().starts_with(PROPOSAL_PREFIX))
+        );
+    }
+
+    #[tokio::test]
+    async fn schema_agent_emits_unknown_form_id_when_missing() {
+        let mut engine = Engine::new();
+        engine.register_suggestor(FormSchemaAgent);
+
+        let seed = serde_json::json!({ "fields": ["email"] });
+        let mut ctx = ContextState::new();
+        let _ = ctx.add_input(ContextKey::Seeds, FORM_REQUEST_SEED_ID, seed.to_string());
+
+        let result = engine.run(ctx).await.expect("converge");
+        let schema = fact_json(result.context.get(ContextKey::Signals), SCHEMA_FACT_ID);
+        assert_eq!(
+            schema.get("form_id").and_then(|v| v.as_str()),
+            Some("unknown")
+        );
+    }
+
+    #[tokio::test]
+    async fn schema_agent_skips_when_seed_id_does_not_match() {
+        let mut engine = Engine::new();
+        engine.register_suggestor(FormSchemaAgent);
+
+        let seed = serde_json::json!({ "form_id": "ignored", "fields": [] });
+        let mut ctx = ContextState::new();
+        // Wrong seed id — parse_form_request returns None and the agent
+        // emits an empty effect.
+        let _ = ctx.add_input(ContextKey::Seeds, "some-other-seed", seed.to_string());
+
+        let result = engine.run(ctx).await.expect("converge");
+        assert!(
+            result
+                .context
+                .get(ContextKey::Signals)
+                .iter()
+                .all(|f| f.id().as_str() != SCHEMA_FACT_ID)
+        );
+    }
 }
