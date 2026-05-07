@@ -1,0 +1,12 @@
+[package]
+name = "example-resolution-showcase"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+organism-pack.workspace = true
+organism-domain.workspace = true
+organism-runtime.workspace = true
+serde_json.workspace = true
+chrono.workspace = true

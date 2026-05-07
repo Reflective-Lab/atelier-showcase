@@ -5,6 +5,6 @@ edition = "2024"
 publish = false
 
 [dependencies]
-organism-pack = { path = "../../crates/pack" }
-organism-intent = { path = "../../crates/intent" }
-chrono = "0.4"
+organism-pack.workspace = true
+organism-intent.workspace = true
+chrono.workspace = true
