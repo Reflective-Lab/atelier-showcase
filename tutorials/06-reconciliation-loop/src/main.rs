@@ -324,28 +324,28 @@ fn seed(ctx: &dyn Context) -> Option<ReconciliationSeed> {
     ctx.get(ContextKey::Seeds)
         .iter()
         .find(|fact| fact.id() == SEED_ID)
-        .and_then(|fact| serde_json::from_str(&fact.content()).ok())
+        .and_then(|fact| serde_json::from_str(fact.content()).ok())
 }
 
 fn candidate_matrix(ctx: &dyn Context) -> Option<CandidateMatrix> {
     ctx.get(ContextKey::Evaluations)
         .iter()
         .find(|fact| fact.id() == MATRIX_ID)
-        .and_then(|fact| serde_json::from_str(&fact.content()).ok())
+        .and_then(|fact| serde_json::from_str(fact.content()).ok())
 }
 
 fn reconciliation_result(ctx: &dyn Context) -> Option<ReconciliationResult> {
     ctx.get(ContextKey::Strategies)
         .iter()
         .find(|fact| fact.id() == RESULT_ID)
-        .and_then(|fact| serde_json::from_str(&fact.content()).ok())
+        .and_then(|fact| serde_json::from_str(fact.content()).ok())
 }
 
 fn reconciliation_summary(ctx: &dyn Context) -> Option<ReconciliationSummary> {
     ctx.get(ContextKey::Diagnostic)
         .iter()
         .find(|fact| fact.id() == SUMMARY_ID)
-        .and_then(|fact| serde_json::from_str(&fact.content()).ok())
+        .and_then(|fact| serde_json::from_str(fact.content()).ok())
 }
 
 fn fact_exists(ctx: &dyn Context, key: ContextKey, id: &str) -> bool {

@@ -465,7 +465,7 @@ impl Suggestor for FeasibilityAgent {
                         assignment
                             .id()
                             .strip_prefix("assignment:")
-                            .unwrap_or(&assignment.id().as_str())
+                            .unwrap_or(assignment.id().as_str())
                     ),
                     format!(
                         "Score: {}/100 | {} | Rationale: {}",

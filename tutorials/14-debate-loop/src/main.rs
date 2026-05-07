@@ -87,10 +87,7 @@ impl Suggestor for LlmPlannerAgent {
 
     async fn execute(&self, ctx: &dyn Context) -> AgentEffect {
         let seeds = ctx.get(ContextKey::Seeds);
-        let intent = seeds
-            .first()
-            .map(|s| s.content())
-            .unwrap_or("(no intent)");
+        let intent = seeds.first().map(|s| s.content()).unwrap_or("(no intent)");
 
         let evaluations = ctx.get(ContextKey::Evaluations);
         let challenges: Vec<String> = evaluations
@@ -195,7 +192,9 @@ impl Suggestor for LlmSkepticAgent {
         let has_initial_plan = proposals.iter().any(|p| p.id() == "plan:initial");
         let has_revised_plan = proposals.iter().any(|p| p.id() == "plan:revised");
         let has_challenges = evaluations.iter().any(|e| e.id().starts_with("challenge:"));
-        let has_final_review = evaluations.iter().any(|e| e.id() == "challenge:final-review");
+        let has_final_review = evaluations
+            .iter()
+            .any(|e| e.id() == "challenge:final-review");
 
         // Challenge initial plan (no challenges yet)
         // OR review revised plan (challenges exist but no final review)

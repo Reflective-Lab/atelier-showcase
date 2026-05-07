@@ -83,11 +83,11 @@ fn top_vendor(ctx: &dyn Context) -> Option<serde_json::Value> {
         .iter()
         .find(|fact| fact.id() == "recommendation-1")?;
     let recommendation_json: serde_json::Value =
-        serde_json::from_str(&recommendation.content()).ok()?;
+        serde_json::from_str(recommendation.content()).ok()?;
     let vendor_id = recommendation_json.get("vendor_id")?.as_str()?;
 
     ctx.get(ContextKey::Signals).iter().find_map(|fact| {
-        let vendor = parse_vendor(&fact.content());
+        let vendor = parse_vendor(fact.content());
         let id = vendor.get("id").and_then(|value| value.as_str())?;
         if id == vendor_id { Some(vendor) } else { None }
     })
@@ -128,7 +128,7 @@ impl Suggestor for VendorDataAgent {
         let seed = seeds.first();
 
         let vendors = if let Some(s) = seed {
-            let json: serde_json::Value = serde_json::from_str(&s.content()).unwrap_or_default();
+            let json: serde_json::Value = serde_json::from_str(s.content()).unwrap_or_default();
             json.get("vendors").cloned().unwrap_or_default()
         } else {
             serde_json::json!([])
@@ -178,7 +178,7 @@ impl Suggestor for PriceEvaluatorAgent {
 
         let mut evaluations = Vec::new();
         for signal in signals {
-            if let Ok(vendor) = serde_json::from_str::<serde_json::Value>(&signal.content()) {
+            if let Ok(vendor) = serde_json::from_str::<serde_json::Value>(signal.content()) {
                 let id = vendor.get("id").and_then(|v| v.as_str()).unwrap_or("?");
                 let price: f64 = vendor
                     .get("price")
@@ -238,7 +238,7 @@ impl Suggestor for ComplianceEvaluatorAgent {
 
         let mut evaluations = Vec::new();
         for signal in signals {
-            if let Ok(vendor) = serde_json::from_str::<serde_json::Value>(&signal.content()) {
+            if let Ok(vendor) = serde_json::from_str::<serde_json::Value>(signal.content()) {
                 let id = vendor.get("id").and_then(|v| v.as_str()).unwrap_or("?");
                 let compliant: bool = vendor
                     .get("compliant")
@@ -290,7 +290,7 @@ impl Suggestor for RiskEvaluatorAgent {
 
         let mut evaluations = Vec::new();
         for signal in signals {
-            if let Ok(vendor) = serde_json::from_str::<serde_json::Value>(&signal.content()) {
+            if let Ok(vendor) = serde_json::from_str::<serde_json::Value>(signal.content()) {
                 let id = vendor.get("id").and_then(|v| v.as_str()).unwrap_or("?");
                 let years: u32 = vendor
                     .get("years_in_business")
@@ -350,7 +350,7 @@ impl Suggestor for TimelineEvaluatorAgent {
 
         let mut evaluations = Vec::new();
         for signal in signals {
-            if let Ok(vendor) = serde_json::from_str::<serde_json::Value>(&signal.content()) {
+            if let Ok(vendor) = serde_json::from_str::<serde_json::Value>(signal.content()) {
                 let id = vendor.get("id").and_then(|v| v.as_str()).unwrap_or("?");
                 let weeks: u32 = vendor
                     .get("delivery_weeks")
@@ -412,7 +412,7 @@ impl Suggestor for ConsensusAgent {
             std::collections::HashMap::new();
 
         for eval in evaluations {
-            if let Ok(eval_json) = serde_json::from_str::<serde_json::Value>(&eval.content()) {
+            if let Ok(eval_json) = serde_json::from_str::<serde_json::Value>(eval.content()) {
                 let vendor_id = eval_json
                     .get("vendor_id")
                     .and_then(|v| v.as_str())
@@ -563,7 +563,7 @@ impl Suggestor for ProcurementApprovalSimulationAgent {
         };
 
         let routing: serde_json::Value =
-            serde_json::from_str(&constraint.content()).unwrap_or_default();
+            serde_json::from_str(constraint.content()).unwrap_or_default();
         let pending = routing
             .get("pending")
             .and_then(|value| value.as_u64())
@@ -629,7 +629,7 @@ impl Suggestor for VendorCommitDecisionAgent {
 
         if !human_approval_present {
             let pending = constraint
-                .and_then(|fact| serde_json::from_str::<serde_json::Value>(&fact.content()).ok())
+                .and_then(|fact| serde_json::from_str::<serde_json::Value>(fact.content()).ok())
                 .and_then(|json| json.get("pending").and_then(|value| value.as_u64()))
                 .unwrap_or(0);
             if pending > 0 {
@@ -748,7 +748,7 @@ async fn main() {
                 RunResult::Complete(Ok(result)) => {
                     println!("✅ Vendor Selected!\n");
                     for fact in result.context.get(ContextKey::Strategies) {
-                        if let Ok(p) = serde_json::from_str::<serde_json::Value>(&fact.content()) {
+                        if let Ok(p) = serde_json::from_str::<serde_json::Value>(fact.content()) {
                             let rank = p.get("rank").and_then(|v| v.as_u64()).unwrap_or(0);
                             let vendor = p.get("vendor_id").and_then(|v| v.as_str()).unwrap_or("?");
                             let score = p.get("score").and_then(|v| v.as_f64()).unwrap_or(0.0);
@@ -771,7 +771,7 @@ async fn main() {
         RunResult::Complete(Ok(result)) => {
             println!("✅ Vendor Selected!\n");
             for fact in result.context.get(ContextKey::Strategies) {
-                if let Ok(p) = serde_json::from_str::<serde_json::Value>(&fact.content()) {
+                if let Ok(p) = serde_json::from_str::<serde_json::Value>(fact.content()) {
                     let rank = p.get("rank").and_then(|v| v.as_u64()).unwrap_or(0);
                     let vendor = p.get("vendor_id").and_then(|v| v.as_str()).unwrap_or("?");
                     let score = p.get("score").and_then(|v| v.as_f64()).unwrap_or(0.0);

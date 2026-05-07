@@ -55,7 +55,7 @@ impl converge_core::Suggestor for ChatAgentSuggestor {
         let context_str = ctx
             .get(self.target_key)
             .iter()
-            .map(|f| f.content())
+            .map(converge_core::ContextFact::content)
             .collect::<Vec<_>>()
             .join("\n");
 

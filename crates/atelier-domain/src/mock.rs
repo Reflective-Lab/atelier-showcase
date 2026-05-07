@@ -115,7 +115,7 @@ impl MockChatBackend {
                 total_tokens: 30,
             }),
             finish_reason: Some(FinishReason::Stop),
-            metadata: Default::default(),
+            metadata: std::collections::HashMap::default(),
         })
     }
 }
@@ -123,7 +123,7 @@ impl MockChatBackend {
 impl ChatBackend for MockChatBackend {
     type ChatFut<'a> = Ready<Result<ChatResponse, LlmError>>;
 
-    fn chat<'a>(&'a self, _req: ChatRequest) -> Self::ChatFut<'a> {
+    fn chat(&self, _req: ChatRequest) -> Self::ChatFut<'_> {
         std::future::ready(self.next_response())
     }
 }

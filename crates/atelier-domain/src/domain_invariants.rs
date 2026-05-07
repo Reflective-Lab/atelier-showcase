@@ -5,7 +5,7 @@ use converge_core::{ContextKey, Invariant, InvariantClass, InvariantResult, Viol
 pub struct AuthorityRequired;
 
 impl Invariant for AuthorityRequired {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "authority_required"
     }
 
@@ -52,7 +52,7 @@ impl Invariant for AuthorityRequired {
 pub struct AuditTrailRequired;
 
 impl Invariant for AuditTrailRequired {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "audit_trail_required"
     }
 
@@ -161,11 +161,7 @@ mod tests {
                 "access:1",
                 "access:granted access:1",
             ),
-            (
-                ContextKey::Signals,
-                "auth:1",
-                "authority:approved access:1",
-            ),
+            (ContextKey::Signals, "auth:1", "authority:approved access:1"),
         ]);
         assert_eq!(inv.check(&ctx), InvariantResult::Ok);
     }
@@ -173,11 +169,7 @@ mod tests {
     #[test]
     fn authority_required_ignores_unrelated_facts() {
         let inv = AuthorityRequired;
-        let ctx = promoted(&[(
-            ContextKey::Strategies,
-            "info:1",
-            "some unrelated content",
-        )]);
+        let ctx = promoted(&[(ContextKey::Strategies, "info:1", "some unrelated content")]);
         assert_eq!(inv.check(&ctx), InvariantResult::Ok);
     }
 

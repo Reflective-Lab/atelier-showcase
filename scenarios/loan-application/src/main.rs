@@ -35,7 +35,7 @@ impl Suggestor for ApplicationIngestionAgent {
         let seed = seeds.first();
 
         if let Some(s) = seed
-            && let Ok(app) = serde_json::from_str::<serde_json::Value>(&s.content())
+            && let Ok(app) = serde_json::from_str::<serde_json::Value>(s.content())
         {
             return AgentEffect::with_proposal(
                 ProposedFact::new(
@@ -73,7 +73,7 @@ impl Suggestor for DocumentVerificationAgent {
         let signal = signals.first();
 
         if let Some(s) = signal
-            && let Ok(app) = serde_json::from_str::<serde_json::Value>(&s.content())
+            && let Ok(app) = serde_json::from_str::<serde_json::Value>(s.content())
         {
             let docs_complete = app
                 .get("documents")
@@ -120,7 +120,7 @@ impl Suggestor for CreditCheckAgent {
         let signal = signals.first();
 
         if let Some(s) = signal
-            && let Ok(app) = serde_json::from_str::<serde_json::Value>(&s.content())
+            && let Ok(app) = serde_json::from_str::<serde_json::Value>(s.content())
         {
             let credit_score: u32 = app
                 .get("credit_score")
@@ -201,7 +201,7 @@ impl Suggestor for ComplianceAgent {
         let signal = signals.first();
 
         if let Some(s) = signal
-            && let Ok(app) = serde_json::from_str::<serde_json::Value>(&s.content())
+            && let Ok(app) = serde_json::from_str::<serde_json::Value>(s.content())
         {
             let us_citizen = app
                 .get("us_citizen")
@@ -269,7 +269,7 @@ impl Suggestor for RiskAssessmentAgent {
         let signal = signals.first();
 
         if let Some(s) = signal
-            && let Ok(app) = serde_json::from_str::<serde_json::Value>(&s.content())
+            && let Ok(app) = serde_json::from_str::<serde_json::Value>(s.content())
         {
             let employment_years: u32 = app
                 .get("employment_years")
@@ -341,7 +341,7 @@ impl Suggestor for LoanDecisionAgent {
         let mut count = 0;
 
         for eval in evaluations {
-            if let Ok(e) = serde_json::from_str::<serde_json::Value>(&eval.content())
+            if let Ok(e) = serde_json::from_str::<serde_json::Value>(eval.content())
                 && let Some(score) = e.get("score").and_then(|v| v.as_f64())
             {
                 total_score += score;
@@ -450,7 +450,7 @@ async fn main() {
             match engine.resume(*pause, decision).await {
                 RunResult::Complete(Ok(result)) => {
                     for fact in result.context.get(ContextKey::Proposals) {
-                        if let Ok(p) = serde_json::from_str::<serde_json::Value>(&fact.content()) {
+                        if let Ok(p) = serde_json::from_str::<serde_json::Value>(fact.content()) {
                             let decision =
                                 p.get("decision").and_then(|v| v.as_str()).unwrap_or("?");
                             let score = p.get("score").and_then(|v| v.as_f64()).unwrap_or(0.0);
@@ -463,7 +463,7 @@ async fn main() {
         }
         RunResult::Complete(Ok(result)) => {
             for fact in result.context.get(ContextKey::Proposals) {
-                if let Ok(p) = serde_json::from_str::<serde_json::Value>(&fact.content()) {
+                if let Ok(p) = serde_json::from_str::<serde_json::Value>(fact.content()) {
                     let decision = p.get("decision").and_then(|v| v.as_str()).unwrap_or("?");
                     let score = p.get("score").and_then(|v| v.as_f64()).unwrap_or(0.0);
                     let confidence = p.get("confidence").and_then(|v| v.as_f64()).unwrap_or(0.0);

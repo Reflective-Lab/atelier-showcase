@@ -390,7 +390,7 @@ fn pending_surveys(ctx: &dyn Context) -> Vec<SurveyRequest> {
             continue;
         }
 
-        if let Ok(request) = serde_json::from_str::<SurveyRequest>(&fact.content())
+        if let Ok(request) = serde_json::from_str::<SurveyRequest>(fact.content())
             && seen.insert((request.root.clone(), request.target.clone()))
         {
             pending.push(request);
@@ -414,7 +414,7 @@ fn signals_for_root(ctx: &dyn Context, root: &str) -> Vec<ArtifactSignal> {
     ctx.get(ContextKey::Signals)
         .iter()
         .filter(|fact| fact.id().starts_with(&format!("{SIGNAL_PREFIX}{root}:")))
-        .filter_map(|fact| serde_json::from_str::<ArtifactSignal>(&fact.content()).ok())
+        .filter_map(|fact| serde_json::from_str::<ArtifactSignal>(fact.content()).ok())
         .collect()
 }
 
@@ -574,7 +574,7 @@ fn request_order(ctx: &dyn Context, root: &str) -> Vec<String> {
     ctx.get(ContextKey::Strategies)
         .iter()
         .filter(|fact| fact.id().starts_with(&format!("{REQUEST_PREFIX}{root}:")))
-        .filter_map(|fact| serde_json::from_str::<SurveyRequest>(&fact.content()).ok())
+        .filter_map(|fact| serde_json::from_str::<SurveyRequest>(fact.content()).ok())
         .map(|request| request.target)
         .collect()
 }
@@ -583,7 +583,7 @@ fn parse_summary(ctx: &dyn Context, root: &str) -> Option<FixedPointSummary> {
     ctx.get(ContextKey::Diagnostic)
         .iter()
         .find(|fact| fact.id().as_str() == summary_id(root))
-        .and_then(|fact| serde_json::from_str(&fact.content()).ok())
+        .and_then(|fact| serde_json::from_str(fact.content()).ok())
 }
 
 fn print_section(title: &str, facts: &[ContextFact]) {

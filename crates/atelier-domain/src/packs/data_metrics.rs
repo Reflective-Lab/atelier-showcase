@@ -45,7 +45,7 @@ pub struct MetricRegistrarAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for MetricRegistrarAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "metric_registrar"
     }
 
@@ -63,7 +63,7 @@ impl Suggestor for MetricRegistrarAgent {
         let triggers = ctx.get(ContextKey::Seeds);
         let mut facts = Vec::new();
 
-        for trigger in triggers.iter() {
+        for trigger in triggers {
             if trigger.content().contains("metric.define")
                 || trigger.content().contains("metric.update")
             {
@@ -94,7 +94,7 @@ pub struct SourceConnectorAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for SourceConnectorAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "source_connector"
     }
 
@@ -112,7 +112,7 @@ impl Suggestor for SourceConnectorAgent {
         let triggers = ctx.get(ContextKey::Seeds);
         let mut facts = Vec::new();
 
-        for trigger in triggers.iter() {
+        for trigger in triggers {
             if trigger.content().contains("source.register")
                 || trigger.content().contains("source.connect")
             {
@@ -143,7 +143,7 @@ pub struct PipelineCoordinatorAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for PipelineCoordinatorAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "pipeline_coordinator"
     }
 
@@ -162,7 +162,7 @@ impl Suggestor for PipelineCoordinatorAgent {
         let signals = ctx.get(ContextKey::Signals);
         let mut facts = Vec::new();
 
-        for source in signals.iter() {
+        for source in signals {
             if source.id().starts_with(SOURCE_PREFIX)
                 && source.content().contains("\"state\":\"healthy\"")
             {
@@ -193,7 +193,7 @@ pub struct DataValidatorAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for DataValidatorAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "data_validator"
     }
 
@@ -211,7 +211,7 @@ impl Suggestor for DataValidatorAgent {
         let proposals = ctx.get(ContextKey::Proposals);
         let mut facts = Vec::new();
 
-        for pipeline in proposals.iter() {
+        for pipeline in proposals {
             if pipeline.id().starts_with(PIPELINE_PREFIX)
                 && pipeline.content().contains("\"state\":\"succeeded\"")
             {
@@ -243,7 +243,7 @@ pub struct AnomalyDetectorAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for AnomalyDetectorAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "anomaly_detector"
     }
 
@@ -282,7 +282,7 @@ pub struct DashboardBuilderAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for DashboardBuilderAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "dashboard_builder"
     }
 
@@ -300,7 +300,7 @@ impl Suggestor for DashboardBuilderAgent {
         let triggers = ctx.get(ContextKey::Seeds);
         let mut facts = Vec::new();
 
-        for trigger in triggers.iter() {
+        for trigger in triggers {
             if trigger.content().contains("dashboard.create")
                 || trigger.content().contains("dashboard.update")
             {
@@ -331,7 +331,7 @@ pub struct ReportGeneratorAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for ReportGeneratorAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "report_generator"
     }
 
@@ -349,7 +349,7 @@ impl Suggestor for ReportGeneratorAgent {
         let triggers = ctx.get(ContextKey::Seeds);
         let mut facts = Vec::new();
 
-        for trigger in triggers.iter() {
+        for trigger in triggers {
             if trigger.content().contains("report.generate")
                 || trigger.content().contains("report.schedule")
             {
@@ -380,7 +380,7 @@ pub struct AlertEvaluatorAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for AlertEvaluatorAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "alert_evaluator"
     }
 
@@ -399,7 +399,7 @@ impl Suggestor for AlertEvaluatorAgent {
         let evaluations = ctx.get(ContextKey::Evaluations);
         let mut facts = Vec::new();
 
-        for eval in evaluations.iter() {
+        for eval in evaluations {
             if eval.id().starts_with(ANOMALY_PREFIX) {
                 // Parse anomaly count - in real impl would check if > 0
                 facts.push(crate::proposal(
@@ -428,7 +428,7 @@ pub struct FreshnessMonitorAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for FreshnessMonitorAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "freshness_monitor"
     }
 
@@ -446,7 +446,7 @@ impl Suggestor for FreshnessMonitorAgent {
         let signals = ctx.get(ContextKey::Signals);
         let mut facts = Vec::new();
 
-        for source in signals.iter() {
+        for source in signals {
             if source.id().starts_with(SOURCE_PREFIX) {
                 facts.push(crate::proposal(
                     self.name(),
@@ -475,7 +475,7 @@ pub struct MetricCalculatorAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for MetricCalculatorAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "metric_calculator"
     }
 
@@ -498,7 +498,7 @@ impl Suggestor for MetricCalculatorAgent {
         let proposals = ctx.get(ContextKey::Proposals);
         let mut facts = Vec::new();
 
-        for metric in proposals.iter() {
+        for metric in proposals {
             if metric.id().starts_with(METRIC_PREFIX)
                 && metric.content().contains("\"state\":\"active\"")
             {
@@ -531,7 +531,7 @@ impl Suggestor for MetricCalculatorAgent {
 pub struct MetricDefinitionVersionedInvariant;
 
 impl Invariant for MetricDefinitionVersionedInvariant {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "metric_definition_versioned"
     }
 
@@ -540,7 +540,7 @@ impl Invariant for MetricDefinitionVersionedInvariant {
     }
 
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
-        for metric in ctx.get(ContextKey::Proposals).iter() {
+        for metric in ctx.get(ContextKey::Proposals) {
             if metric.id().starts_with(METRIC_PREFIX) && !metric.content().contains("\"version\"") {
                 return InvariantResult::Violated(Violation::with_facts(
                     format!("Metric {} has no version", metric.id()),
@@ -557,7 +557,7 @@ impl Invariant for MetricDefinitionVersionedInvariant {
 pub struct DashboardCitesSourcesInvariant;
 
 impl Invariant for DashboardCitesSourcesInvariant {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "dashboard_cites_sources"
     }
 
@@ -566,7 +566,7 @@ impl Invariant for DashboardCitesSourcesInvariant {
     }
 
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
-        for dashboard in ctx.get(ContextKey::Proposals).iter() {
+        for dashboard in ctx.get(ContextKey::Proposals) {
             if dashboard.id().starts_with(DASHBOARD_PREFIX)
                 && dashboard.content().contains("\"state\":\"published\"")
                 && !dashboard.content().contains("\"data_source\"")
@@ -586,7 +586,7 @@ impl Invariant for DashboardCitesSourcesInvariant {
 pub struct AlertHasOwnerInvariant;
 
 impl Invariant for AlertHasOwnerInvariant {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "alert_has_owner"
     }
 
@@ -595,7 +595,7 @@ impl Invariant for AlertHasOwnerInvariant {
     }
 
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
-        for alert in ctx.get(ContextKey::Proposals).iter() {
+        for alert in ctx.get(ContextKey::Proposals) {
             if alert.id().starts_with(ALERT_PREFIX)
                 && alert.content().contains("\"state\":\"active\"")
                 && !alert.content().contains("\"owner\"")
@@ -615,7 +615,7 @@ impl Invariant for AlertHasOwnerInvariant {
 pub struct DataFreshnessInvariant;
 
 impl Invariant for DataFreshnessInvariant {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "data_freshness"
     }
 
@@ -624,7 +624,7 @@ impl Invariant for DataFreshnessInvariant {
     }
 
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
-        for check in ctx.get(ContextKey::Evaluations).iter() {
+        for check in ctx.get(ContextKey::Evaluations) {
             if check.content().contains("\"type\":\"freshness_check\"")
                 && check.content().contains("\"is_fresh\":false")
             {
@@ -732,7 +732,11 @@ mod tests {
     #[test]
     fn source_connector_accepts_register_or_connect() {
         let agent = SourceConnectorAgent;
-        assert!(agent.accepts(&promoted(&[(ContextKey::Seeds, "s1", "source.register pg")])));
+        assert!(agent.accepts(&promoted(&[(
+            ContextKey::Seeds,
+            "s1",
+            "source.register pg"
+        )])));
         assert!(agent.accepts(&promoted(&[(ContextKey::Seeds, "s1", "source.connect pg")])));
         assert!(!agent.accepts(&promoted(&[(ContextKey::Seeds, "s1", "metric.define")])));
     }
@@ -751,17 +755,9 @@ mod tests {
     #[test]
     fn pipeline_coordinator_only_for_healthy_sources() {
         let agent = PipelineCoordinatorAgent;
-        let healthy = promoted(&[(
-            ContextKey::Signals,
-            "source:pg",
-            r#"{"state":"healthy"}"#,
-        )]);
+        let healthy = promoted(&[(ContextKey::Signals, "source:pg", r#"{"state":"healthy"}"#)]);
         assert!(agent.accepts(&healthy));
-        let degraded = promoted(&[(
-            ContextKey::Signals,
-            "source:pg",
-            r#"{"state":"degraded"}"#,
-        )]);
+        let degraded = promoted(&[(ContextKey::Signals, "source:pg", r#"{"state":"degraded"}"#)]);
         assert!(!agent.accepts(&degraded));
     }
 
@@ -769,11 +765,7 @@ mod tests {
     fn pipeline_coordinator_emits_pipeline_for_each_healthy_source() {
         let agent = PipelineCoordinatorAgent;
         let ctx = promoted(&[
-            (
-                ContextKey::Signals,
-                "source:pg",
-                r#"{"state":"healthy"}"#,
-            ),
+            (ContextKey::Signals, "source:pg", r#"{"state":"healthy"}"#),
             (
                 ContextKey::Signals,
                 "source:redis",
@@ -942,21 +934,13 @@ mod tests {
     #[test]
     fn metric_calculator_requires_active_metric_and_validation() {
         let agent = MetricCalculatorAgent;
-        let only_metric = promoted(&[(
-            ContextKey::Proposals,
-            "metric:m1",
-            r#"{"state":"active"}"#,
-        )]);
+        let only_metric =
+            promoted(&[(ContextKey::Proposals, "metric:m1", r#"{"state":"active"}"#)]);
         assert!(!agent.accepts(&only_metric));
-        let only_validation =
-            promoted(&[(ContextKey::Evaluations, "validation:p1", "{}")]);
+        let only_validation = promoted(&[(ContextKey::Evaluations, "validation:p1", "{}")]);
         assert!(!agent.accepts(&only_validation));
         let both = promoted(&[
-            (
-                ContextKey::Proposals,
-                "metric:m1",
-                r#"{"state":"active"}"#,
-            ),
+            (ContextKey::Proposals, "metric:m1", r#"{"state":"active"}"#),
             (ContextKey::Evaluations, "validation:p1", "{}"),
         ]);
         assert!(agent.accepts(&both));
@@ -966,11 +950,7 @@ mod tests {
     fn metric_calculator_emits_calculated_evaluation() {
         let agent = MetricCalculatorAgent;
         let ctx = promoted(&[
-            (
-                ContextKey::Proposals,
-                "metric:m1",
-                r#"{"state":"active"}"#,
-            ),
+            (ContextKey::Proposals, "metric:m1", r#"{"state":"active"}"#),
             (ContextKey::Evaluations, "validation:p1", "{}"),
         ]);
         let effect = block_execute(&agent, &ctx);
@@ -989,11 +969,7 @@ mod tests {
         let inv = MetricDefinitionVersionedInvariant;
         assert_eq!(inv.name(), "metric_definition_versioned");
         assert_eq!(inv.class(), InvariantClass::Structural);
-        let ctx = invariant_ctx(&[(
-            ContextKey::Proposals,
-            "metric:m1",
-            r#"{"version":"1.0.0"}"#,
-        )]);
+        let ctx = invariant_ctx(&[(ContextKey::Proposals, "metric:m1", r#"{"version":"1.0.0"}"#)]);
         assert!(matches!(inv.check(&ctx), InvariantResult::Ok));
     }
 
@@ -1043,22 +1019,15 @@ mod tests {
             r#"{"state":"active","owner":"sre"}"#,
         )]);
         assert!(matches!(inv.check(&owned), InvariantResult::Ok));
-        let inactive = invariant_ctx(&[(
-            ContextKey::Proposals,
-            "alert:a1",
-            r#"{"state":"paused"}"#,
-        )]);
+        let inactive =
+            invariant_ctx(&[(ContextKey::Proposals, "alert:a1", r#"{"state":"paused"}"#)]);
         assert!(matches!(inv.check(&inactive), InvariantResult::Ok));
     }
 
     #[test]
     fn alert_has_owner_violates_when_active_without_owner() {
         let inv = AlertHasOwnerInvariant;
-        let ctx = invariant_ctx(&[(
-            ContextKey::Proposals,
-            "alert:a1",
-            r#"{"state":"active"}"#,
-        )]);
+        let ctx = invariant_ctx(&[(ContextKey::Proposals, "alert:a1", r#"{"state":"active"}"#)]);
         assert!(matches!(inv.check(&ctx), InvariantResult::Violated(_)));
     }
 

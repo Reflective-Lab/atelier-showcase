@@ -99,7 +99,7 @@ pub struct InvoiceCreatorAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for InvoiceCreatorAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "invoice_creator"
     }
 
@@ -125,7 +125,7 @@ impl Suggestor for InvoiceCreatorAgent {
         let triggers = ctx.get(ContextKey::Seeds);
         let mut facts = Vec::new();
 
-        for trigger in triggers.iter() {
+        for trigger in triggers {
             if trigger.content().contains("deal.closed_won") {
                 facts.push(crate::proposal(
                     self.name(),
@@ -176,7 +176,7 @@ impl std::fmt::Debug for InvoiceIssuerAgent {
 
 #[async_trait::async_trait]
 impl Suggestor for InvoiceIssuerAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "invoice_issuer"
     }
 
@@ -188,7 +188,7 @@ impl Suggestor for InvoiceIssuerAgent {
         ctx.get(ContextKey::Proposals).iter().any(|invoice| {
             invoice.id().as_str().starts_with(INVOICE_PREFIX)
                 && invoice.content().contains("\"state\":\"ready_to_issue\"")
-                && !invoice_issue_final_output_exists(ctx, &invoice.id())
+                && !invoice_issue_final_output_exists(ctx, invoice.id())
         })
     }
 
@@ -196,15 +196,15 @@ impl Suggestor for InvoiceIssuerAgent {
         let proposals = ctx.get(ContextKey::Proposals);
         let mut facts = Vec::new();
 
-        for invoice in proposals.iter() {
+        for invoice in proposals {
             if !invoice.id().as_str().starts_with(INVOICE_PREFIX)
                 || !invoice.content().contains("\"state\":\"ready_to_issue\"")
-                || invoice_issue_final_output_exists(ctx, &invoice.id())
+                || invoice_issue_final_output_exists(ctx, invoice.id())
             {
                 continue;
             }
 
-            let Ok(invoice_json) = serde_json::from_str::<serde_json::Value>(&invoice.content())
+            let Ok(invoice_json) = serde_json::from_str::<serde_json::Value>(invoice.content())
             else {
                 continue;
             };
@@ -233,7 +233,7 @@ impl Suggestor for InvoiceIssuerAgent {
             let human_approval_present = crate::flow_governance::has_approval(
                 ctx,
                 "invoice",
-                &invoice.id(),
+                invoice.id(),
                 "finance_manager",
             );
             let amount = invoice_json
@@ -275,7 +275,7 @@ impl Suggestor for InvoiceIssuerAgent {
                     .to_string(),
                 )),
                 FlowGateOutcome::Escalate => {
-                    if !invoice_issue_request_exists(ctx, &invoice.id()) {
+                    if !invoice_issue_request_exists(ctx, invoice.id()) {
                         facts.push(crate::proposal(
                             self.name(),
                             ContextKey::Proposals,
@@ -323,7 +323,7 @@ pub struct PaymentAllocatorAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for PaymentAllocatorAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "payment_allocator"
     }
 
@@ -354,7 +354,7 @@ impl Suggestor for PaymentAllocatorAgent {
 
         let mut facts = Vec::new();
 
-        for payment in payments.iter() {
+        for payment in &payments {
             // Try to find matching invoice
             if let Some(invoice) = invoices.first() {
                 facts.push(crate::proposal(
@@ -390,7 +390,7 @@ pub struct ReconciliationMatcherAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for ReconciliationMatcherAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "reconciliation_matcher"
     }
 
@@ -426,7 +426,7 @@ impl Suggestor for ReconciliationMatcherAgent {
 
         let mut facts = Vec::new();
 
-        for txn in bank_txns.iter() {
+        for txn in &bank_txns {
             if let Some(invoice) = invoices.first() {
                 facts.push(crate::proposal(
                     self.name(),
@@ -459,7 +459,7 @@ pub struct OverdueDetectorAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for OverdueDetectorAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "overdue_detector"
     }
 
@@ -481,7 +481,7 @@ impl Suggestor for OverdueDetectorAgent {
         let proposals = ctx.get(ContextKey::Proposals);
         let mut facts = Vec::new();
 
-        for invoice in proposals.iter() {
+        for invoice in proposals {
             if invoice.id().as_str().starts_with(INVOICE_PREFIX)
                 && invoice.content().contains("\"overdue\":true")
             {
@@ -534,7 +534,7 @@ impl std::fmt::Debug for PeriodCloserAgent {
 
 #[async_trait::async_trait]
 impl Suggestor for PeriodCloserAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "period_closer"
     }
 
@@ -547,7 +547,7 @@ impl Suggestor for PeriodCloserAgent {
         ctx.get(ContextKey::Proposals).iter().any(|period| {
             period.id().starts_with(PERIOD_PREFIX)
                 && period.content().contains("\"state\":\"closing\"")
-                && !period_close_final_output_exists(ctx, &period.id())
+                && !period_close_final_output_exists(ctx, period.id())
         })
     }
 
@@ -555,15 +555,15 @@ impl Suggestor for PeriodCloserAgent {
         let proposals = ctx.get(ContextKey::Proposals);
         let mut facts = Vec::new();
 
-        for period in proposals.iter() {
+        for period in proposals {
             if !period.id().starts_with(PERIOD_PREFIX)
                 || !period.content().contains("\"state\":\"closing\"")
-                || period_close_final_output_exists(ctx, &period.id())
+                || period_close_final_output_exists(ctx, period.id())
             {
                 continue;
             }
 
-            let Ok(period_json) = serde_json::from_str::<serde_json::Value>(&period.content())
+            let Ok(period_json) = serde_json::from_str::<serde_json::Value>(period.content())
             else {
                 continue;
             };
@@ -572,12 +572,8 @@ impl Suggestor for PeriodCloserAgent {
                 .get("reconciliation_complete")
                 .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false);
-            let human_approval_present = crate::flow_governance::has_approval(
-                ctx,
-                "period",
-                &period.id(),
-                "finance_manager",
-            );
+            let human_approval_present =
+                crate::flow_governance::has_approval(ctx, "period", period.id(), "finance_manager");
             let decision = self
                 .policy
                 .decide(&crate::flow_governance::flow_input(
@@ -613,7 +609,7 @@ impl Suggestor for PeriodCloserAgent {
                     .to_string(),
                 )),
                 FlowGateOutcome::Escalate => {
-                    if !period_close_request_exists(ctx, &period.id()) {
+                    if !period_close_request_exists(ctx, period.id()) {
                         facts.push(crate::proposal(
                             self.name(),
                             ContextKey::Proposals,
@@ -659,7 +655,7 @@ impl Suggestor for PeriodCloserAgent {
 pub struct InvoiceHasCustomerInvariant;
 
 impl Invariant for InvoiceHasCustomerInvariant {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "invoice_has_customer"
     }
 
@@ -668,7 +664,7 @@ impl Invariant for InvoiceHasCustomerInvariant {
     }
 
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
-        for invoice in ctx.get(ContextKey::Proposals).iter() {
+        for invoice in ctx.get(ContextKey::Proposals) {
             if invoice.id().as_str().starts_with(INVOICE_PREFIX)
                 && !invoice.content().contains("customer_id")
             {
@@ -687,7 +683,7 @@ impl Invariant for InvoiceHasCustomerInvariant {
 pub struct PaymentAllocationCompleteInvariant;
 
 impl Invariant for PaymentAllocationCompleteInvariant {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "payment_allocation_complete"
     }
 
@@ -697,7 +693,7 @@ impl Invariant for PaymentAllocationCompleteInvariant {
 
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
         // Check that paid invoices have allocations summing to total
-        for invoice in ctx.get(ContextKey::Proposals).iter() {
+        for invoice in ctx.get(ContextKey::Proposals) {
             if invoice.id().as_str().starts_with(INVOICE_PREFIX)
                 && invoice.content().contains("\"state\":\"paid\"")
             {
@@ -714,7 +710,7 @@ impl Invariant for PaymentAllocationCompleteInvariant {
 pub struct ClosedPeriodReadonlyInvariant;
 
 impl Invariant for ClosedPeriodReadonlyInvariant {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "closed_period_readonly"
     }
 
@@ -724,7 +720,7 @@ impl Invariant for ClosedPeriodReadonlyInvariant {
 
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
         // Check that facts in closed periods have override references
-        for period in ctx.get(ContextKey::Proposals).iter() {
+        for period in ctx.get(ContextKey::Proposals) {
             if period.id().starts_with(PERIOD_PREFIX)
                 && period.content().contains("\"state\":\"closed\"")
             {

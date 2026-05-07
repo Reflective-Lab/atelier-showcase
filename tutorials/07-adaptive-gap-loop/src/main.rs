@@ -400,7 +400,7 @@ fn pending_surveys(ctx: &dyn Context) -> Vec<SurveyRequest> {
             continue;
         }
 
-        if let Ok(request) = serde_json::from_str::<SurveyRequest>(&fact.content())
+        if let Ok(request) = serde_json::from_str::<SurveyRequest>(fact.content())
             && seen.insert((request.root.clone(), request.target.clone()))
         {
             pending.push(request);
@@ -424,7 +424,7 @@ fn signals(ctx: &dyn Context) -> Vec<ArtifactSignal> {
     ctx.get(ContextKey::Signals)
         .iter()
         .filter(|fact| fact.id().starts_with(SIGNAL_PREFIX))
-        .filter_map(|fact| serde_json::from_str::<ArtifactSignal>(&fact.content()).ok())
+        .filter_map(|fact| serde_json::from_str::<ArtifactSignal>(fact.content()).ok())
         .collect()
 }
 
@@ -475,7 +475,7 @@ fn closure_inputs(ctx: &dyn Context, root: &str) -> Option<ClosureSummary> {
             continue;
         }
 
-        let Ok(request) = serde_json::from_str::<SurveyRequest>(&fact.content()) else {
+        let Ok(request) = serde_json::from_str::<SurveyRequest>(fact.content()) else {
             continue;
         };
         if request.root == root && !surveyed.contains(&request.target) {
@@ -507,7 +507,7 @@ fn parse_summary(ctx: &dyn Context, root: &str) -> Option<ClosureSummary> {
     ctx.get(ContextKey::Diagnostic)
         .iter()
         .find(|fact| fact.id().as_str() == summary_id)
-        .and_then(|fact| serde_json::from_str(&fact.content()).ok())
+        .and_then(|fact| serde_json::from_str(fact.content()).ok())
 }
 
 fn print_section(title: &str, facts: &[ContextFact]) {

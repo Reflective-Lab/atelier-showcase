@@ -757,8 +757,7 @@ mod tests {
     #[test]
     fn meeting_feasibility_indeterminate_without_strategies() {
         let eval = MeetingScheduleFeasibilityEval;
-        let ctx =
-            promoted_context(&[(ContextKey::Constraints, "wh", "working hours 10-16")]);
+        let ctx = promoted_context(&[(ContextKey::Constraints, "wh", "working hours 10-16")]);
         assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Indeterminate);
     }
 
@@ -801,7 +800,11 @@ mod tests {
     fn invoice_accuracy_fail_when_below_threshold() {
         let eval = InvoiceAccuracyEval;
         let ctx = promoted_context(&[
-            (ContextKey::Proposals, "invoice:1", "amount: 100, customer: A"),
+            (
+                ContextKey::Proposals,
+                "invoice:1",
+                "amount: 100, customer: A",
+            ),
             (ContextKey::Proposals, "invoice:2", "incomplete data"),
             (ContextKey::Proposals, "invoice:3", "incomplete data"),
         ]);
@@ -882,11 +885,8 @@ mod tests {
             eval.dependencies(),
             &[ContextKey::Proposals, ContextKey::Signals]
         );
-        let ctx = promoted_context(&[(
-            ContextKey::Proposals,
-            "scope:1",
-            "change request approved",
-        )]);
+        let ctx =
+            promoted_context(&[(ContextKey::Proposals, "scope:1", "change request approved")]);
         assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Pass);
     }
 
@@ -926,8 +926,7 @@ mod tests {
     #[test]
     fn access_compliance_fail_when_access_retained() {
         let eval = AccessComplianceEval;
-        let ctx =
-            promoted_context(&[(ContextKey::Proposals, "employee:1", "terminated")]);
+        let ctx = promoted_context(&[(ContextKey::Proposals, "employee:1", "terminated")]);
         assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Fail);
     }
 
@@ -985,11 +984,8 @@ mod tests {
     fn metric_definition_quality_pass_when_well_defined() {
         let eval = MetricDefinitionQualityEval;
         assert_eq!(eval.name(), "metric_definition_quality");
-        let ctx = promoted_context(&[(
-            ContextKey::Proposals,
-            "metric:1",
-            "formula: count(orders)",
-        )]);
+        let ctx =
+            promoted_context(&[(ContextKey::Proposals, "metric:1", "formula: count(orders)")]);
         assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Pass);
     }
 

@@ -27,7 +27,7 @@ fn parse_form_request(ctx: &dyn converge_core::Context) -> Option<FormRequestSee
     ctx.get(ContextKey::Seeds)
         .iter()
         .find(|seed| seed.id().as_str() == FORM_REQUEST_SEED_ID)
-        .and_then(|seed| serde_json::from_str::<FormRequestSeed>(&seed.content()).ok())
+        .and_then(|seed| serde_json::from_str::<FormRequestSeed>(seed.content()).ok())
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -80,7 +80,7 @@ pub struct FormSchemaAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for FormSchemaAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "FormSchemaAgent"
     }
 
@@ -93,9 +93,8 @@ impl Suggestor for FormSchemaAgent {
     }
 
     async fn execute(&self, ctx: &dyn converge_core::Context) -> AgentEffect {
-        let request = match parse_form_request(ctx) {
-            Some(request) => request,
-            None => return AgentEffect::empty(),
+        let Some(request) = parse_form_request(ctx) else {
+            return AgentEffect::empty();
         };
 
         let payload = serde_json::json!({
@@ -117,7 +116,7 @@ pub struct FieldMappingAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for FieldMappingAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "FieldMappingAgent"
     }
 
@@ -134,7 +133,7 @@ impl Suggestor for FieldMappingAgent {
             .get(ContextKey::Signals)
             .iter()
             .find(|fact| fact.id().as_str() == SCHEMA_FACT_ID)
-            .and_then(|fact| serde_json::from_str::<serde_json::Value>(&fact.content()).ok());
+            .and_then(|fact| serde_json::from_str::<serde_json::Value>(fact.content()).ok());
 
         let fields = schema
             .and_then(|value| value.get("fields").cloned())
@@ -144,7 +143,7 @@ impl Suggestor for FieldMappingAgent {
         let mappings: Vec<FieldMapping> = fields
             .iter()
             .map(|field_id| FieldMapping {
-                field_id: field_id.to_string(),
+                field_id: field_id.clone(),
                 source: "unknown".to_string(),
             })
             .collect();
@@ -164,7 +163,7 @@ pub struct NormalizationAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for NormalizationAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "NormalizationAgent"
     }
 
@@ -182,7 +181,7 @@ impl Suggestor for NormalizationAgent {
             .get(ContextKey::Hypotheses)
             .iter()
             .find(|fact| fact.id().as_str() == MAPPINGS_FACT_ID)
-            .and_then(|fact| serde_json::from_str::<serde_json::Value>(&fact.content()).ok())
+            .and_then(|fact| serde_json::from_str::<serde_json::Value>(fact.content()).ok())
             .and_then(|value| value.get("mappings").cloned())
             .and_then(|value| serde_json::from_value::<Vec<FieldMapping>>(value).ok())
             .unwrap_or_default();
@@ -210,7 +209,7 @@ pub struct CompletenessAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for CompletenessAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "CompletenessAgent"
     }
 
@@ -228,7 +227,7 @@ impl Suggestor for CompletenessAgent {
             .get(ContextKey::Hypotheses)
             .iter()
             .find(|fact| fact.id().as_str() == NORMALIZED_FACT_ID)
-            .and_then(|fact| serde_json::from_str::<serde_json::Value>(&fact.content()).ok())
+            .and_then(|fact| serde_json::from_str::<serde_json::Value>(fact.content()).ok())
             .and_then(|value| value.get("normalized").cloned())
             .and_then(|value| serde_json::from_value::<Vec<NormalizedField>>(value).ok())
             .unwrap_or_default();
@@ -254,7 +253,7 @@ pub struct RiskClassifierAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for RiskClassifierAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "RiskClassifierAgent"
     }
 
@@ -271,7 +270,7 @@ impl Suggestor for RiskClassifierAgent {
             .get(ContextKey::Signals)
             .iter()
             .find(|fact| fact.id().as_str() == SCHEMA_FACT_ID)
-            .and_then(|fact| serde_json::from_str::<serde_json::Value>(&fact.content()).ok());
+            .and_then(|fact| serde_json::from_str::<serde_json::Value>(fact.content()).ok());
 
         let fields = schema
             .and_then(|value| value.get("fields").cloned())
@@ -298,7 +297,7 @@ pub struct FillPlanAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for FillPlanAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "FillPlanAgent"
     }
 
@@ -317,14 +316,14 @@ impl Suggestor for FillPlanAgent {
             .get(ContextKey::Signals)
             .iter()
             .find(|fact| fact.id().as_str() == SCHEMA_FACT_ID)
-            .and_then(|fact| serde_json::from_str::<serde_json::Value>(&fact.content()).ok());
+            .and_then(|fact| serde_json::from_str::<serde_json::Value>(fact.content()).ok());
 
         let form_id = schema
             .and_then(|value| {
                 value
                     .get("form_id")
                     .and_then(|id| id.as_str())
-                    .map(|s| s.to_string())
+                    .map(std::string::ToString::to_string)
             })
             .unwrap_or_else(|| "unknown".to_string());
 
@@ -332,7 +331,7 @@ impl Suggestor for FillPlanAgent {
             .get(ContextKey::Constraints)
             .iter()
             .find(|fact| fact.id().as_str() == COMPLETENESS_FACT_ID)
-            .and_then(|fact| serde_json::from_str::<CompletenessStatus>(&fact.content()).ok())
+            .and_then(|fact| serde_json::from_str::<CompletenessStatus>(fact.content()).ok())
             .map(|status| status.missing_fields)
             .unwrap_or_default();
 
@@ -340,7 +339,7 @@ impl Suggestor for FillPlanAgent {
             .get(ContextKey::Constraints)
             .iter()
             .find(|fact| fact.id().as_str() == RISK_FACT_ID)
-            .and_then(|fact| serde_json::from_str::<RiskClassification>(&fact.content()).ok())
+            .and_then(|fact| serde_json::from_str::<RiskClassification>(fact.content()).ok())
             .map(|status| status.high_risk_fields)
             .unwrap_or_default();
 
@@ -366,7 +365,7 @@ pub struct ProposalEmitterAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for ProposalEmitterAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "ProposalEmitterAgent"
     }
 
@@ -383,7 +382,7 @@ impl Suggestor for ProposalEmitterAgent {
             .get(ContextKey::Hypotheses)
             .iter()
             .find(|fact| fact.id().as_str() == NORMALIZED_FACT_ID)
-            .and_then(|fact| serde_json::from_str::<serde_json::Value>(&fact.content()).ok())
+            .and_then(|fact| serde_json::from_str::<serde_json::Value>(fact.content()).ok())
             .and_then(|value| value.get("normalized").cloned())
             .and_then(|value| serde_json::from_value::<Vec<NormalizedField>>(value).ok())
             .unwrap_or_default();
@@ -533,15 +532,17 @@ mod tests {
         let schema = fact_json(result.context.get(ContextKey::Signals), SCHEMA_FACT_ID);
         assert_eq!(schema.get("form_id").and_then(|v| v.as_str()), Some("I-9"));
 
-        let plan = fact_json(result.context.get(ContextKey::Strategies), FILL_PLAN_FACT_ID);
+        let plan = fact_json(
+            result.context.get(ContextKey::Strategies),
+            FILL_PLAN_FACT_ID,
+        );
         assert_eq!(plan.get("form_id").and_then(|v| v.as_str()), Some("I-9"));
 
         let high_risk = plan
             .get("high_risk_fields")
             .and_then(|v| v.as_array())
             .expect("high_risk_fields array");
-        let high_risk_names: Vec<&str> =
-            high_risk.iter().filter_map(|v| v.as_str()).collect();
+        let high_risk_names: Vec<&str> = high_risk.iter().filter_map(|v| v.as_str()).collect();
         assert!(high_risk_names.contains(&"employee_ssn"));
         assert!(high_risk_names.contains(&"bank_account_number"));
         assert!(!high_risk_names.contains(&"first_name"));
@@ -551,8 +552,16 @@ mod tests {
         // RiskClassifierAgent writes first — so the plan may capture the
         // RISK fact before COMPLETENESS arrives. Either way the plan
         // surfaces high_risk_fields and is not ready to submit.
-        assert!(plan.get("missing_fields").and_then(|v| v.as_array()).is_some());
-        assert_eq!(plan.get("ready_for_submit").and_then(|v| v.as_bool()), Some(false));
+        assert!(
+            plan.get("missing_fields")
+                .and_then(|v| v.as_array())
+                .is_some()
+        );
+        assert_eq!(
+            plan.get("ready_for_submit")
+                .and_then(serde_json::Value::as_bool),
+            Some(false)
+        );
 
         // ProposalEmitterAgent only emits proposals for non-empty normalized
         // values; with the placeholder normaliser nothing should be proposed.

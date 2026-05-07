@@ -231,7 +231,7 @@ impl Suggestor for IntentCodecSuggestor {
     fn accepts(&self, ctx: &dyn Context) -> bool {
         ctx.get(ContextKey::Seeds).iter().any(|fact| {
             fact.id().starts_with(SPEC_PREFIX)
-                && !route_exists(ctx, request_id_from_spec(&fact.id()))
+                && !route_exists(ctx, request_id_from_spec(fact.id()))
         })
     }
 
@@ -243,12 +243,12 @@ impl Suggestor for IntentCodecSuggestor {
                 continue;
             }
 
-            let request_id = request_id_from_spec(&fact.id());
+            let request_id = request_id_from_spec(fact.id());
             if route_exists(ctx, request_id) {
                 continue;
             }
 
-            let compiled = compile_intent(&fact.content());
+            let compiled = compile_intent(fact.content());
             let formation_request = FormationRequest {
                 id: request_id.to_string(),
                 required_roles: compiled.required_roles.clone(),
@@ -325,7 +325,7 @@ impl Suggestor for LoopStatusSuggestor {
         ctx.get(ContextKey::Strategies)
             .iter()
             .filter(|fact| fact.id().starts_with(FORMATION_PLAN_PREFIX))
-            .filter_map(|fact| serde_json::from_str::<FormationPlan>(&fact.content()).ok())
+            .filter_map(|fact| serde_json::from_str::<FormationPlan>(fact.content()).ok())
             .any(|plan| {
                 !fact_exists(
                     ctx,
@@ -342,7 +342,7 @@ impl Suggestor for LoopStatusSuggestor {
             .get(ContextKey::Strategies)
             .iter()
             .filter(|fact| fact.id().starts_with(FORMATION_PLAN_PREFIX))
-            .filter_map(|fact| serde_json::from_str::<FormationPlan>(&fact.content()).ok())
+            .filter_map(|fact| serde_json::from_str::<FormationPlan>(fact.content()).ok())
         {
             let status_id = format!("{LOOP_STATUS_PREFIX}{}", plan.request_id);
             if fact_exists(ctx, ContextKey::Diagnostic, &status_id) {
@@ -769,7 +769,7 @@ fn assigned_requests(ctx: &dyn Context, suggestor_name: &str) -> Vec<String> {
     ctx.get(ContextKey::Strategies)
         .iter()
         .filter(|fact| fact.id().starts_with(FORMATION_PLAN_PREFIX))
-        .filter_map(|fact| serde_json::from_str::<FormationPlan>(&fact.content()).ok())
+        .filter_map(|fact| serde_json::from_str::<FormationPlan>(fact.content()).ok())
         .filter(|plan| {
             plan.assignments
                 .iter()
@@ -784,7 +784,7 @@ fn provider_assignment_for(ctx: &dyn Context, request_id: &str) -> Option<Provid
     ctx.get(ContextKey::Strategies)
         .iter()
         .find(|fact| fact.id().as_str() == assignment_id)
-        .and_then(|fact| serde_json::from_str(&fact.content()).ok())
+        .and_then(|fact| serde_json::from_str(fact.content()).ok())
 }
 
 fn route_exists(ctx: &dyn Context, request_id: &str) -> bool {
@@ -1004,7 +1004,7 @@ And policy gates should block non-compliant synthesis"#,
             .get(ContextKey::Diagnostic)
             .iter()
             .find(|fact| fact.id() == "loop-status:dd-acme-metrics")
-            .and_then(|fact| serde_json::from_str(&fact.content()).ok())
+            .and_then(|fact| serde_json::from_str(fact.content()).ok())
             .expect("loop status should exist");
 
         assert_eq!(status["ready"].as_bool(), Some(false));
@@ -1033,14 +1033,14 @@ And policy gates should block non-compliant synthesis"#,
             .get(ContextKey::Strategies)
             .iter()
             .find(|fact| fact.id() == "formation-plan:dd-acme-metrics")
-            .and_then(|fact| serde_json::from_str::<FormationPlan>(&fact.content()).ok())
+            .and_then(|fact| serde_json::from_str::<FormationPlan>(fact.content()).ok())
             .expect("formation plan should exist");
         let status: serde_json::Value = result
             .context
             .get(ContextKey::Diagnostic)
             .iter()
             .find(|fact| fact.id() == "loop-status:dd-acme-metrics")
-            .and_then(|fact| serde_json::from_str(&fact.content()).ok())
+            .and_then(|fact| serde_json::from_str(fact.content()).ok())
             .expect("loop status should exist");
 
         assert_eq!(plan.unmatched_roles, vec![SuggestorRole::Constraint]);

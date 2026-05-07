@@ -15,7 +15,7 @@ pub struct DraftingResearchAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for DraftingResearchAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "DraftingResearchAgent"
     }
 
@@ -53,7 +53,7 @@ pub struct DraftingComposerAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for DraftingComposerAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "DraftingComposerAgent"
     }
 
@@ -192,7 +192,11 @@ mod tests {
                 "drafting_research:notes",
                 "research output",
             ),
-            (ContextKey::Strategies, "drafting_output:v0", "existing draft"),
+            (
+                ContextKey::Strategies,
+                "drafting_output:v0",
+                "existing draft",
+            ),
         ]);
         assert!(!agent.accepts(&ctx));
     }

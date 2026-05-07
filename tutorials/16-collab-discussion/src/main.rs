@@ -230,12 +230,12 @@ fn main() {
         println!(
             "  {:14} {:<5}{:<5}{:<5}{:<5}{:<5}{}",
             format!("{rule:?}"),
-            if passes(*rule,0, 5) { "PASS" } else { "FAIL" },
-            if passes(*rule,1, 5) { "PASS" } else { "FAIL" },
-            if passes(*rule,2, 5) { "PASS" } else { "FAIL" },
-            if passes(*rule,3, 5) { "PASS" } else { "FAIL" },
-            if passes(*rule,4, 5) { "PASS" } else { "FAIL" },
-            if passes(*rule,5, 5) { "PASS" } else { "FAIL" },
+            if passes(*rule, 0, 5) { "PASS" } else { "FAIL" },
+            if passes(*rule, 1, 5) { "PASS" } else { "FAIL" },
+            if passes(*rule, 2, 5) { "PASS" } else { "FAIL" },
+            if passes(*rule, 3, 5) { "PASS" } else { "FAIL" },
+            if passes(*rule, 4, 5) { "PASS" } else { "FAIL" },
+            if passes(*rule, 5, 5) { "PASS" } else { "FAIL" },
         );
     }
 }

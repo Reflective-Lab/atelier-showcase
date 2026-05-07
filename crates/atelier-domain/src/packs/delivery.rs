@@ -37,7 +37,7 @@ pub struct PromiseCreatorAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for PromiseCreatorAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "promise_creator"
     }
 
@@ -59,7 +59,7 @@ impl Suggestor for PromiseCreatorAgent {
         let triggers = ctx.get(ContextKey::Seeds);
         let mut facts = Vec::new();
 
-        for trigger in triggers.iter() {
+        for trigger in triggers {
             if trigger.content().contains("deal.closed_won") {
                 facts.push(crate::proposal(
                     self.name(),
@@ -87,7 +87,7 @@ pub struct ScopeExtractorAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for ScopeExtractorAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "scope_extractor"
     }
 
@@ -105,7 +105,7 @@ impl Suggestor for ScopeExtractorAgent {
         let proposals = ctx.get(ContextKey::Proposals);
         let mut facts = Vec::new();
 
-        for promise in proposals.iter() {
+        for promise in proposals {
             if promise.id().starts_with(PROMISE_PREFIX)
                 && promise.content().contains("\"state\":\"draft\"")
             {
@@ -135,7 +135,7 @@ pub struct WorkBreakdownAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for WorkBreakdownAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "work_breakdown"
     }
 
@@ -159,7 +159,7 @@ impl Suggestor for WorkBreakdownAgent {
         let proposals = ctx.get(ContextKey::Proposals);
         let mut facts = Vec::new();
 
-        for item in proposals.iter() {
+        for item in proposals {
             if item.id().starts_with(SCOPE_PREFIX) {
                 facts.push(crate::proposal(
                     self.name(),
@@ -187,7 +187,7 @@ pub struct BlockerDetectorAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for BlockerDetectorAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "blocker_detector"
     }
 
@@ -205,7 +205,7 @@ impl Suggestor for BlockerDetectorAgent {
         let proposals = ctx.get(ContextKey::Proposals);
         let mut facts = Vec::new();
 
-        for task in proposals.iter() {
+        for task in proposals {
             if task.id().as_str().starts_with(TASK_PREFIX)
                 && task.content().contains("\"blocked\":true")
             {
@@ -235,7 +235,7 @@ pub struct BlockerRouterAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for BlockerRouterAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "blocker_router"
     }
 
@@ -253,7 +253,7 @@ impl Suggestor for BlockerRouterAgent {
         let proposals = ctx.get(ContextKey::Proposals);
         let mut facts = Vec::new();
 
-        for blocker in proposals.iter() {
+        for blocker in proposals {
             if blocker.id().starts_with(BLOCKER_PREFIX)
                 && blocker.content().contains("\"state\":\"raised\"")
             {
@@ -283,7 +283,7 @@ pub struct RiskAssessorAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for RiskAssessorAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "risk_assessor"
     }
 
@@ -312,7 +312,7 @@ impl Suggestor for RiskAssessorAgent {
 
         let mut facts = Vec::new();
 
-        for promise in proposals.iter() {
+        for promise in proposals {
             if promise.id().starts_with(PROMISE_PREFIX) {
                 let risk_level = if blocker_count > 2 {
                     "high"
@@ -348,7 +348,7 @@ pub struct StatusAggregatorAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for StatusAggregatorAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "status_aggregator"
     }
 
@@ -380,7 +380,7 @@ pub struct AcceptanceRequestorAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for AcceptanceRequestorAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "acceptance_requestor"
     }
 
@@ -398,7 +398,7 @@ impl Suggestor for AcceptanceRequestorAgent {
         let proposals = ctx.get(ContextKey::Proposals);
         let mut facts = Vec::new();
 
-        for promise in proposals.iter() {
+        for promise in proposals {
             if promise.id().starts_with(PROMISE_PREFIX)
                 && promise.content().contains("\"state\":\"review\"")
             {
@@ -427,7 +427,7 @@ pub struct PostmortemSchedulerAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for PostmortemSchedulerAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "postmortem_scheduler"
     }
 
@@ -445,7 +445,7 @@ impl Suggestor for PostmortemSchedulerAgent {
         let proposals = ctx.get(ContextKey::Proposals);
         let mut facts = Vec::new();
 
-        for promise in proposals.iter() {
+        for promise in proposals {
             if promise.id().starts_with(PROMISE_PREFIX)
                 && promise.content().contains("\"state\":\"completed\"")
             {
@@ -477,7 +477,7 @@ impl Suggestor for PostmortemSchedulerAgent {
 pub struct PromiseHasDealInvariant;
 
 impl Invariant for PromiseHasDealInvariant {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "promise_has_deal"
     }
 
@@ -486,7 +486,7 @@ impl Invariant for PromiseHasDealInvariant {
     }
 
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
-        for promise in ctx.get(ContextKey::Proposals).iter() {
+        for promise in ctx.get(ContextKey::Proposals) {
             if promise.id().starts_with(PROMISE_PREFIX)
                 && !promise.content().contains("\"deal_id\":")
             {
@@ -505,7 +505,7 @@ impl Invariant for PromiseHasDealInvariant {
 pub struct BlockerHasResolutionPathInvariant;
 
 impl Invariant for BlockerHasResolutionPathInvariant {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "blocker_has_resolution_path"
     }
 
@@ -516,7 +516,7 @@ impl Invariant for BlockerHasResolutionPathInvariant {
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
         let proposals = ctx.get(ContextKey::Proposals);
 
-        for blocker in proposals.iter() {
+        for blocker in proposals {
             // Check blockers that are raised but not yet routed
             if blocker.id().starts_with(BLOCKER_PREFIX)
                 && blocker.content().contains("\"state\":\"raised\"")
@@ -545,7 +545,7 @@ impl Invariant for BlockerHasResolutionPathInvariant {
 pub struct ScopeChangeRequiresApprovalInvariant;
 
 impl Invariant for ScopeChangeRequiresApprovalInvariant {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "scope_change_requires_approval"
     }
 
@@ -554,7 +554,7 @@ impl Invariant for ScopeChangeRequiresApprovalInvariant {
     }
 
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
-        for scope in ctx.get(ContextKey::Proposals).iter() {
+        for scope in ctx.get(ContextKey::Proposals) {
             if scope.id().starts_with(SCOPE_PREFIX) && scope.content().contains("\"change_type\":")
             {
                 // Scope has been modified - check for approval
@@ -577,7 +577,7 @@ impl Invariant for ScopeChangeRequiresApprovalInvariant {
 pub struct CompletedPromiseHasAcceptanceInvariant;
 
 impl Invariant for CompletedPromiseHasAcceptanceInvariant {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "completed_promise_has_acceptance"
     }
 
@@ -588,7 +588,7 @@ impl Invariant for CompletedPromiseHasAcceptanceInvariant {
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
         let proposals = ctx.get(ContextKey::Proposals);
 
-        for promise in proposals.iter() {
+        for promise in proposals {
             if promise.id().starts_with(PROMISE_PREFIX)
                 && promise.content().contains("\"state\":\"completed\"")
             {

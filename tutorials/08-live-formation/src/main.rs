@@ -231,7 +231,7 @@ fn formation_plan(ctx: &dyn Context) -> Option<FormationPlan> {
     ctx.get(ContextKey::Strategies)
         .iter()
         .find(|f| f.id() == "formation-plan:launch")
-        .and_then(|f| serde_json::from_str(&f.content()).ok())
+        .and_then(|f| serde_json::from_str(f.content()).ok())
 }
 
 fn in_formation(ctx: &dyn Context, suggestor_name: &str) -> bool {
@@ -264,7 +264,7 @@ impl Suggestor for MarketAnalyser {
             .get(ContextKey::Seeds)
             .iter()
             .find(|f| f.id() == "market-signal")
-            .and_then(|f| serde_json::from_str(&f.content()).ok())
+            .and_then(|f| serde_json::from_str(f.content()).ok())
             .unwrap_or_default();
 
         let tam_bn = signal["market_size_usd_bn"].as_f64().unwrap_or(0.0);
@@ -327,7 +327,7 @@ impl Suggestor for TrendForecaster {
             .get(ContextKey::Seeds)
             .iter()
             .find(|f| f.id() == "market-signal")
-            .and_then(|f| serde_json::from_str(&f.content()).ok())
+            .and_then(|f| serde_json::from_str(f.content()).ok())
             .unwrap_or_default();
 
         let win_rate = signal["win_rate_comparable"].as_f64().unwrap_or(0.30);
@@ -395,7 +395,7 @@ impl Suggestor for CompetitiveScanner {
             .get(ContextKey::Seeds)
             .iter()
             .find(|f| f.id() == "market-signal")
-            .and_then(|f| serde_json::from_str(&f.content()).ok())
+            .and_then(|f| serde_json::from_str(f.content()).ok())
             .unwrap_or_default();
 
         let competitors: Vec<&str> = signal["competitors"]
@@ -479,14 +479,14 @@ impl Suggestor for InvestmentGuard {
         let risk_score: f64 = evals
             .iter()
             .find(|f| f.id() == "eval:competitive-risk")
-            .and_then(|f| serde_json::from_str::<serde_json::Value>(&f.content()).ok())
+            .and_then(|f| serde_json::from_str::<serde_json::Value>(f.content()).ok())
             .and_then(|v| v["risk_score"].as_f64())
             .unwrap_or(1.0);
 
         let tam_bn: f64 = evals
             .iter()
             .find(|f| f.id() == "analysis:market")
-            .and_then(|f| serde_json::from_str::<serde_json::Value>(&f.content()).ok())
+            .and_then(|f| serde_json::from_str::<serde_json::Value>(f.content()).ok())
             .and_then(|v| v["tam_current_usd_bn"].as_f64())
             .unwrap_or(0.0);
 
@@ -548,7 +548,7 @@ impl Suggestor for BudgetAllocator {
             .get(ContextKey::Seeds)
             .iter()
             .find(|f| f.id() == "market-signal")
-            .and_then(|f| serde_json::from_str(&f.content()).ok())
+            .and_then(|f| serde_json::from_str(f.content()).ok())
             .unwrap_or_default();
 
         let budget = signal["launch_budget_usd"].as_f64().unwrap_or(5_000_000.0);
@@ -623,35 +623,35 @@ impl Suggestor for LaunchDirector {
             .get(ContextKey::Constraints)
             .iter()
             .find(|f| f.id() == "risk-gate")
-            .and_then(|f| serde_json::from_str(&f.content()).ok())
+            .and_then(|f| serde_json::from_str(f.content()).ok())
             .unwrap_or_default();
 
         let market: serde_json::Value = ctx
             .get(ContextKey::Evaluations)
             .iter()
             .find(|f| f.id() == "analysis:market")
-            .and_then(|f| serde_json::from_str(&f.content()).ok())
+            .and_then(|f| serde_json::from_str(f.content()).ok())
             .unwrap_or_default();
 
         let forecast: serde_json::Value = ctx
             .get(ContextKey::Evaluations)
             .iter()
             .find(|f| f.id() == "eval:trend-forecast")
-            .and_then(|f| serde_json::from_str(&f.content()).ok())
+            .and_then(|f| serde_json::from_str(f.content()).ok())
             .unwrap_or_default();
 
         let risk: serde_json::Value = ctx
             .get(ContextKey::Evaluations)
             .iter()
             .find(|f| f.id() == "eval:competitive-risk")
-            .and_then(|f| serde_json::from_str(&f.content()).ok())
+            .and_then(|f| serde_json::from_str(f.content()).ok())
             .unwrap_or_default();
 
         let budget: serde_json::Value = ctx
             .get(ContextKey::Hypotheses)
             .iter()
             .find(|f| f.id() == "plan:budget")
-            .and_then(|f| serde_json::from_str(&f.content()).ok())
+            .and_then(|f| serde_json::from_str(f.content()).ok())
             .unwrap_or_default();
 
         // Formation provenance from the plan written by FormationAssemblySuggestor.
@@ -669,7 +669,7 @@ impl Suggestor for LaunchDirector {
             .get(ContextKey::Strategies)
             .iter()
             .find(|f| f.id() == "provider-assignment:launch")
-            .and_then(|f| serde_json::from_str(&f.content()).ok());
+            .and_then(|f| serde_json::from_str(f.content()).ok());
 
         let providers: Vec<String> = provider_assignment
             .map(|a| {
@@ -896,7 +896,7 @@ async fn main() {
         .get(ContextKey::Strategies)
         .iter()
         .find(|f| f.id() == "provider-assignment:launch")
-        .and_then(|f| serde_json::from_str::<ProviderAssignment>(&f.content()).ok())
+        .and_then(|f| serde_json::from_str::<ProviderAssignment>(f.content()).ok())
     {
         println!(
             "  Provider assignment  (coverage: {:.0}%)",
@@ -917,7 +917,7 @@ async fn main() {
         .get(ContextKey::Strategies)
         .iter()
         .find(|f| f.id() == "formation-plan:launch")
-        .and_then(|f| serde_json::from_str::<FormationPlan>(&f.content()).ok())
+        .and_then(|f| serde_json::from_str::<FormationPlan>(f.content()).ok())
     {
         println!(
             "  Formation plan  (coverage: {:.0}%)",
@@ -941,7 +941,7 @@ async fn main() {
     for eval in result.context.get(ContextKey::Evaluations) {
         match eval.id().as_str() {
             "analysis:market" => {
-                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&eval.content()) {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(eval.content()) {
                     println!(
                         "  Market Analysis  [{}]",
                         v["assessment"].as_str().unwrap_or("?")
@@ -961,7 +961,7 @@ async fn main() {
                 }
             }
             "eval:competitive-risk" => {
-                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&eval.content()) {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(eval.content()) {
                     println!(
                         "  Competitive Risk  [{}]  score: {}",
                         v["risk_level"].as_str().unwrap_or("?"),
@@ -978,7 +978,7 @@ async fn main() {
                 }
             }
             "eval:trend-forecast" => {
-                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&eval.content()) {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(eval.content()) {
                     let arr_y1 = v["arr_year1_usd"].as_f64().unwrap_or(0.0) / 1_000_000.0;
                     let arr_y3 = v["arr_year3_usd"].as_f64().unwrap_or(0.0) / 1_000_000.0;
                     println!("  Revenue Forecast  [confidence: {}]", v["confidence"]);
@@ -1005,7 +1005,7 @@ async fn main() {
         .get(ContextKey::Constraints)
         .iter()
         .find(|f| f.id() == "risk-gate")
-        .and_then(|f| serde_json::from_str::<serde_json::Value>(&f.content()).ok())
+        .and_then(|f| serde_json::from_str::<serde_json::Value>(f.content()).ok())
     {
         let decision = gate["decision"].as_str().unwrap_or("block");
         let icon = if decision == "permit" { "✓" } else { "✗" };
@@ -1024,7 +1024,7 @@ async fn main() {
         .get(ContextKey::Hypotheses)
         .iter()
         .find(|f| f.id() == "plan:budget")
-        .and_then(|f| serde_json::from_str::<serde_json::Value>(&f.content()).ok())
+        .and_then(|f| serde_json::from_str::<serde_json::Value>(f.content()).ok())
     {
         println!(
             "  Budget Plan  ${:.1}M  [{}]",
@@ -1055,7 +1055,7 @@ async fn main() {
         .get(ContextKey::Proposals)
         .iter()
         .find(|f| f.id() == "recommendation:launch")
-        .and_then(|f| serde_json::from_str::<serde_json::Value>(&f.content()).ok())
+        .and_then(|f| serde_json::from_str::<serde_json::Value>(f.content()).ok())
     {
         let verdict = rec["verdict"].as_str().unwrap_or("?");
         let confidence = rec["confidence"].as_f64().unwrap_or(0.0);

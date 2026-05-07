@@ -1,0 +1,14 @@
+[package]
+name = "scenario-truth-driven-formation"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Demo: hand Organism three Truths, watch it pick the right formation per problem class"
+
+[dependencies]
+axiom-truth.workspace = true
+organism-pack.workspace = true
+organism-runtime.workspace = true
+converge-kernel.workspace = true
+chrono.workspace = true
+anyhow.workspace = true

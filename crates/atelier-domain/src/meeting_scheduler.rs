@@ -379,7 +379,7 @@ impl Suggestor for ConflictDetectionAgent {
                         slot.id()
                             .as_str()
                             .strip_prefix("slot:")
-                            .unwrap_or(&slot.id().as_str())
+                            .unwrap_or(slot.id().as_str())
                     ),
                     format!(
                         "Score: {}/100 | {} | Rationale: {}",
@@ -568,12 +568,12 @@ impl Invariant for RequirePositiveDuration {
 
         let duration = duration_from_seeds.or(duration_from_constraints);
 
-        if let Some(dur) = duration {
-            if dur == 0 {
-                return InvariantResult::Violated(Violation::new(
-                    "meeting duration must be greater than zero",
-                ));
-            }
+        if let Some(dur) = duration
+            && dur == 0
+        {
+            return InvariantResult::Violated(Violation::new(
+                "meeting duration must be greater than zero",
+            ));
         }
 
         InvariantResult::Ok
@@ -722,7 +722,13 @@ mod tests {
         let project = |facts: &[ContextFact]| -> Vec<(ContextKey, String, String)> {
             facts
                 .iter()
-                .map(|f| (f.key(), f.id().as_str().to_string(), f.content().to_string()))
+                .map(|f| {
+                    (
+                        f.key(),
+                        f.id().as_str().to_string(),
+                        f.content().to_string(),
+                    )
+                })
                 .collect()
         };
 

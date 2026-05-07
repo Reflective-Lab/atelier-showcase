@@ -590,7 +590,7 @@ mod tests {
     }
 
     impl VectorRecall for TestVectorStore {
-        fn name(&self) -> &str {
+        fn name(&self) -> &'static str {
             "test-vector-store"
         }
 
@@ -650,7 +650,7 @@ mod tests {
     struct MockEmbedder;
 
     impl Embedding for MockEmbedder {
-        fn name(&self) -> &str {
+        fn name(&self) -> &'static str {
             "mock-embedder"
         }
 
@@ -699,7 +699,7 @@ mod tests {
     struct MockReranker;
 
     impl Reranking for MockReranker {
-        fn name(&self) -> &str {
+        fn name(&self) -> &'static str {
             "mock-reranker"
         }
 

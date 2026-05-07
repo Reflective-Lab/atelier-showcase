@@ -28,6 +28,7 @@ pub(crate) fn has_approval(
     })
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn flow_input(
     principal_id: &str,
     authority: &str,
@@ -129,7 +130,7 @@ mod tests {
                 .principal
                 .domains
                 .iter()
-                .map(|d| d.as_str())
+                .map(converge_core::types::DomainId::as_str)
                 .collect::<Vec<_>>(),
             vec!["finance"]
         );
@@ -145,7 +146,7 @@ mod tests {
                 .resource
                 .gates_passed
                 .iter()
-                .map(|g| g.as_str())
+                .map(converge_core::GateId::as_str)
                 .collect::<Vec<_>>(),
             vec!["receipt"]
         );

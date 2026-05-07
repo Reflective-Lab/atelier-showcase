@@ -108,7 +108,7 @@ impl Suggestor for ExpenseParsingAgent {
         let seed = seeds.first();
 
         let parsed = if let Some(s) = seed {
-            let json: serde_json::Value = serde_json::from_str(&s.content()).unwrap_or_default();
+            let json: serde_json::Value = serde_json::from_str(s.content()).unwrap_or_default();
             ProposedFact::new(
                 ContextKey::Strategies,
                 "parsed-expense",
@@ -152,7 +152,7 @@ impl Suggestor for PolicyValidationAgent {
         let strategy = strategies.first();
 
         let result = strategy
-            .map(|fact| parse_expense(&fact.content()))
+            .map(|fact| parse_expense(fact.content()))
             .map(|expense| {
                 let decision = self
                     .policy
@@ -220,8 +220,8 @@ impl Suggestor for ApprovalRoutingAgent {
         let strategies = ctx.get(ContextKey::Strategies);
 
         if let (Some(e), Some(s)) = (evaluations.first(), strategies.first()) {
-            let eval: serde_json::Value = serde_json::from_str(&e.content()).unwrap_or_default();
-            let expense = parse_expense(&s.content());
+            let eval: serde_json::Value = serde_json::from_str(e.content()).unwrap_or_default();
+            let expense = parse_expense(s.content());
             let validate_outcome = eval
                 .get("outcome")
                 .and_then(|value| value.as_str())
@@ -302,7 +302,7 @@ impl Suggestor for CommitDecisionAgent {
             return AgentEffect::default();
         };
 
-        let expense = parse_expense(&strategy.content());
+        let expense = parse_expense(strategy.content());
         let human_approval_present = has_human_approval(ctx);
         let constraint = ctx
             .get(ContextKey::Constraints)
@@ -311,7 +311,7 @@ impl Suggestor for CommitDecisionAgent {
 
         if !human_approval_present {
             let pending = constraint
-                .and_then(|fact| serde_json::from_str::<serde_json::Value>(&fact.content()).ok())
+                .and_then(|fact| serde_json::from_str::<serde_json::Value>(fact.content()).ok())
                 .and_then(|json| json.get("pending").and_then(|value| value.as_u64()))
                 .unwrap_or(0);
             if pending > 0 {
@@ -372,7 +372,7 @@ impl Suggestor for ApprovalSimulationAgent {
             .iter()
             .find(|fact| fact.id() == "expense-approval-routing")
         {
-            let routing: serde_json::Value = serde_json::from_str(&c.content()).unwrap_or_default();
+            let routing: serde_json::Value = serde_json::from_str(c.content()).unwrap_or_default();
             let pending = routing
                 .get("pending")
                 .and_then(|value| value.as_u64())

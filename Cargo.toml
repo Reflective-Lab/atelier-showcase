@@ -8,6 +8,7 @@ members = [
     "scenarios/expense-approval",
     "scenarios/loan-application",
     "scenarios/meeting-scheduler",
+    "scenarios/truth-driven-formation",
     "scenarios/vendor-selection",
 
     # Tutorials — numbered learning spine (read in order)
@@ -58,10 +59,13 @@ converge-client = "3.8.1"
 converge-storage = { version = "3.8.1", default-features = false }
 
 # Organism platform (also patched while unreleased)
-organism-pack = "1.5.0"
-organism-runtime = "1.5.0"
-organism-intent = "1.5.0"
+organism-pack = "1.8.0"
+organism-runtime = "1.8.0"
+organism-intent = "1.8.0"
 organism-domain = { path = "crates/organism-domain" }
+
+# Axiom — Truth source parsing and IntentPacket compilation (patched to local).
+axiom-truth = "0.8"
 
 # Common
 anyhow = "1"

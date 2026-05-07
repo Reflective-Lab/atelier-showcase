@@ -45,7 +45,7 @@ fn parse_sources(ctx: &dyn converge_core::Context) -> Vec<AskSource> {
         .iter()
         .filter(|seed| seed.id().as_str().starts_with(SOURCE_SEED_PREFIX))
         .map(|seed| {
-            let payload: Option<AskSourcePayload> = serde_json::from_str(&seed.content()).ok();
+            let payload: Option<AskSourcePayload> = serde_json::from_str(seed.content()).ok();
             if let Some(payload) = payload {
                 AskSource {
                     id: payload.id.unwrap_or_else(|| seed.id().as_str().to_string()),
@@ -94,7 +94,7 @@ pub struct AskConvergeAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for AskConvergeAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "ask_converge"
     }
 
@@ -112,9 +112,8 @@ impl Suggestor for AskConvergeAgent {
     }
 
     async fn execute(&self, ctx: &dyn converge_core::Context) -> AgentEffect {
-        let question = match parse_question(ctx) {
-            Some(question) => question,
-            None => return AgentEffect::empty(),
+        let Some(question) = parse_question(ctx) else {
+            return AgentEffect::empty();
         };
         let sources = parse_sources(ctx);
 
@@ -138,7 +137,7 @@ impl Suggestor for AskConvergeAgent {
 pub struct GroundedAnswerInvariant;
 
 impl Invariant for GroundedAnswerInvariant {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "grounded_answer_required"
     }
 
@@ -152,7 +151,7 @@ impl Invariant for GroundedAnswerInvariant {
                 continue;
             }
 
-            let payload: serde_json::Value = match serde_json::from_str(&fact.content()) {
+            let payload: serde_json::Value = match serde_json::from_str(fact.content()) {
                 Ok(payload) => payload,
                 Err(_) => {
                     return InvariantResult::Violated(Violation::new(
@@ -161,10 +160,10 @@ impl Invariant for GroundedAnswerInvariant {
                 }
             };
 
-            let grounded = payload.get("grounded").and_then(|v| v.as_bool());
+            let grounded = payload.get("grounded").and_then(serde_json::Value::as_bool);
             let sources = payload.get("sources").and_then(|v| v.as_array());
 
-            if grounded != Some(true) || sources.map_or(true, |s| s.is_empty()) {
+            if grounded != Some(true) || sources.is_none_or(std::vec::Vec::is_empty) {
                 return InvariantResult::Violated(Violation::new(
                     "Ask answer must be grounded with at least one source".to_string(),
                 ));
@@ -179,7 +178,7 @@ impl Invariant for GroundedAnswerInvariant {
 pub struct RecallNotEvidenceInvariant;
 
 impl Invariant for RecallNotEvidenceInvariant {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "recall_not_evidence"
     }
 
@@ -193,7 +192,7 @@ impl Invariant for RecallNotEvidenceInvariant {
                 continue;
             }
 
-            let payload: serde_json::Value = match serde_json::from_str(&fact.content()) {
+            let payload: serde_json::Value = match serde_json::from_str(fact.content()) {
                 Ok(payload) => payload,
                 Err(_) => {
                     return InvariantResult::Violated(Violation::new(
@@ -202,7 +201,9 @@ impl Invariant for RecallNotEvidenceInvariant {
                 }
             };
 
-            let recall_only = payload.get("recall_only").and_then(|v| v.as_bool());
+            let recall_only = payload
+                .get("recall_only")
+                .and_then(serde_json::Value::as_bool);
             if recall_only != Some(true) {
                 return InvariantResult::Violated(Violation::new(
                     "Ask answer must be marked recall_only".to_string(),
@@ -243,7 +244,7 @@ mod tests {
             (ContextKey::Seeds, "ask:source:1", source.as_str()),
         ]);
 
-        let agent = AskConvergeAgent::default();
+        let agent = AskConvergeAgent;
         let effect = tokio::runtime::Runtime::new()
             .unwrap()
             .block_on(agent.execute(&ctx));

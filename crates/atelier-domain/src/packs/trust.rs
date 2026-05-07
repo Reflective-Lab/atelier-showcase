@@ -67,7 +67,7 @@ pub struct SessionValidatorAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for SessionValidatorAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "session_validator"
     }
 
@@ -85,7 +85,7 @@ impl Suggestor for SessionValidatorAgent {
         let triggers = ctx.get(ContextKey::Seeds);
         let mut facts = Vec::new();
 
-        for trigger in triggers.iter() {
+        for trigger in triggers {
             if trigger.content().contains("session.token") {
                 facts.push(crate::proposal(
                     self.name(),
@@ -117,7 +117,7 @@ pub struct RbacEnforcerAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for RbacEnforcerAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "rbac_enforcer"
     }
 
@@ -140,7 +140,7 @@ impl Suggestor for RbacEnforcerAgent {
         let signals = ctx.get(ContextKey::Signals);
         let mut facts = Vec::new();
 
-        for session in signals.iter() {
+        for session in signals {
             if session.id().starts_with(SESSION_PREFIX)
                 && session.content().contains("\"valid\":true")
             {
@@ -173,7 +173,7 @@ pub struct AuditWriterAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for AuditWriterAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "audit_writer"
     }
 
@@ -191,7 +191,7 @@ impl Suggestor for AuditWriterAgent {
         let proposals = ctx.get(ContextKey::Proposals);
         let mut facts = Vec::new();
 
-        for decision in proposals.iter() {
+        for decision in proposals {
             if decision.id().starts_with(ACCESS_DECISION_PREFIX) {
                 facts.push(crate::proposal(
                     self.name(),
@@ -222,7 +222,7 @@ pub struct ProvenanceTrackerAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for ProvenanceTrackerAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "provenance_tracker"
     }
 
@@ -246,7 +246,7 @@ impl Suggestor for ProvenanceTrackerAgent {
         let proposals = ctx.get(ContextKey::Proposals);
         let mut facts = Vec::new();
 
-        for entry in proposals.iter() {
+        for entry in proposals {
             if entry.id().starts_with(AUDIT_PREFIX) {
                 facts.push(crate::proposal(
                     self.name(),
@@ -277,7 +277,7 @@ pub struct ComplianceScannerAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for ComplianceScannerAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "compliance_scanner"
     }
 
@@ -329,7 +329,7 @@ pub struct ViolationRemediatorAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for ViolationRemediatorAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "violation_remediator"
     }
 
@@ -347,7 +347,7 @@ impl Suggestor for ViolationRemediatorAgent {
         let signals = ctx.get(ContextKey::Signals);
         let mut facts = Vec::new();
 
-        for violation in signals.iter() {
+        for violation in signals {
             if violation.id().starts_with(VIOLATION_PREFIX)
                 && violation.content().contains("\"state\":\"open\"")
             {
@@ -399,7 +399,7 @@ impl std::fmt::Debug for ContractExecutionAgent {
 
 #[async_trait::async_trait]
 impl Suggestor for ContractExecutionAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "contract_execution"
     }
 
@@ -413,7 +413,7 @@ impl Suggestor for ContractExecutionAgent {
                 && contract
                     .content()
                     .contains("\"state\":\"ready_to_execute\"")
-                && !contract_execution_final_output_exists(ctx, &contract.id())
+                && !contract_execution_final_output_exists(ctx, contract.id())
         })
     }
 
@@ -421,17 +421,17 @@ impl Suggestor for ContractExecutionAgent {
         let proposals = ctx.get(ContextKey::Proposals);
         let mut facts = Vec::new();
 
-        for contract in proposals.iter() {
+        for contract in proposals {
             if !contract.id().starts_with(LEGAL_CONTRACT_PREFIX)
                 || !contract
                     .content()
                     .contains("\"state\":\"ready_to_execute\"")
-                || contract_execution_final_output_exists(ctx, &contract.id())
+                || contract_execution_final_output_exists(ctx, contract.id())
             {
                 continue;
             }
 
-            let Ok(contract_json) = serde_json::from_str::<serde_json::Value>(&contract.content())
+            let Ok(contract_json) = serde_json::from_str::<serde_json::Value>(contract.content())
             else {
                 continue;
             };
@@ -457,7 +457,7 @@ impl Suggestor for ContractExecutionAgent {
             let human_approval_present = crate::flow_governance::has_approval(
                 ctx,
                 "contract",
-                &contract.id(),
+                contract.id(),
                 "legal_counsel",
             );
 
@@ -507,7 +507,7 @@ impl Suggestor for ContractExecutionAgent {
                     ));
                 }
                 FlowGateOutcome::Escalate => {
-                    if !contract_execution_request_exists(ctx, &contract.id()) {
+                    if !contract_execution_request_exists(ctx, contract.id()) {
                         facts.push(crate::proposal(
                             self.name(),
                             ContextKey::Proposals,
@@ -550,7 +550,7 @@ pub struct PiiRedactorAgent;
 
 #[async_trait::async_trait]
 impl Suggestor for PiiRedactorAgent {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "pii_redactor"
     }
 
@@ -568,7 +568,7 @@ impl Suggestor for PiiRedactorAgent {
         let triggers = ctx.get(ContextKey::Seeds);
         let mut facts = Vec::new();
 
-        for trigger in triggers.iter() {
+        for trigger in triggers {
             if trigger.content().contains("redaction.required") {
                 facts.push(crate::proposal(
                     self.name(),
@@ -599,7 +599,7 @@ impl Suggestor for PiiRedactorAgent {
 pub struct AllActionsAuditedInvariant;
 
 impl Invariant for AllActionsAuditedInvariant {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "all_actions_audited"
     }
 
@@ -609,7 +609,7 @@ impl Invariant for AllActionsAuditedInvariant {
 
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
         let proposals = ctx.get(ContextKey::Proposals);
-        for decision in proposals.iter() {
+        for decision in proposals {
             if decision.id().starts_with(ACCESS_DECISION_PREFIX) {
                 let has_audit = proposals.iter().any(|a| {
                     a.id().starts_with(AUDIT_PREFIX) && a.content().contains(decision.id().as_str())
@@ -631,7 +631,7 @@ impl Invariant for AllActionsAuditedInvariant {
 pub struct AuditImmutabilityInvariant;
 
 impl Invariant for AuditImmutabilityInvariant {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "audit_immutability"
     }
 
@@ -640,7 +640,7 @@ impl Invariant for AuditImmutabilityInvariant {
     }
 
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
-        for entry in ctx.get(ContextKey::Proposals).iter() {
+        for entry in ctx.get(ContextKey::Proposals) {
             if entry.id().starts_with(AUDIT_PREFIX)
                 && !entry.content().contains("\"immutable\":true")
             {
@@ -659,7 +659,7 @@ impl Invariant for AuditImmutabilityInvariant {
 pub struct ViolationsHaveRemediationInvariant;
 
 impl Invariant for ViolationsHaveRemediationInvariant {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "violations_have_remediation"
     }
 
@@ -669,7 +669,7 @@ impl Invariant for ViolationsHaveRemediationInvariant {
 
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
         let proposals = ctx.get(ContextKey::Proposals);
-        for violation in ctx.get(ContextKey::Signals).iter() {
+        for violation in ctx.get(ContextKey::Signals) {
             if violation.id().starts_with(VIOLATION_PREFIX)
                 && violation.content().contains("\"state\":\"open\"")
             {
@@ -707,7 +707,7 @@ const LEGAL_IP_ASSIGNMENT_PREFIX: &str = "ip_assignment:";
 pub struct LegalActionsAuditedInvariant;
 
 impl Invariant for LegalActionsAuditedInvariant {
-    fn name(&self) -> &str {
+    fn name(&self) -> &'static str {
         "legal_actions_audited"
     }
 
@@ -719,7 +719,7 @@ impl Invariant for LegalActionsAuditedInvariant {
         let proposals = ctx.get(ContextKey::Proposals);
 
         // Check executed contracts have audit entries
-        for contract in proposals.iter() {
+        for contract in proposals {
             if contract.id().starts_with(LEGAL_CONTRACT_PREFIX)
                 && contract.content().contains("\"state\":\"executed\"")
             {
@@ -743,7 +743,7 @@ impl Invariant for LegalActionsAuditedInvariant {
         }
 
         // Check equity grants have audit entries
-        for grant in proposals.iter() {
+        for grant in proposals {
             if grant.id().starts_with(LEGAL_EQUITY_PREFIX)
                 && grant.content().contains("\"state\":\"granted\"")
             {
@@ -764,7 +764,7 @@ impl Invariant for LegalActionsAuditedInvariant {
         }
 
         // Check IP assignments have audit entries
-        for ip in proposals.iter() {
+        for ip in proposals {
             if ip.id().starts_with(LEGAL_IP_ASSIGNMENT_PREFIX)
                 && ip.content().contains("\"state\":\"signed\"")
             {

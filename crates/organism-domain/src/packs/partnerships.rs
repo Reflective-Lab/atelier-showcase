@@ -459,8 +459,8 @@ mod tests {
         assert!(!AGENTS.is_empty());
         assert!(!INVARIANTS.is_empty());
         assert!(!PROFILE.entities.is_empty());
-        assert!(PROFILE.requires_hitl);
-        assert!(!PROFILE.uses_llm);
+        const { assert!(PROFILE.requires_hitl) };
+        const { assert!(!PROFILE.uses_llm) };
     }
 
     #[tokio::test]
@@ -642,9 +642,13 @@ mod tests {
             Some("winner")
         );
         assert_eq!(
-            json.get("recommendation").and_then(serde_json::Value::as_str),
+            json.get("recommendation")
+                .and_then(serde_json::Value::as_str),
             Some("recommended")
         );
-        assert_eq!(json.get("rank").and_then(serde_json::Value::as_u64), Some(1));
+        assert_eq!(
+            json.get("rank").and_then(serde_json::Value::as_u64),
+            Some(1)
+        );
     }
 }
