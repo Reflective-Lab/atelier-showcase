@@ -2,20 +2,34 @@
 resolver = "2"
 members = [
     "crates/atelier-domain",
-    "crates/example-hello-convergence",
-    "crates/example-custom-agent",
-    "crates/example-custom-provider",
-    "crates/example-meeting-scheduler",
-    "crates/example-expense-approval",
-    "crates/example-vendor-selection",
-    "crates/example-loan-application",
-    "crates/example-formation-mixed",
-    "crates/example-live-formation",
-    "crates/example-intent-codec-loop",
-    "crates/example-adaptive-gap-loop",
-    "crates/example-fixed-point-vs-budget",
-    "crates/example-reconciliation-loop",
     "crates/organism-domain",
+
+    # Scenarios — full end-to-end domain demos
+    "scenarios/expense-approval",
+    "scenarios/loan-application",
+    "scenarios/meeting-scheduler",
+    "scenarios/vendor-selection",
+
+    # Tutorials — learning spine
+    "tutorials/adaptive-gap-loop",
+    "tutorials/charter-from-intent",
+    "tutorials/collab-discussion",
+    "tutorials/collab-huddle",
+    "tutorials/collab-panel",
+    "tutorials/collab-self-organizing",
+    "tutorials/custom-agent",
+    "tutorials/custom-provider",
+    "tutorials/debate-loop",
+    "tutorials/fixed-point-vs-budget",
+    "tutorials/formation-compiler",
+    "tutorials/formation-mixed",
+    "tutorials/hello-convergence",
+    "tutorials/intent-codec-loop",
+    "tutorials/live-formation",
+    "tutorials/reconciliation-loop",
+    "tutorials/resolution-showcase",
+    "tutorials/shape-competition",
+    "tutorials/topology-transition",
 ]
 
 [workspace.package]
@@ -45,6 +59,9 @@ converge-storage = { version = "3.8.1", default-features = false }
 
 # Organism platform (also patched while unreleased)
 organism-pack = "1.5.0"
+organism-runtime = "1.5.0"
+organism-intent = "1.5.0"
+organism-domain = { path = "crates/organism-domain" }
 
 # Common
 anyhow = "1"
@@ -93,6 +110,8 @@ codegen-units = 1
 # Local Organism development override.
 [patch.crates-io]
 organism-pack = { path = "../../work/organism/crates/pack" }
+organism-runtime = { path = "../../work/organism/crates/runtime" }
+organism-intent = { path = "../../work/organism/crates/intent" }
 # axiom-truth 0.7.0 on crates.io imports `converge_provider::select_healthy_chat_backend`,
 # which now lives in `converge-manifold-adapters` (lib name `manifold`). Local source is
 # already migrated; remove this patch once axiom-truth is republished against 3.8.1.
