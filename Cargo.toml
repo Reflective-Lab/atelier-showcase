@@ -93,3 +93,7 @@ codegen-units = 1
 # Local Organism development override.
 [patch.crates-io]
 organism-pack = { path = "../../work/organism/crates/pack" }
+# axiom-truth 0.7.0 on crates.io imports `converge_provider::select_healthy_chat_backend`,
+# which now lives in `converge-manifold-adapters` (lib name `manifold`). Local source is
+# already migrated; remove this patch once axiom-truth is republished against 3.8.1.
+axiom-truth = { path = "../../work/axiom" }

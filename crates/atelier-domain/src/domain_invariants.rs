@@ -126,4 +126,87 @@ mod tests {
         let ctx = FakeCtx(HashMap::new());
         assert_eq!(inv.check(&ctx), InvariantResult::Ok);
     }
+
+    use converge_core::{ContextState, Engine};
+
+    fn promoted(entries: &[(ContextKey, &str, &str)]) -> ContextState {
+        let mut ctx = ContextState::new();
+        for (key, id, content) in entries {
+            ctx.add_input(*key, *id, *content).unwrap();
+        }
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(Engine::new().run(ctx))
+            .unwrap()
+            .context
+    }
+
+    #[test]
+    fn authority_required_violates_on_unapproved_access() {
+        let inv = AuthorityRequired;
+        let ctx = promoted(&[(
+            ContextKey::Strategies,
+            "access:1",
+            "access:granted to user X",
+        )]);
+        assert!(matches!(inv.check(&ctx), InvariantResult::Violated(_)));
+    }
+
+    #[test]
+    fn authority_required_passes_when_authority_present() {
+        let inv = AuthorityRequired;
+        let ctx = promoted(&[
+            (
+                ContextKey::Strategies,
+                "access:1",
+                "access:granted access:1",
+            ),
+            (
+                ContextKey::Signals,
+                "auth:1",
+                "authority:approved access:1",
+            ),
+        ]);
+        assert_eq!(inv.check(&ctx), InvariantResult::Ok);
+    }
+
+    #[test]
+    fn authority_required_ignores_unrelated_facts() {
+        let inv = AuthorityRequired;
+        let ctx = promoted(&[(
+            ContextKey::Strategies,
+            "info:1",
+            "some unrelated content",
+        )]);
+        assert_eq!(inv.check(&ctx), InvariantResult::Ok);
+    }
+
+    #[test]
+    fn audit_trail_required_violates_when_provenance_missing() {
+        let inv = AuditTrailRequired;
+        let ctx = promoted(&[(
+            ContextKey::Strategies,
+            "draft:1",
+            "draft body without metadata",
+        )]);
+        assert!(matches!(inv.check(&ctx), InvariantResult::Violated(_)));
+    }
+
+    #[test]
+    fn audit_trail_required_passes_with_provenance_tag() {
+        let inv = AuditTrailRequired;
+        let ctx = promoted(&[(
+            ContextKey::Strategies,
+            "draft:1",
+            "content provenance: alice",
+        )]);
+        assert_eq!(inv.check(&ctx), InvariantResult::Ok);
+    }
+
+    #[test]
+    fn audit_trail_required_passes_with_by_tag() {
+        let inv = AuditTrailRequired;
+        let ctx = promoted(&[(ContextKey::Evaluations, "eval:1", "result by: bob")]);
+        assert_eq!(inv.check(&ctx), InvariantResult::Ok);
+    }
 }

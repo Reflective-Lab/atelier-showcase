@@ -645,6 +645,25 @@ impl Invariant for DataFreshnessInvariant {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use converge_core::{ContextState, Engine};
+
+    fn promoted(entries: &[(ContextKey, &str, &str)]) -> ContextState {
+        let mut ctx = ContextState::new();
+        for (key, id, content) in entries {
+            ctx.add_input(*key, *id, *content).unwrap();
+        }
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(Engine::new().run(ctx))
+            .unwrap()
+            .context
+    }
+
+    fn block_execute<S: Suggestor>(agent: &S, ctx: &ContextState) -> AgentEffect {
+        tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(agent.execute(ctx))
+    }
 
     #[test]
     fn agents_have_correct_names() {
@@ -658,5 +677,412 @@ mod tests {
         assert_eq!(AlertEvaluatorAgent.name(), "alert_evaluator");
         assert_eq!(FreshnessMonitorAgent.name(), "freshness_monitor");
         assert_eq!(MetricCalculatorAgent.name(), "metric_calculator");
+    }
+
+    #[test]
+    fn agents_declare_dependencies() {
+        assert_eq!(MetricRegistrarAgent.dependencies(), &[ContextKey::Seeds]);
+        assert_eq!(SourceConnectorAgent.dependencies(), &[ContextKey::Seeds]);
+        assert_eq!(
+            PipelineCoordinatorAgent.dependencies(),
+            &[ContextKey::Signals]
+        );
+        assert_eq!(DataValidatorAgent.dependencies(), &[ContextKey::Proposals]);
+        assert_eq!(
+            AnomalyDetectorAgent.dependencies(),
+            &[ContextKey::Evaluations]
+        );
+        assert_eq!(DashboardBuilderAgent.dependencies(), &[ContextKey::Seeds]);
+        assert_eq!(ReportGeneratorAgent.dependencies(), &[ContextKey::Seeds]);
+        assert_eq!(
+            AlertEvaluatorAgent.dependencies(),
+            &[ContextKey::Evaluations]
+        );
+        assert_eq!(FreshnessMonitorAgent.dependencies(), &[ContextKey::Signals]);
+        assert_eq!(
+            MetricCalculatorAgent.dependencies(),
+            &[ContextKey::Proposals, ContextKey::Evaluations]
+        );
+    }
+
+    #[test]
+    fn metric_registrar_accepts_define_or_update_seeds() {
+        let agent = MetricRegistrarAgent;
+        assert!(agent.accepts(&promoted(&[(ContextKey::Seeds, "m1", "metric.define")])));
+        assert!(agent.accepts(&promoted(&[(ContextKey::Seeds, "m1", "metric.update")])));
+        assert!(!agent.accepts(&promoted(&[(ContextKey::Seeds, "m1", "unrelated")])));
+        assert!(!agent.accepts(&promoted(&[])));
+    }
+
+    #[test]
+    fn metric_registrar_emits_one_proposal_per_trigger() {
+        let agent = MetricRegistrarAgent;
+        let ctx = promoted(&[
+            (ContextKey::Seeds, "m1", "metric.define orders.total"),
+            (ContextKey::Seeds, "m2", "metric.update orders.refunded"),
+            (ContextKey::Seeds, "noise", "unrelated"),
+        ]);
+        let effect = block_execute(&agent, &ctx);
+        let proposals = effect.proposals();
+        assert_eq!(proposals.len(), 2);
+        assert!(proposals.iter().all(|p| p.key == ContextKey::Proposals));
+        assert!(proposals.iter().all(|p| p.id.starts_with(METRIC_PREFIX)));
+    }
+
+    #[test]
+    fn source_connector_accepts_register_or_connect() {
+        let agent = SourceConnectorAgent;
+        assert!(agent.accepts(&promoted(&[(ContextKey::Seeds, "s1", "source.register pg")])));
+        assert!(agent.accepts(&promoted(&[(ContextKey::Seeds, "s1", "source.connect pg")])));
+        assert!(!agent.accepts(&promoted(&[(ContextKey::Seeds, "s1", "metric.define")])));
+    }
+
+    #[test]
+    fn source_connector_emits_signals() {
+        let agent = SourceConnectorAgent;
+        let ctx = promoted(&[(ContextKey::Seeds, "s1", "source.register pg")]);
+        let effect = block_execute(&agent, &ctx);
+        let proposals = effect.proposals();
+        assert_eq!(proposals.len(), 1);
+        assert_eq!(proposals[0].key, ContextKey::Signals);
+        assert!(proposals[0].id.starts_with(SOURCE_PREFIX));
+    }
+
+    #[test]
+    fn pipeline_coordinator_only_for_healthy_sources() {
+        let agent = PipelineCoordinatorAgent;
+        let healthy = promoted(&[(
+            ContextKey::Signals,
+            "source:pg",
+            r#"{"state":"healthy"}"#,
+        )]);
+        assert!(agent.accepts(&healthy));
+        let degraded = promoted(&[(
+            ContextKey::Signals,
+            "source:pg",
+            r#"{"state":"degraded"}"#,
+        )]);
+        assert!(!agent.accepts(&degraded));
+    }
+
+    #[test]
+    fn pipeline_coordinator_emits_pipeline_for_each_healthy_source() {
+        let agent = PipelineCoordinatorAgent;
+        let ctx = promoted(&[
+            (
+                ContextKey::Signals,
+                "source:pg",
+                r#"{"state":"healthy"}"#,
+            ),
+            (
+                ContextKey::Signals,
+                "source:redis",
+                r#"{"state":"healthy"}"#,
+            ),
+            (
+                ContextKey::Signals,
+                "source:cold",
+                r#"{"state":"degraded"}"#,
+            ),
+        ]);
+        let effect = block_execute(&agent, &ctx);
+        let proposals = effect.proposals();
+        assert_eq!(proposals.len(), 2);
+        assert!(proposals.iter().all(|p| p.id.starts_with(PIPELINE_PREFIX)));
+    }
+
+    #[test]
+    fn data_validator_only_on_succeeded_pipeline() {
+        let agent = DataValidatorAgent;
+        let succeeded = promoted(&[(
+            ContextKey::Proposals,
+            "pipeline:p1",
+            r#"{"state":"succeeded"}"#,
+        )]);
+        assert!(agent.accepts(&succeeded));
+        let pending = promoted(&[(
+            ContextKey::Proposals,
+            "pipeline:p1",
+            r#"{"state":"running"}"#,
+        )]);
+        assert!(!agent.accepts(&pending));
+    }
+
+    #[test]
+    fn data_validator_emits_validation_evaluations() {
+        let agent = DataValidatorAgent;
+        let ctx = promoted(&[(
+            ContextKey::Proposals,
+            "pipeline:p1",
+            r#"{"state":"succeeded"}"#,
+        )]);
+        let effect = block_execute(&agent, &ctx);
+        let proposals = effect.proposals();
+        assert_eq!(proposals.len(), 1);
+        assert_eq!(proposals[0].key, ContextKey::Evaluations);
+        assert!(proposals[0].id.starts_with(VALIDATION_PREFIX));
+    }
+
+    #[test]
+    fn anomaly_detector_accepts_valid_schema() {
+        let agent = AnomalyDetectorAgent;
+        let ctx = promoted(&[(
+            ContextKey::Evaluations,
+            "validation:p1",
+            r#"{"schema_valid":true}"#,
+        )]);
+        assert!(agent.accepts(&ctx));
+        let bad = promoted(&[(
+            ContextKey::Evaluations,
+            "validation:p1",
+            r#"{"schema_valid":false}"#,
+        )]);
+        assert!(!agent.accepts(&bad));
+    }
+
+    #[test]
+    fn anomaly_detector_emits_single_scan() {
+        let agent = AnomalyDetectorAgent;
+        let ctx = promoted(&[(
+            ContextKey::Evaluations,
+            "validation:p1",
+            r#"{"schema_valid":true}"#,
+        )]);
+        let effect = block_execute(&agent, &ctx);
+        let proposals = effect.proposals();
+        assert_eq!(proposals.len(), 1);
+        assert!(proposals[0].id.starts_with(ANOMALY_PREFIX));
+    }
+
+    #[test]
+    fn dashboard_builder_accepts_create_or_update() {
+        let agent = DashboardBuilderAgent;
+        assert!(agent.accepts(&promoted(&[(ContextKey::Seeds, "d1", "dashboard.create")])));
+        assert!(agent.accepts(&promoted(&[(ContextKey::Seeds, "d1", "dashboard.update")])));
+        assert!(!agent.accepts(&promoted(&[(ContextKey::Seeds, "d1", "noop")])));
+    }
+
+    #[test]
+    fn dashboard_builder_emits_dashboard_proposal() {
+        let agent = DashboardBuilderAgent;
+        let ctx = promoted(&[(ContextKey::Seeds, "d1", "dashboard.create")]);
+        let effect = block_execute(&agent, &ctx);
+        let proposals = effect.proposals();
+        assert_eq!(proposals.len(), 1);
+        assert!(proposals[0].id.starts_with(DASHBOARD_PREFIX));
+    }
+
+    #[test]
+    fn report_generator_accepts_generate_or_schedule() {
+        let agent = ReportGeneratorAgent;
+        assert!(agent.accepts(&promoted(&[(ContextKey::Seeds, "r1", "report.generate")])));
+        assert!(agent.accepts(&promoted(&[(ContextKey::Seeds, "r1", "report.schedule")])));
+        assert!(!agent.accepts(&promoted(&[(ContextKey::Seeds, "r1", "noop")])));
+    }
+
+    #[test]
+    fn report_generator_emits_one_per_trigger() {
+        let agent = ReportGeneratorAgent;
+        let ctx = promoted(&[
+            (ContextKey::Seeds, "r1", "report.generate weekly"),
+            (ContextKey::Seeds, "r2", "report.schedule daily"),
+        ]);
+        let effect = block_execute(&agent, &ctx);
+        assert_eq!(effect.proposals().len(), 2);
+    }
+
+    #[test]
+    fn alert_evaluator_accepts_anomaly_evaluations() {
+        let agent = AlertEvaluatorAgent;
+        let ctx = promoted(&[(
+            ContextKey::Evaluations,
+            "anomaly:scan:latest",
+            r#"{"anomalies_detected":0}"#,
+        )]);
+        assert!(agent.accepts(&ctx));
+        let unrelated = promoted(&[(
+            ContextKey::Evaluations,
+            "validation:p1",
+            r#"{"schema_valid":true}"#,
+        )]);
+        assert!(!agent.accepts(&unrelated));
+    }
+
+    #[test]
+    fn alert_evaluator_emits_alert_evaluation() {
+        let agent = AlertEvaluatorAgent;
+        let ctx = promoted(&[(
+            ContextKey::Evaluations,
+            "anomaly:scan:latest",
+            r#"{"anomalies_detected":0}"#,
+        )]);
+        let effect = block_execute(&agent, &ctx);
+        assert_eq!(effect.proposals().len(), 1);
+    }
+
+    #[test]
+    fn freshness_monitor_accepts_any_source_signal() {
+        let agent = FreshnessMonitorAgent;
+        let ctx = promoted(&[(ContextKey::Signals, "source:pg", "{}")]);
+        assert!(agent.accepts(&ctx));
+        assert!(!agent.accepts(&promoted(&[(ContextKey::Signals, "other:x", "{}")])));
+    }
+
+    #[test]
+    fn freshness_monitor_emits_per_source() {
+        let agent = FreshnessMonitorAgent;
+        let ctx = promoted(&[
+            (ContextKey::Signals, "source:pg", "{}"),
+            (ContextKey::Signals, "source:redis", "{}"),
+        ]);
+        let effect = block_execute(&agent, &ctx);
+        assert_eq!(effect.proposals().len(), 2);
+    }
+
+    #[test]
+    fn metric_calculator_requires_active_metric_and_validation() {
+        let agent = MetricCalculatorAgent;
+        let only_metric = promoted(&[(
+            ContextKey::Proposals,
+            "metric:m1",
+            r#"{"state":"active"}"#,
+        )]);
+        assert!(!agent.accepts(&only_metric));
+        let only_validation =
+            promoted(&[(ContextKey::Evaluations, "validation:p1", "{}")]);
+        assert!(!agent.accepts(&only_validation));
+        let both = promoted(&[
+            (
+                ContextKey::Proposals,
+                "metric:m1",
+                r#"{"state":"active"}"#,
+            ),
+            (ContextKey::Evaluations, "validation:p1", "{}"),
+        ]);
+        assert!(agent.accepts(&both));
+    }
+
+    #[test]
+    fn metric_calculator_emits_calculated_evaluation() {
+        let agent = MetricCalculatorAgent;
+        let ctx = promoted(&[
+            (
+                ContextKey::Proposals,
+                "metric:m1",
+                r#"{"state":"active"}"#,
+            ),
+            (ContextKey::Evaluations, "validation:p1", "{}"),
+        ]);
+        let effect = block_execute(&agent, &ctx);
+        let proposals = effect.proposals();
+        assert_eq!(proposals.len(), 1);
+        assert_eq!(proposals[0].key, ContextKey::Evaluations);
+        assert!(proposals[0].id.starts_with("calculated:"));
+    }
+
+    fn invariant_ctx(entries: &[(ContextKey, &str, &str)]) -> ContextState {
+        promoted(entries)
+    }
+
+    #[test]
+    fn metric_definition_versioned_passes_when_versioned() {
+        let inv = MetricDefinitionVersionedInvariant;
+        assert_eq!(inv.name(), "metric_definition_versioned");
+        assert_eq!(inv.class(), InvariantClass::Structural);
+        let ctx = invariant_ctx(&[(
+            ContextKey::Proposals,
+            "metric:m1",
+            r#"{"version":"1.0.0"}"#,
+        )]);
+        assert!(matches!(inv.check(&ctx), InvariantResult::Ok));
+    }
+
+    #[test]
+    fn metric_definition_versioned_violates_without_version() {
+        let inv = MetricDefinitionVersionedInvariant;
+        let ctx = invariant_ctx(&[(ContextKey::Proposals, "metric:m1", r#"{"state":"draft"}"#)]);
+        assert!(matches!(inv.check(&ctx), InvariantResult::Violated(_)));
+    }
+
+    #[test]
+    fn dashboard_cites_sources_passes_when_cited() {
+        let inv = DashboardCitesSourcesInvariant;
+        assert_eq!(inv.name(), "dashboard_cites_sources");
+        let ok = invariant_ctx(&[(
+            ContextKey::Proposals,
+            "dashboard:d1",
+            r#"{"state":"published","data_source":"pg"}"#,
+        )]);
+        assert!(matches!(inv.check(&ok), InvariantResult::Ok));
+        let draft = invariant_ctx(&[(
+            ContextKey::Proposals,
+            "dashboard:d1",
+            r#"{"state":"draft"}"#,
+        )]);
+        assert!(matches!(inv.check(&draft), InvariantResult::Ok));
+    }
+
+    #[test]
+    fn dashboard_cites_sources_violates_when_published_without_source() {
+        let inv = DashboardCitesSourcesInvariant;
+        let ctx = invariant_ctx(&[(
+            ContextKey::Proposals,
+            "dashboard:d1",
+            r#"{"state":"published"}"#,
+        )]);
+        assert!(matches!(inv.check(&ctx), InvariantResult::Violated(_)));
+    }
+
+    #[test]
+    fn alert_has_owner_passes_when_owned_or_inactive() {
+        let inv = AlertHasOwnerInvariant;
+        assert_eq!(inv.name(), "alert_has_owner");
+        let owned = invariant_ctx(&[(
+            ContextKey::Proposals,
+            "alert:a1",
+            r#"{"state":"active","owner":"sre"}"#,
+        )]);
+        assert!(matches!(inv.check(&owned), InvariantResult::Ok));
+        let inactive = invariant_ctx(&[(
+            ContextKey::Proposals,
+            "alert:a1",
+            r#"{"state":"paused"}"#,
+        )]);
+        assert!(matches!(inv.check(&inactive), InvariantResult::Ok));
+    }
+
+    #[test]
+    fn alert_has_owner_violates_when_active_without_owner() {
+        let inv = AlertHasOwnerInvariant;
+        let ctx = invariant_ctx(&[(
+            ContextKey::Proposals,
+            "alert:a1",
+            r#"{"state":"active"}"#,
+        )]);
+        assert!(matches!(inv.check(&ctx), InvariantResult::Violated(_)));
+    }
+
+    #[test]
+    fn data_freshness_passes_when_fresh() {
+        let inv = DataFreshnessInvariant;
+        assert_eq!(inv.name(), "data_freshness");
+        assert_eq!(inv.class(), InvariantClass::Semantic);
+        let ctx = invariant_ctx(&[(
+            ContextKey::Evaluations,
+            "freshness:source:pg",
+            r#"{"type":"freshness_check","is_fresh":true}"#,
+        )]);
+        assert!(matches!(inv.check(&ctx), InvariantResult::Ok));
+    }
+
+    #[test]
+    fn data_freshness_violates_when_stale() {
+        let inv = DataFreshnessInvariant;
+        let ctx = invariant_ctx(&[(
+            ContextKey::Evaluations,
+            "freshness:source:pg",
+            r#"{"type":"freshness_check","is_fresh":false}"#,
+        )]);
+        assert!(matches!(inv.check(&ctx), InvariantResult::Violated(_)));
     }
 }

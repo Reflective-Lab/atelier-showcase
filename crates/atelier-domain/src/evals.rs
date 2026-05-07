@@ -742,4 +742,294 @@ mod tests {
         // No working hours constraint → indeterminate
         assert_eq!(result.outcome, EvalOutcome::Indeterminate);
     }
+
+    #[test]
+    fn meeting_feasibility_metadata() {
+        let eval = MeetingScheduleFeasibilityEval;
+        assert_eq!(eval.name(), "meeting_schedule_feasibility");
+        assert!(!eval.description().is_empty());
+        assert_eq!(
+            eval.dependencies(),
+            &[ContextKey::Strategies, ContextKey::Constraints]
+        );
+    }
+
+    #[test]
+    fn meeting_feasibility_indeterminate_without_strategies() {
+        let eval = MeetingScheduleFeasibilityEval;
+        let ctx =
+            promoted_context(&[(ContextKey::Constraints, "wh", "working hours 10-16")]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Indeterminate);
+    }
+
+    #[test]
+    fn meeting_feasibility_pass_when_all_within_hours() {
+        let eval = MeetingScheduleFeasibilityEval;
+        let ctx = promoted_context(&[
+            (ContextKey::Strategies, "m1", "standup 10-16"),
+            (ContextKey::Strategies, "m2", "review 9-17"),
+            (ContextKey::Constraints, "wh", "working hours 10-16"),
+        ]);
+        let result = eval.evaluate(&ctx);
+        assert_eq!(result.outcome, EvalOutcome::Pass);
+        assert!((result.score - 1.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn meeting_feasibility_fail_when_some_outside_hours() {
+        let eval = MeetingScheduleFeasibilityEval;
+        let ctx = promoted_context(&[
+            (ContextKey::Strategies, "m1", "standup 10-16"),
+            (ContextKey::Strategies, "m2", "after-hours review"),
+            (ContextKey::Constraints, "wh", "working hours 10-16"),
+        ]);
+        let result = eval.evaluate(&ctx);
+        assert_eq!(result.outcome, EvalOutcome::Fail);
+        assert!(result.score < 1.0);
+    }
+
+    #[test]
+    fn invoice_accuracy_indeterminate_with_no_invoices() {
+        let eval = InvoiceAccuracyEval;
+        assert_eq!(eval.name(), "invoice_accuracy");
+        assert_eq!(eval.dependencies(), &[ContextKey::Proposals]);
+        let ctx = promoted_context(&[]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Indeterminate);
+    }
+
+    #[test]
+    fn invoice_accuracy_fail_when_below_threshold() {
+        let eval = InvoiceAccuracyEval;
+        let ctx = promoted_context(&[
+            (ContextKey::Proposals, "invoice:1", "amount: 100, customer: A"),
+            (ContextKey::Proposals, "invoice:2", "incomplete data"),
+            (ContextKey::Proposals, "invoice:3", "incomplete data"),
+        ]);
+        let result = eval.evaluate(&ctx);
+        assert_eq!(result.outcome, EvalOutcome::Fail);
+    }
+
+    #[test]
+    fn payment_reconciliation_pass_when_all_matched() {
+        let eval = PaymentReconciliationEval;
+        assert_eq!(eval.name(), "payment_reconciliation");
+        let ctx = promoted_context(&[
+            (ContextKey::Proposals, "payment:1", "invoice_id: 1"),
+            (ContextKey::Proposals, "payment:2", "invoice_id: 2"),
+        ]);
+        let result = eval.evaluate(&ctx);
+        assert_eq!(result.outcome, EvalOutcome::Pass);
+    }
+
+    #[test]
+    fn payment_reconciliation_indeterminate_with_no_payments() {
+        let eval = PaymentReconciliationEval;
+        let ctx = promoted_context(&[]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Indeterminate);
+    }
+
+    #[test]
+    fn payment_reconciliation_fail_when_some_orphaned() {
+        let eval = PaymentReconciliationEval;
+        let ctx = promoted_context(&[
+            (ContextKey::Proposals, "payment:1", "invoice_id: 1"),
+            (ContextKey::Proposals, "payment:2", "no match"),
+        ]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Fail);
+    }
+
+    #[test]
+    fn promise_fulfillment_pass_at_threshold() {
+        let eval = PromiseFulfillmentEval;
+        assert_eq!(eval.name(), "promise_fulfillment");
+        let ctx = promoted_context(&[
+            (ContextKey::Proposals, "promise:1", "delivered"),
+            (ContextKey::Proposals, "promise:2", "accepted"),
+            (ContextKey::Proposals, "promise:3", "complete"),
+            (ContextKey::Proposals, "promise:4", "delivered"),
+            (ContextKey::Proposals, "promise:5", "delivered"),
+            (ContextKey::Proposals, "promise:6", "delivered"),
+            (ContextKey::Proposals, "promise:7", "delivered"),
+            (ContextKey::Proposals, "promise:8", "delivered"),
+            (ContextKey::Proposals, "promise:9", "delivered"),
+            (ContextKey::Proposals, "promise:10", "delivered"),
+        ]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Pass);
+    }
+
+    #[test]
+    fn promise_fulfillment_indeterminate_when_empty() {
+        let eval = PromiseFulfillmentEval;
+        let ctx = promoted_context(&[]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Indeterminate);
+    }
+
+    #[test]
+    fn promise_fulfillment_fail_below_threshold() {
+        let eval = PromiseFulfillmentEval;
+        let ctx = promoted_context(&[
+            (ContextKey::Proposals, "promise:1", "delivered"),
+            (ContextKey::Proposals, "promise:2", "pending"),
+        ]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Fail);
+    }
+
+    #[test]
+    fn scope_creep_pass_when_all_approved() {
+        let eval = ScopeCreepDetectionEval;
+        assert_eq!(eval.name(), "scope_creep_detection");
+        assert_eq!(
+            eval.dependencies(),
+            &[ContextKey::Proposals, ContextKey::Signals]
+        );
+        let ctx = promoted_context(&[(
+            ContextKey::Proposals,
+            "scope:1",
+            "change request approved",
+        )]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Pass);
+    }
+
+    #[test]
+    fn scope_creep_pass_when_no_changes() {
+        let eval = ScopeCreepDetectionEval;
+        let ctx = promoted_context(&[]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Pass);
+    }
+
+    #[test]
+    fn scope_creep_fail_when_unapproved_changes() {
+        let eval = ScopeCreepDetectionEval;
+        let ctx = promoted_context(&[(ContextKey::Proposals, "scope:1", "change pending")]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Fail);
+    }
+
+    #[test]
+    fn access_compliance_pass_when_all_revoked() {
+        let eval = AccessComplianceEval;
+        assert_eq!(eval.name(), "access_compliance");
+        let ctx = promoted_context(&[(
+            ContextKey::Proposals,
+            "employee:1",
+            "terminated, access revoked",
+        )]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Pass);
+    }
+
+    #[test]
+    fn access_compliance_pass_when_no_terminated() {
+        let eval = AccessComplianceEval;
+        let ctx = promoted_context(&[]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Pass);
+    }
+
+    #[test]
+    fn access_compliance_fail_when_access_retained() {
+        let eval = AccessComplianceEval;
+        let ctx =
+            promoted_context(&[(ContextKey::Proposals, "employee:1", "terminated")]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Fail);
+    }
+
+    #[test]
+    fn audit_coverage_pass_when_no_actions() {
+        let eval = AuditCoverageEval;
+        assert_eq!(eval.name(), "audit_coverage");
+        let ctx = promoted_context(&[]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Pass);
+    }
+
+    #[test]
+    fn audit_coverage_pass_when_actions_audited() {
+        let eval = AuditCoverageEval;
+        let ctx = promoted_context(&[
+            (ContextKey::Proposals, "action:1", "x"),
+            (ContextKey::Proposals, "audit:1", "y"),
+        ]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Pass);
+    }
+
+    #[test]
+    fn audit_coverage_fail_when_missing_audits() {
+        let eval = AuditCoverageEval;
+        let ctx = promoted_context(&[(ContextKey::Proposals, "action:1", "x")]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Fail);
+    }
+
+    #[test]
+    fn rbac_enforcement_pass_when_all_have_role() {
+        let eval = RbacEnforcementEval;
+        assert_eq!(eval.name(), "rbac_enforcement");
+        let ctx = promoted_context(&[(ContextKey::Proposals, "access:1", "role admin")]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Pass);
+    }
+
+    #[test]
+    fn rbac_enforcement_indeterminate_when_no_attempts() {
+        let eval = RbacEnforcementEval;
+        let ctx = promoted_context(&[]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Indeterminate);
+    }
+
+    #[test]
+    fn rbac_enforcement_fail_when_some_bypass() {
+        let eval = RbacEnforcementEval;
+        let ctx = promoted_context(&[
+            (ContextKey::Proposals, "access:1", "role admin"),
+            (ContextKey::Proposals, "access:2", "no auth"),
+        ]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Fail);
+    }
+
+    #[test]
+    fn metric_definition_quality_pass_when_well_defined() {
+        let eval = MetricDefinitionQualityEval;
+        assert_eq!(eval.name(), "metric_definition_quality");
+        let ctx = promoted_context(&[(
+            ContextKey::Proposals,
+            "metric:1",
+            "formula: count(orders)",
+        )]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Pass);
+    }
+
+    #[test]
+    fn metric_definition_quality_indeterminate_when_empty() {
+        let eval = MetricDefinitionQualityEval;
+        let ctx = promoted_context(&[]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Indeterminate);
+    }
+
+    #[test]
+    fn metric_definition_quality_fail_when_undefined() {
+        let eval = MetricDefinitionQualityEval;
+        let ctx = promoted_context(&[
+            (ContextKey::Proposals, "metric:1", "formula: x"),
+            (ContextKey::Proposals, "metric:2", "no spec"),
+            (ContextKey::Proposals, "metric:3", "no spec"),
+        ]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Fail);
+    }
+
+    #[test]
+    fn dashboard_source_pass_when_cited() {
+        let eval = DashboardSourceEval;
+        assert_eq!(eval.name(), "dashboard_source");
+        let ctx = promoted_context(&[(ContextKey::Proposals, "dashboard:1", "source: pg")]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Pass);
+    }
+
+    #[test]
+    fn dashboard_source_indeterminate_when_empty() {
+        let eval = DashboardSourceEval;
+        let ctx = promoted_context(&[]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Indeterminate);
+    }
+
+    #[test]
+    fn dashboard_source_fail_when_uncited() {
+        let eval = DashboardSourceEval;
+        let ctx = promoted_context(&[(ContextKey::Proposals, "dashboard:1", "uncited")]);
+        assert_eq!(eval.evaluate(&ctx).outcome, EvalOutcome::Fail);
+    }
 }

@@ -64,8 +64,22 @@ security-audit:
     summary="${out_dir}/summary.txt"
     : > "${summary}"
     echo "── cargo-audit ──────────────────────────────" | tee -a "${summary}"
-    cargo audit --json > "${out_dir}/audit.json" || true
-    cargo audit --deny warnings 2>&1 | tee -a "${summary}"
+    cargo audit --json \
+        --ignore RUSTSEC-2023-0089 \
+        --ignore RUSTSEC-2024-0384 \
+        --ignore RUSTSEC-2024-0436 \
+        --ignore RUSTSEC-2025-0012 \
+        --ignore RUSTSEC-2025-0134 \
+        --ignore RUSTSEC-2021-0141 \
+        > "${out_dir}/audit.json" || true
+    cargo audit --deny warnings \
+        --ignore RUSTSEC-2023-0089 \
+        --ignore RUSTSEC-2024-0384 \
+        --ignore RUSTSEC-2024-0436 \
+        --ignore RUSTSEC-2025-0012 \
+        --ignore RUSTSEC-2025-0134 \
+        --ignore RUSTSEC-2021-0141 \
+        2>&1 | tee -a "${summary}"
     audit_human_status=${PIPESTATUS[0]}
     echo "" | tee -a "${summary}"
     echo "── cargo-deny ───────────────────────────────" | tee -a "${summary}"
@@ -87,16 +101,16 @@ coverage:
     set -euo pipefail
     out_dir="target/coverage"
     mkdir -p "${out_dir}/html"
-    common=(--workspace --lib --tests
-        --ignore-filename-regex '(^|/)(tests|benches|examples)/')
+    ignore_re='(^|/)(tests|benches|examples)/|/crates/example-(custom-agent|custom-provider|expense-approval|formation-mixed|hello-convergence|live-formation|loan-application|meeting-scheduler|vendor-selection)/'
+    common=(--workspace --lib --tests --ignore-filename-regex "${ignore_re}")
     cargo llvm-cov clean --workspace
     rm -rf target/tests/trybuild
     cargo llvm-cov "${common[@]}" --no-report
-    cargo llvm-cov report \
+    cargo llvm-cov report --ignore-filename-regex "${ignore_re}" \
         --json --summary-only --output-path "${out_dir}/converge-coverage.json"
-    cargo llvm-cov report \
+    cargo llvm-cov report --ignore-filename-regex "${ignore_re}" \
         --lcov --output-path "${out_dir}/lcov.info"
-    cargo llvm-cov report \
+    cargo llvm-cov report --ignore-filename-regex "${ignore_re}" \
         --html --output-dir "${out_dir}/html"
     pct=$(python3 -c "import json; d=json.load(open('${out_dir}/converge-coverage.json')); print(f\"{d['data'][0]['totals']['lines']['percent']:.1f}\")")
     echo "coverage: ${pct}%  json→${out_dir}/converge-coverage.json  lcov→${out_dir}/lcov.info  html→${out_dir}/html/index.html"

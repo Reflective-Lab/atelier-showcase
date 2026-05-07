@@ -43,8 +43,14 @@
 //! - [`blueprints::diligence_to_decision`] — DueDiligence → Legal → Knowledge
 
 pub mod blueprints;
-pub mod pack;
 pub mod packs;
+pub mod standard_packs;
+
+pub use standard_packs::{register_standard_packs, registry_with_standard_packs};
+
+// Pack contract types live in `organism-pack`. Re-exported here so existing
+// consumers keep working with `organism_domain::pack::*` paths.
+pub use organism_pack::pack;
 
 #[cfg(test)]
 mod tests {

@@ -23,7 +23,6 @@ serde_json.workspace = true
 
 [dev-dependencies]
 tracing-test = "0.2"
-dotenv = "0.15"
 proptest = "1.5"
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 
