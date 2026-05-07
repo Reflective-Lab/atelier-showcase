@@ -1,7 +1,9 @@
 # atelier
 
 [![CI](https://github.com/Reflective-Lab/atelier-showcase/actions/workflows/ci.yml/badge.svg)](https://github.com/Reflective-Lab/atelier-showcase/actions/workflows/ci.yml)
+[![Coverage](https://github.com/Reflective-Lab/atelier-showcase/actions/workflows/coverage.yml/badge.svg)](https://github.com/Reflective-Lab/atelier-showcase/actions/workflows/coverage.yml)
 [![Security](https://github.com/Reflective-Lab/atelier-showcase/actions/workflows/security.yml/badge.svg)](https://github.com/Reflective-Lab/atelier-showcase/actions/workflows/security.yml)
+[![Stability](https://github.com/Reflective-Lab/atelier-showcase/actions/workflows/stability.yml/badge.svg)](https://github.com/Reflective-Lab/atelier-showcase/actions/workflows/stability.yml)
 [![Crates.io](https://img.shields.io/crates/v/converge-atelier-domain.svg)](https://crates.io/crates/converge-atelier-domain)
 [![docs.rs](https://docs.rs/converge-atelier-domain/badge.svg)](https://docs.rs/converge-atelier-domain)
 [![dependency status](https://deps.rs/repo/github/Reflective-Lab/atelier-showcase/status.svg)](https://deps.rs/repo/github/Reflective-Lab/atelier-showcase)
