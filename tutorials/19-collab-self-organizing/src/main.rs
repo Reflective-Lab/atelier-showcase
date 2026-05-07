@@ -16,6 +16,7 @@
 //! - Advisory consensus (the done gate always passes)
 //! - Dynamic team scaling
 
+use converge_pack::{EligibleVoters, VoteTally};
 use organism_pack::{
     CollaborationCharter, CollaborationMember, CollaborationRole, ConsensusRule, TeamFormation,
     TeamFormationMode, TurnCadence,
@@ -146,11 +147,17 @@ fn main() {
     println!("--- Advisory Consensus ---");
     println!(
         "  Advisory with 0/3 yes: {}",
-        ConsensusRule::AdvisoryOnly.passes(0, 3)
+        ConsensusRule::AdvisoryOnly.passes(
+            VoteTally::new(0, 3, 0),
+            EligibleVoters::new(3).expect("3 >= 1"),
+        )
     );
     println!(
-        "  Advisory with 0/0:     {}",
-        ConsensusRule::AdvisoryOnly.passes(0, 0)
+        "  Advisory with 0/1:     {}",
+        ConsensusRule::AdvisoryOnly.passes(
+            VoteTally::new(0, 1, 0),
+            EligibleVoters::new(1).expect("1 >= 1"),
+        )
     );
     println!("  (The done gate is a formality — the team decides when it's done)");
     println!();

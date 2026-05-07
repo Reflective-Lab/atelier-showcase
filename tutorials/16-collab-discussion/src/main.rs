@@ -13,11 +13,20 @@
 //! - Advisory consensus (non-binding — no done-gate)
 //! - Comparing all four collaboration topologies side by side
 
+use converge_pack::{EligibleVoters, VoteTally};
 use organism_pack::{
     CollaborationCharter, CollaborationDiscipline, CollaborationMember, CollaborationRole,
     ConsensusRule, TeamFormation, TeamFormationMode, TurnCadence,
 };
 use organism_runtime::{CollaborationParticipant, CollaborationRunner};
+
+fn passes(rule: ConsensusRule, yes: usize, total: usize) -> bool {
+    let no = total.saturating_sub(yes);
+    rule.passes(
+        VoteTally::new(yes, no, 0),
+        EligibleVoters::new(total.max(1)).expect("total.max(1) >= 1"),
+    )
+}
 
 #[derive(Debug, Clone)]
 struct Participant {
@@ -221,12 +230,12 @@ fn main() {
         println!(
             "  {:14} {:<5}{:<5}{:<5}{:<5}{:<5}{}",
             format!("{rule:?}"),
-            if rule.passes(0, 5) { "PASS" } else { "FAIL" },
-            if rule.passes(1, 5) { "PASS" } else { "FAIL" },
-            if rule.passes(2, 5) { "PASS" } else { "FAIL" },
-            if rule.passes(3, 5) { "PASS" } else { "FAIL" },
-            if rule.passes(4, 5) { "PASS" } else { "FAIL" },
-            if rule.passes(5, 5) { "PASS" } else { "FAIL" },
+            if passes(*rule,0, 5) { "PASS" } else { "FAIL" },
+            if passes(*rule,1, 5) { "PASS" } else { "FAIL" },
+            if passes(*rule,2, 5) { "PASS" } else { "FAIL" },
+            if passes(*rule,3, 5) { "PASS" } else { "FAIL" },
+            if passes(*rule,4, 5) { "PASS" } else { "FAIL" },
+            if passes(*rule,5, 5) { "PASS" } else { "FAIL" },
         );
     }
 }

@@ -130,7 +130,7 @@ fn main() {
 // ── Helpers ────────────────────────────────────────────────────────
 
 fn build_full_registry() -> Registry {
-    let mut r = Registry::with_standard_packs();
+    let mut r = organism_domain::registry_with_standard_packs();
 
     // Register available capabilities
     r.register_capability("web", "URL capture and metadata extraction");
@@ -221,7 +221,7 @@ fn print_binding(binding: &IntentBinding) {
             println!(
                 "     {:14} conf={:.0}%  [{:?}]  {}",
                 p.pack_name,
-                p.confidence * 100.0,
+                p.confidence.as_f64() * 100.0,
                 p.source,
                 p.reason
             );
@@ -234,7 +234,7 @@ fn print_binding(binding: &IntentBinding) {
             println!(
                 "     {:14} conf={:.0}%  [{:?}]  {}",
                 c.capability,
-                c.confidence * 100.0,
+                c.confidence.as_f64() * 100.0,
                 c.source,
                 c.reason
             );

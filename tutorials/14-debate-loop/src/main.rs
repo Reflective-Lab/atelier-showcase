@@ -78,9 +78,9 @@ impl Suggestor for LlmPlannerAgent {
         let proposals = ctx.get(ContextKey::Proposals);
         let evaluations = ctx.get(ContextKey::Evaluations);
 
-        let has_plan = proposals.iter().any(|p| p.id.starts_with("plan:"));
-        let has_challenges = evaluations.iter().any(|e| e.id.starts_with("challenge:"));
-        let has_revised = proposals.iter().any(|p| p.id.starts_with("plan:revised"));
+        let has_plan = proposals.iter().any(|p| p.id().starts_with("plan:"));
+        let has_challenges = evaluations.iter().any(|e| e.id().starts_with("challenge:"));
+        let has_revised = proposals.iter().any(|p| p.id().starts_with("plan:revised"));
 
         !has_plan || (has_challenges && !has_revised)
     }
@@ -89,14 +89,14 @@ impl Suggestor for LlmPlannerAgent {
         let seeds = ctx.get(ContextKey::Seeds);
         let intent = seeds
             .first()
-            .map(|s| s.content.as_str())
+            .map(|s| s.content())
             .unwrap_or("(no intent)");
 
         let evaluations = ctx.get(ContextKey::Evaluations);
         let challenges: Vec<String> = evaluations
             .iter()
-            .filter(|e| e.id.starts_with("challenge:"))
-            .map(|e| e.content.clone())
+            .filter(|e| e.id().starts_with("challenge:"))
+            .map(|e| e.content().to_string())
             .collect();
 
         if challenges.is_empty() {
@@ -136,8 +136,8 @@ impl Suggestor for LlmPlannerAgent {
             let proposals = ctx.get(ContextKey::Proposals);
             let original_plan = proposals
                 .iter()
-                .find(|p| p.id == "plan:initial")
-                .map(|p| p.content.clone())
+                .find(|p| p.id() == "plan:initial")
+                .map(|p| p.content().to_string())
                 .unwrap_or_default();
 
             let revised = call_claude(
@@ -159,7 +159,7 @@ impl Suggestor for LlmPlannerAgent {
                         "version": 2,
                         "plan": revised,
                         "addressed_challenges": challenges.len(),
-                        "intent": proposals.first().map(|p| p.content.as_str()).unwrap_or(""),
+                        "intent": proposals.first().map(|p| p.content()).unwrap_or(""),
                     })
                     .to_string(),
                     self.name(),
@@ -192,10 +192,10 @@ impl Suggestor for LlmSkepticAgent {
         let proposals = ctx.get(ContextKey::Proposals);
         let evaluations = ctx.get(ContextKey::Evaluations);
 
-        let has_initial_plan = proposals.iter().any(|p| p.id == "plan:initial");
-        let has_revised_plan = proposals.iter().any(|p| p.id == "plan:revised");
-        let has_challenges = evaluations.iter().any(|e| e.id.starts_with("challenge:"));
-        let has_final_review = evaluations.iter().any(|e| e.id == "challenge:final-review");
+        let has_initial_plan = proposals.iter().any(|p| p.id() == "plan:initial");
+        let has_revised_plan = proposals.iter().any(|p| p.id() == "plan:revised");
+        let has_challenges = evaluations.iter().any(|e| e.id().starts_with("challenge:"));
+        let has_final_review = evaluations.iter().any(|e| e.id() == "challenge:final-review");
 
         // Challenge initial plan (no challenges yet)
         // OR review revised plan (challenges exist but no final review)
@@ -206,17 +206,17 @@ impl Suggestor for LlmSkepticAgent {
         let proposals = ctx.get(ContextKey::Proposals);
         let evaluations = ctx.get(ContextKey::Evaluations);
 
-        let has_revised = proposals.iter().any(|p| p.id == "plan:revised");
+        let has_revised = proposals.iter().any(|p| p.id() == "plan:revised");
         let is_final_review =
-            has_revised && evaluations.iter().any(|e| e.id.starts_with("challenge:"));
+            has_revised && evaluations.iter().any(|e| e.id().starts_with("challenge:"));
 
         let plan_fact = if has_revised {
-            proposals.iter().find(|p| p.id == "plan:revised")
+            proposals.iter().find(|p| p.id() == "plan:revised")
         } else {
-            proposals.iter().find(|p| p.id == "plan:initial")
+            proposals.iter().find(|p| p.id() == "plan:initial")
         };
 
-        let plan_content = plan_fact.map(|p| p.content.as_str()).unwrap_or("(no plan)");
+        let plan_content = plan_fact.map(|p| p.content()).unwrap_or("(no plan)");
 
         let review_type = if is_final_review {
             "final review of revised plan"
@@ -336,7 +336,7 @@ async fn main() {
 
             println!("Proposals ({}):", proposals.len());
             for p in proposals {
-                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&p.content) {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(p.content()) {
                     let version = json.get("version").and_then(|v| v.as_u64()).unwrap_or(0);
                     let plan = json.get("plan").and_then(|v| v.as_str()).unwrap_or("?");
                     println!("  [v{version}] {}", truncate(plan, 300));
@@ -345,7 +345,7 @@ async fn main() {
 
             println!("\nChallenges ({}):", evaluations.len());
             for e in evaluations {
-                if let Ok(json) = serde_json::from_str::<serde_json::Value>(&e.content) {
+                if let Ok(json) = serde_json::from_str::<serde_json::Value>(e.content()) {
                     let review_type = json
                         .get("review_type")
                         .and_then(|v| v.as_str())
@@ -366,9 +366,9 @@ async fn main() {
 
             let final_review = evaluations
                 .iter()
-                .find(|e| e.id == "challenge:final-review");
+                .find(|e| e.id() == "challenge:final-review");
             if let Some(review) = final_review
-                && let Ok(json) = serde_json::from_str::<serde_json::Value>(&review.content)
+                && let Ok(json) = serde_json::from_str::<serde_json::Value>(review.content())
             {
                 let approved = json
                     .get("approved")

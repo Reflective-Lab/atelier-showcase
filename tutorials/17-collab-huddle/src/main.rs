@@ -13,6 +13,7 @@
 //! - Majority consensus for the done gate
 //! - Validation rejects teams that violate the charter
 
+use converge_pack::{EligibleVoters, VoteTally};
 use organism_pack::{
     CollaborationCharter, CollaborationMember, CollaborationRole, ConsensusRule, TeamFormation,
     TeamFormationMode,
@@ -134,7 +135,11 @@ fn main() {
     for (name, vote) in &votes {
         println!("  {name}: {}", if *vote { "YES" } else { "NO" });
     }
-    let passed = runner.consensus_rule().passes(yes, total);
+    let no = total - yes;
+    let passed = runner.consensus_rule().passes(
+        VoteTally::new(yes, no, 0),
+        EligibleVoters::new(total).expect("total >= 1 (votes was non-empty)"),
+    );
     println!(
         "  Result: {} ({yes}/{total}, rule: {:?})",
         if passed { "PASSED" } else { "BLOCKED" },
@@ -175,7 +180,10 @@ fn main() {
     println!();
     println!("--- Unanimous Override ---");
     let strict = ConsensusRule::Unanimous;
-    let passed_strict = strict.passes(yes, total);
+    let passed_strict = strict.passes(
+        VoteTally::new(yes, no, 0),
+        EligibleVoters::new(total).expect("total >= 1"),
+    );
     println!(
         "  Same votes ({yes}/{total}) with unanimous: {}",
         if passed_strict { "PASSED" } else { "BLOCKED" }

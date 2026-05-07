@@ -5,5 +5,6 @@ edition = "2024"
 publish = false
 
 [dependencies]
+converge-pack.workspace = true
 organism-pack.workspace = true
 organism-runtime.workspace = true
