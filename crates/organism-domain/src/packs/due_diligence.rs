@@ -1,7 +1,7 @@
 //! Due Diligence pack — convergent research, fact extraction, gap detection,
 //! contradiction finding, and synthesis for investment or procurement decisions.
 //!
-//! Born from monterro (PE portfolio intelligence) and hackathon (governance demo).
+//! Born from monterro (PE portfolio intelligence) and a governance demo app.
 //! The pattern is: seed research strategies → search wide and deep → extract facts
 //! → detect gaps and contradictions → synthesize when stable.
 //!

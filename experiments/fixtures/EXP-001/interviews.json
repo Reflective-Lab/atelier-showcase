@@ -1,0 +1,219 @@
+{
+  "fixture_id": "EXP-001-interviews-v1",
+  "rfp_id": "rfp-1",
+  "vendors_under_review": ["vendor-a", "vendor-b", "vendor-c"],
+  "vendor_facts_summary": {
+    "vendor-a": "Acme Corp — established (15y), compliant, mid-price ($15K), 6-week delivery.",
+    "vendor-b": "Beta Solutions — mid-tenure (8y), compliant, premium ($22K), 4-week delivery.",
+    "vendor-c": "Gamma Industries — young (3y), non-compliant, low-price ($8K), 10-week delivery."
+  },
+  "intent": "Open-ended stakeholder interviews surfacing soft signals (trust, implementation fit, urgency, novelty tolerance, hesitation) that the structured criteria in scenarios/vendor-selection do not capture. Synthetic.",
+  "stakeholders": [
+    { "id": "sh-cfo", "role": "Chief Financial Officer", "tenure_years": 6, "stance": "cost-conscious, slightly conservative" },
+    { "id": "sh-cto", "role": "Chief Technology Officer", "tenure_years": 4, "stance": "architectural pragmatist, low novelty tolerance after a recent failed migration" },
+    { "id": "sh-ops", "role": "Head of Operations", "tenure_years": 11, "stance": "delivery-focused, has seen vendors come and go" },
+    { "id": "sh-pm", "role": "Project Lead (this initiative)", "tenure_years": 2, "stance": "needs daily traction, will own the rollout" },
+    { "id": "sh-sec", "role": "IT Security Manager", "tenure_years": 7, "stance": "compliance is non-negotiable but reads cultural signals carefully" },
+    { "id": "sh-user", "role": "Senior end-user (operations floor)", "tenure_years": 9, "stance": "wants tools that don't fight her team" }
+  ],
+  "interviews": [
+    {
+      "id": "int-001",
+      "stakeholder_id": "sh-cfo",
+      "vendor_focus": "vendor-a",
+      "question": "What's your read on Acme as the incumbent contender?",
+      "answer": "Acme is the safe pick on paper. Fifteen years, compliant, the price is fine. But honestly — and I've said this in steering — every time we've worked with them in the past two years they've shown up like they already knew what we needed. They didn't. Their reps are pleasant. Their actual responsiveness when something gets hard is… mid. I'd pick them again if there were no other option, but I'm not enthusiastic. I think we're a B-tier account to them now."
+    },
+    {
+      "id": "int-002",
+      "stakeholder_id": "sh-cfo",
+      "vendor_focus": "vendor-b",
+      "question": "And Beta?",
+      "answer": "The pricing makes me wince. Twenty-two thousand for what's effectively the same scope as Acme is a forty percent premium. The pitch was polished — maybe too polished. I felt like I was being sold to in a way I haven't felt with the others. That said, their references checked out. I just don't know if we're paying for substance or for the deck."
+    },
+    {
+      "id": "int-003",
+      "stakeholder_id": "sh-cfo",
+      "vendor_focus": "vendor-c",
+      "question": "Gamma?",
+      "answer": "I know the compliance flag is supposed to take them off the table. I get it. But I'll tell you — their founder spent forty minutes with us last Thursday and was the only person across all three vendors who could describe the actual problem we're solving without being prompted. The cheap price is suspicious in isolation but it isn't the reason I'd pause. I just want us to be honest that we're rejecting them on a paperwork item, not on substance."
+    },
+    {
+      "id": "int-004",
+      "stakeholder_id": "sh-cfo",
+      "question": "Anything else weighing on you across the three?",
+      "answer": "Yes. I don't think anyone in this room is excited. We're picking the least-bad option and I don't love that as a frame for a multi-year relationship. If we had another month I'd want to revisit Gamma's compliance status with their team — I suspect it's a fixable gap, not a structural one. But we don't have another month."
+    },
+    {
+      "id": "int-005",
+      "stakeholder_id": "sh-cfo",
+      "question": "How urgent does this actually feel?",
+      "answer": "Operations is leaning on me hard about timing. I'd say the urgency is real but not catastrophic. We'd survive a six-week slip. We wouldn't survive a six-month slip. So Beta's four weeks is attractive but not decisive."
+    },
+    {
+      "id": "int-006",
+      "stakeholder_id": "sh-cto",
+      "vendor_focus": "vendor-a",
+      "question": "Technical fit on Acme?",
+      "answer": "Acme will deliver. They always deliver. The question I keep coming back to is whether they'll deliver something that looks like 2018 — because that's what their reference architectures still look like. I asked their solution architect three times what their position on event-driven integration was and got three different answers. That's a tell."
+    },
+    {
+      "id": "int-007",
+      "stakeholder_id": "sh-cto",
+      "vendor_focus": "vendor-b",
+      "question": "Beta?",
+      "answer": "Beta's tech is genuinely modern. I think they'd integrate cleanly. My worry isn't technical — it's that their delivery model is opinionated to the point of being prescriptive. They have a way they do things. We just came off a project where a prescriptive vendor cost us four months of customization fights. I'm not eager to repeat that."
+    },
+    {
+      "id": "int-008",
+      "stakeholder_id": "sh-cto",
+      "vendor_focus": "vendor-c",
+      "question": "Gamma — beyond the compliance issue?",
+      "answer": "Their architecture is the most interesting of the three. It's also the youngest, which means we'd be in their second or third reference deployment, not their fiftieth. I'm not saying that's disqualifying. I'm saying we'd be co-developing in places, and that's a different operating model than the room is currently planning for."
+    },
+    {
+      "id": "int-009",
+      "stakeholder_id": "sh-cto",
+      "question": "If you had to weight novelty risk right now?",
+      "answer": "Low tolerance. The migration last year burned a lot of credibility I'm still rebuilding. I'd rather take a boring win than a brilliant gamble. That's not a permanent stance. It is the stance for this quarter."
+    },
+    {
+      "id": "int-010",
+      "stakeholder_id": "sh-ops",
+      "vendor_focus": "vendor-a",
+      "question": "Operationally, how does Acme behave when things go sideways?",
+      "answer": "They show up. They don't always show up fast, and they don't always show up with the right person, but they show up. Compared to vendors I've worked with who go silent in week eight, that's worth something. It's not flashy."
+    },
+    {
+      "id": "int-011",
+      "stakeholder_id": "sh-ops",
+      "vendor_focus": "vendor-b",
+      "question": "Beta?",
+      "answer": "I haven't worked with Beta directly. Two of my peers at sister sites have, and the feedback was: very organized in the first sixty days, harder to reach after go-live unless you've bought their premium support tier. I asked their account manager about that on Tuesday. The answer was a non-answer."
+    },
+    {
+      "id": "int-012",
+      "stakeholder_id": "sh-ops",
+      "vendor_focus": "vendor-c",
+      "question": "Gamma?",
+      "answer": "The honest read is that they don't have the operational depth yet to support an account our size if multiple things break in the same week. Their team is fifteen people. I like them, but ops is where ambition meets reality and that's a real ceiling. I'd want to know who their on-call person is and whether that's a single point of failure."
+    },
+    {
+      "id": "int-013",
+      "stakeholder_id": "sh-ops",
+      "question": "Are we picking for the launch or for year three?",
+      "answer": "We say year three. We pick for the launch. Every time."
+    },
+    {
+      "id": "int-014",
+      "stakeholder_id": "sh-pm",
+      "vendor_focus": "vendor-a",
+      "question": "You'll own the rollout. What do you see?",
+      "answer": "Acme will get it across the line. I won't be proud of the result. Their PM was clearly running three other accounts and didn't remember our name in the second meeting. I can manage around that — I've done it before — but it costs me capacity I'd rather spend on adoption inside our team."
+    },
+    {
+      "id": "int-015",
+      "stakeholder_id": "sh-pm",
+      "vendor_focus": "vendor-b",
+      "question": "Beta?",
+      "answer": "Their PM was sharp. I'd enjoy working with that person. But I'm aware that's a relationship I'd be buying for the duration of the project, and if their PM rotates off — which their model seems to allow at the ninety-day mark — I'm working with whoever's next, and that's an unknown."
+    },
+    {
+      "id": "int-016",
+      "stakeholder_id": "sh-pm",
+      "vendor_focus": "vendor-c",
+      "question": "Gamma?",
+      "answer": "I want to like them. Their team felt like our team. The energy in the room was completely different. But I can't tell if that's a real signal or if it's just because they're hungry for the deal. I've been fooled by that before. Hunger doesn't last to month nine."
+    },
+    {
+      "id": "int-017",
+      "stakeholder_id": "sh-pm",
+      "question": "How does delivery time affect your plan?",
+      "answer": "Beta's four weeks is genuinely useful. It compresses the change-management window for our floor team, which is the part I'm most worried about. Acme's six weeks is workable. Gamma's ten weeks would push us into the holiday freeze and that's a non-starter in practice even though no one wants to say it that way."
+    },
+    {
+      "id": "int-018",
+      "stakeholder_id": "sh-sec",
+      "vendor_focus": "vendor-a",
+      "question": "Security read on Acme?",
+      "answer": "Their compliance posture is fine. It's also the least curious posture I've seen this year. I asked about their incident response in the last twelve months and got a marketing answer. That's not a flag on its own. It's a flag that they treat security as a checkbox rather than a practice."
+    },
+    {
+      "id": "int-019",
+      "stakeholder_id": "sh-sec",
+      "vendor_focus": "vendor-b",
+      "question": "Beta?",
+      "answer": "Beta's security team was the strongest of the three. They walked me through two recent incidents unprompted and named what they'd changed afterward. That's the behavior of an organization that takes the function seriously. I'd trust them in a breach."
+    },
+    {
+      "id": "int-020",
+      "stakeholder_id": "sh-sec",
+      "vendor_focus": "vendor-c",
+      "question": "Gamma — the compliance gap.",
+      "answer": "I want to be precise here because the gap matters. Gamma fails one specific certification we require for our regulated workloads. They have an active project to obtain it, with a third-party auditor engaged, and a target of next quarter. If the timeline holds, the gap closes before we'd commit to production for the regulated portion. I'm not saying override the policy. I am saying the policy was written assuming a static state, and reality isn't static."
+    },
+    {
+      "id": "int-021",
+      "stakeholder_id": "sh-sec",
+      "question": "If you had a free vote?",
+      "answer": "I'd want a sixty-day extension to re-evaluate Gamma after their certification audit. I know that's not what's being asked of this decision."
+    },
+    {
+      "id": "int-022",
+      "stakeholder_id": "sh-user",
+      "vendor_focus": "vendor-a",
+      "question": "From the floor — how does Acme actually feel to use?",
+      "answer": "We've used their previous product. It works. It's clunky. Training someone new on it takes about three weeks before they stop calling me with questions. I don't hate it. I don't love it. It's there."
+    },
+    {
+      "id": "int-023",
+      "stakeholder_id": "sh-user",
+      "vendor_focus": "vendor-b",
+      "question": "Beta?",
+      "answer": "Their demo was the most polished one I've seen and I trust polished demos the least. I want to know what it's like in week six when something goes wrong and the polish is gone. They wouldn't put me in touch with an existing customer at our scale, which I noticed."
+    },
+    {
+      "id": "int-024",
+      "stakeholder_id": "sh-user",
+      "vendor_focus": "vendor-c",
+      "question": "Gamma?",
+      "answer": "Their team listened. That sounds small and it isn't. The other two pitched at me. Gamma's lead asked me what a bad day looked like for my floor and then drew the workflow on the whiteboard from memory in the next meeting. That's not nothing. I don't know if it's enough to overcome everything else, but it's not nothing."
+    },
+    {
+      "id": "int-025",
+      "stakeholder_id": "sh-user",
+      "question": "What's the most likely failure mode of this whole decision?",
+      "answer": "We pick the safe one, the floor team rolls their eyes because nothing actually changed, adoption is fifty percent in month three, and we redo this in eighteen months with the same three vendors. I've seen that movie."
+    },
+    {
+      "id": "int-026",
+      "stakeholder_id": "sh-cto",
+      "question": "Cross-vendor — what would change your mind on Gamma?",
+      "answer": "Honestly? Two things. Confirmation from sec that the certification audit is on track and not theoretical. And a reference customer at half our scale who's been live for at least a year. I have neither today. I'm not opposed in principle. I'm opposed on evidence."
+    },
+    {
+      "id": "int-027",
+      "stakeholder_id": "sh-ops",
+      "question": "If we narrow to Acme vs Beta?",
+      "answer": "Acme is the lower-variance choice. Beta is the higher-expected-value choice if their post-go-live support is actually as good as their pre-sales motion. The honest answer is I don't know. The room is treating Acme as the default and Beta as the upgrade. I'm not sure that framing is right."
+    },
+    {
+      "id": "int-028",
+      "stakeholder_id": "sh-pm",
+      "question": "Your gut?",
+      "answer": "My gut says Beta if I trust the PM stays on the account. Acme if I want to sleep through the project. Gamma if I had four more weeks. I don't have four more weeks."
+    },
+    {
+      "id": "int-029",
+      "stakeholder_id": "sh-cfo",
+      "question": "Final temperature check — are we aligned?",
+      "answer": "We are not aligned. We are converging on Acme because no one has the energy to fight for an alternative. That's a different state. I'd note that in whatever record we're keeping."
+    },
+    {
+      "id": "int-030",
+      "stakeholder_id": "sh-sec",
+      "question": "What did the structured scoring miss?",
+      "answer": "It missed how each vendor behaves when they don't have a script. Acme reverts to defaults. Beta reverts to its sales playbook. Gamma stays in the conversation. That's not in any of the columns and it's the thing I'd most want to weight."
+    }
+  ]
+}

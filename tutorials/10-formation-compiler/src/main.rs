@@ -31,7 +31,7 @@ async fn main() {
             .with_keyword("diligence-evaluate-decide")
             .with_entity("VendorSelectionDecisionRecord"),
     )
-    .with_tenant_id("hackathon-buyer")
+    .with_tenant_id("demo-buyer")
     .with_domain_tag("vendor-selection");
     let intent = IntentPacket::new(
         "select AI automation vendor for claims and invoice exceptions",
@@ -74,7 +74,7 @@ async fn main() {
         key: ContextKey::Seeds,
         id: "vendor-selection-f3".into(),
         content: "evaluate AI automation vendors for claims and invoice exceptions".to_string(),
-        provenance: "hackathon-fixture".to_string(),
+        provenance: "tutorial-fixture".to_string(),
     };
 
     let record = Runtime::new()
@@ -99,7 +99,7 @@ async fn main() {
             QualityScoreBps::new(9_200).expect("valid bps"),
             "scorecard cells carry source evidence links",
         ))
-        .with_writeback_target("decision://vendor-selection/hackathon-f3");
+        .with_writeback_target("decision://vendor-selection/demo-f3");
 
     println!("template: {}", plan.template_id);
     println!("formation: {}", record.result.label);

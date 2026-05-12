@@ -49,7 +49,7 @@ converge-pack = "3.8.1"
 converge-core = "3.8.1"
 converge-kernel = "3.8.1"
 converge-model = "3.8.1"
-arbiter = { package = "converge-arbiter-policy", path = "../arbiter-policy/crates/arbiter", version = "1.0.0" }
+arbiter = { package = "converge-arbiter-policy", path = "../mosaic-extensions/arbiter-policy/crates/arbiter", version = "1.0.0" }
 converge-provider = "3.8.1"
 converge-optimization = "3.8.1"
 converge-runtime = "3.8.1"
@@ -113,10 +113,11 @@ codegen-units = 1
 
 # Local Organism development override.
 [patch.crates-io]
-organism-pack = { path = "../../work/organism/crates/pack" }
-organism-runtime = { path = "../../work/organism/crates/runtime" }
-organism-intent = { path = "../../work/organism/crates/intent" }
+organism-pack = { path = "../bedrock-platform/organism/crates/pack" }
+organism-runtime = { path = "../bedrock-platform/organism/crates/runtime" }
+organism-intent = { path = "../bedrock-platform/organism/crates/intent" }
+converge-prism-analytics = { path = "../mosaic-extensions/prism-analytics/crates/prism" }
 # axiom-truth 0.7.0 on crates.io imports `converge_provider::select_healthy_chat_backend`,
 # which now lives in `converge-manifold-adapters` (lib name `manifold`). Local source is
 # already migrated; remove this patch once axiom-truth is republished against 3.8.1.
-axiom-truth = { path = "../../work/axiom" }
+axiom-truth = { path = "../bedrock-platform/axiom" }

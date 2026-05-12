@@ -37,12 +37,12 @@ versioning) before tagging.
 
 ## Topology
 
-- **Foundation:** `~/dev/work/converge`
-- **Sibling checkouts:** `~/dev/extensions/{atelier-showcase, arbiter-policy, embassy-ports, ferrox-solvers, manifold-adapters, mnemos-knowledge, prism-analytics}`
-- **Organism platform:** `~/dev/work/organism` (path-patched into this
+- **Foundation:** `~/dev/reflective/stack/bedrock-platform/converge`
+- **Sibling checkouts:** `~/dev/reflective/stack/mosaic-extensions/{atelier-showcase, arbiter-policy, embassy-ports, ferrox-solvers, manifold-adapters, mnemos-knowledge, prism-analytics}`
+- **Organism platform:** `~/dev/reflective/stack/bedrock-platform/organism` (path-patched into this
   workspace via `[patch.crates-io]` while organism crates remain
   unreleased)
-- **Templates:** `~/dev/templates/converge-extension` (this scaffold)
+- **Templates:** `~/dev/reflective/templates/converge-extension` (this scaffold)
 
 ## The five-command release ritual
 
