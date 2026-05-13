@@ -13,6 +13,14 @@ ignore = [
     # dotenv 0.15.0 unmaintained — transitive via axiom-truth → organism-*
     # (test/dev surface only; foundation also ignores).
     "RUSTSEC-2021-0141",
+    # bincode 1.x and 2.x unmaintained. Transitive via burn (model
+    # serialization) → prism-analytics. No upstream fix; burn has not
+    # migrated. Mirrors prism-analytics/deny.toml.
+    "RUSTSEC-2025-0141",
+    # lru 0.12.5 unsound `IterMut` (Stacked Borrows). Transitive via
+    # ratatui → burn-train. The unsound API is reachable only inside
+    # ratatui's internal cache; we do not call it. Mirrors prism's policy.
+    "RUSTSEC-2026-0002",
 ]
 
 [licenses]
@@ -28,6 +36,11 @@ allow = [
     "BSL-1.0",
     "CC0-1.0",
     "MPL-2.0",
+    # NCSA permissive license (Univ. of Illinois/NCSA) — enters via
+    # libfuzzer-sys (transitive: prism → burn → burn-dataset → image →
+    # ravif → rav1e → libfuzzer-sys). Both foundation (converge) and
+    # prism-analytics already allow it; this restores parity.
+    "NCSA",
     "Unlicense",
     "CDLA-Permissive-2.0",
 ]
