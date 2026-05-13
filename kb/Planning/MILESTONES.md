@@ -9,8 +9,8 @@ source: mixed
 
 **Target:** 2026-05 | **Tracks:** Converge 3.8.1
 
-- [ ] Keep workspace package version at `1.0.0`.
-- [ ] Keep Converge dependencies on the `3.8.1` contract baseline.
-- [ ] Adopt Extension Release Checklist (security-audit, coverage, performance-profile, soak)
-- [ ] First clean `just release-check` run
-- [ ] Tag v1.0.0
+- [x] Keep workspace package version at `1.0.0`.
+- [x] Keep Converge dependencies on the `3.8.1` contract baseline.
+- [x] Adopt Extension Release Checklist (security-audit, coverage, performance-profile, soak)
+- [x] First clean `just release-check` run (2026-05-13, coverage 83.3%)
+- [x] Tag v1.0.0 (2026-05-13)
