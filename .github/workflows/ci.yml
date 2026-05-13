@@ -61,3 +61,32 @@ jobs:
           components: rustfmt
       - name: Check formatting
         run: cargo fmt --all -- --check
+
+  # Cross-extension solver e2e — exercises ferrox CP-SAT alongside arbiter +
+  # prism. Requires libortools to be built/installed on the runner, which is
+  # a ~10 min source build per ferrox-solvers/Dockerfile. Allowed to fail
+  # until the install step is fleshed out; promote to required once stable.
+  #
+  # Manual trigger only for now (workflow_dispatch). Once the OR-tools
+  # install is fast/cached, broaden the `on:` filter to run on solver-scoped
+  # PRs.
+  solver-tests:
+    name: Solver E2E (ferrox + arbiter + prism)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: ${{ env.RUST_VERSION }}
+      - uses: Swatinem/rust-cache@v2
+      # TODO: install OR-tools. Mirror the source build in
+      # ../mosaic-extensions/ferrox-solvers/Dockerfile (stage `cpp-builder`),
+      # or pull a prebuilt artefact once one is published.
+      - name: Install OR-tools
+        run: |
+          echo "OR-tools install step pending — see ferrox-solvers/Dockerfile."
+          exit 1
+      - name: Run solver e2e
+        run: just solver-check

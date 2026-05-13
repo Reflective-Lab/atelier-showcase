@@ -1,0 +1,25 @@
+[package]
+name = "example-arbiter-ferrox-solver-gallery"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[features]
+default = []
+native-solvers = ["ferrox/full"]
+
+[dependencies]
+arbiter.workspace = true
+converge-kernel.workspace = true
+converge-model.workspace = true
+converge-optimization.workspace = true
+converge-pack.workspace = true
+converge-provider.workspace = true
+ferrox.workspace = true
+async-trait.workspace = true
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio.workspace = true
+
+[dev-dependencies]
+proptest = "1"

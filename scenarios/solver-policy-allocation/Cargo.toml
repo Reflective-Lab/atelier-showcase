@@ -1,0 +1,28 @@
+[package]
+name = "example-solver-policy-allocation"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Cross-extension showcase: composes a solver pipeline (atelier-domain
+# resource_routing today, ferrox in step 3) with Cedar policy gating
+# (arbiter) and feature extraction (prism) inside one Converge formation.
+
+[dependencies]
+converge-kernel.workspace = true
+converge-pack.workspace = true
+arbiter.workspace = true
+prism = { package = "converge-prism-analytics", version = "1.0.0" }
+atelier-domain.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+# ferrox is opt-in: enabling `with-solver` pulls in OR-tools C++ deps
+# (libortools must be present on the system).
+ferrox = { workspace = true, features = ["ortools"], optional = true }
+
+[features]
+default = []
+with-solver = ["dep:ferrox"]

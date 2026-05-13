@@ -22,6 +22,11 @@ test:
 test-one name:
     cargo test --workspace --all-targets -- {{name}}
 
+# Cross-extension solver e2e — requires libortools installed on the host.
+# Runs the ferrox CP-SAT path of scenarios/solver-policy-allocation.
+solver-check:
+    cargo test -p example-solver-policy-allocation --features with-solver --test end_to_end
+
 lint:
     cargo fmt --check
     cargo clippy --workspace --all-targets -- -D warnings
