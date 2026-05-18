@@ -12,12 +12,19 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use converge_kernel::{
     AgentEffect, Budget, Context, ContextFact, ContextKey, ContextState, ConvergeResult, Engine,
-    Suggestor,
+    Suggestor, TextPayload,
 };
 use converge_optimization::assignment::{AssignmentProblem, solve as solve_assignment};
 use serde::{Deserialize, Serialize};
 
 const SEED_ID: &str = "reconciliation-seed:default";
+
+/// Provenance source for every fact proposed by this tutorial. The
+/// 3.9 contract requires fact-emitting Suggestors to override the
+/// default empty `provenance()` — see `Suggestor::provenance` in
+/// converge-pack. One shared identifier for the whole tutorial keeps
+/// the audit trail readable.
+const RECONCILIATION_PROVENANCE: &str = "example-reconciliation-loop";
 const MATRIX_ID: &str = "candidate-matrix:default";
 const RESULT_ID: &str = "reconciliation-result:default";
 const SUMMARY_ID: &str = "reconciliation-summary:default";
@@ -99,6 +106,10 @@ impl Suggestor for CandidateScorerSuggestor {
         "candidate-scorer"
     }
 
+    fn provenance(&self) -> &'static str {
+        RECONCILIATION_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &SEED_DEPENDENCIES
     }
@@ -117,8 +128,8 @@ impl Suggestor for CandidateScorerSuggestor {
             converge_kernel::ProposedFact::new(
                 ContextKey::Evaluations,
                 MATRIX_ID,
-                serde_json::to_string(&matrix).unwrap_or_default(),
-                self.name(),
+                TextPayload::new(serde_json::to_string(&matrix).unwrap_or_default()),
+                RECONCILIATION_PROVENANCE,
             )
             .with_confidence(0.9),
         )
@@ -131,6 +142,10 @@ struct ExactAssignmentSuggestor;
 impl Suggestor for ExactAssignmentSuggestor {
     fn name(&self) -> &str {
         "exact-assignment"
+    }
+
+    fn provenance(&self) -> &'static str {
+        RECONCILIATION_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -151,8 +166,8 @@ impl Suggestor for ExactAssignmentSuggestor {
             converge_kernel::ProposedFact::new(
                 ContextKey::Strategies,
                 RESULT_ID,
-                serde_json::to_string(&result).unwrap_or_default(),
-                self.name(),
+                TextPayload::new(serde_json::to_string(&result).unwrap_or_default()),
+                RECONCILIATION_PROVENANCE,
             )
             .with_confidence(0.94),
         )
@@ -165,6 +180,10 @@ struct ResidueSummarySuggestor;
 impl Suggestor for ResidueSummarySuggestor {
     fn name(&self) -> &str {
         "residue-summary"
+    }
+
+    fn provenance(&self) -> &'static str {
+        RECONCILIATION_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -200,8 +219,8 @@ impl Suggestor for ResidueSummarySuggestor {
             converge_kernel::ProposedFact::new(
                 ContextKey::Diagnostic,
                 SUMMARY_ID,
-                serde_json::to_string(&summary).unwrap_or_default(),
-                self.name(),
+                TextPayload::new(serde_json::to_string(&summary).unwrap_or_default()),
+                RECONCILIATION_PROVENANCE,
             )
             .with_confidence(0.96),
         )
@@ -324,28 +343,36 @@ fn seed(ctx: &dyn Context) -> Option<ReconciliationSeed> {
     ctx.get(ContextKey::Seeds)
         .iter()
         .find(|fact| fact.id() == SEED_ID)
-        .and_then(|fact| serde_json::from_str(fact.content()).ok())
+        .and_then(|fact| serde_json::from_str(fact_text(fact)).ok())
 }
 
 fn candidate_matrix(ctx: &dyn Context) -> Option<CandidateMatrix> {
     ctx.get(ContextKey::Evaluations)
         .iter()
         .find(|fact| fact.id() == MATRIX_ID)
-        .and_then(|fact| serde_json::from_str(fact.content()).ok())
+        .and_then(|fact| serde_json::from_str(fact_text(fact)).ok())
 }
 
 fn reconciliation_result(ctx: &dyn Context) -> Option<ReconciliationResult> {
     ctx.get(ContextKey::Strategies)
         .iter()
         .find(|fact| fact.id() == RESULT_ID)
-        .and_then(|fact| serde_json::from_str(fact.content()).ok())
+        .and_then(|fact| serde_json::from_str(fact_text(fact)).ok())
 }
 
 fn reconciliation_summary(ctx: &dyn Context) -> Option<ReconciliationSummary> {
     ctx.get(ContextKey::Diagnostic)
         .iter()
         .find(|fact| fact.id() == SUMMARY_ID)
-        .and_then(|fact| serde_json::from_str(fact.content()).ok())
+        .and_then(|fact| serde_json::from_str(fact_text(fact)).ok())
+}
+
+/// Pull a fact's text payload as a `&str`. Returns `""` when the fact's
+/// payload is not a `TextPayload` (these accessor functions only look at
+/// fact ids that this tutorial wrote, so non-text payloads aren't
+/// expected — the empty fallback keeps the call sites infallible).
+fn fact_text(fact: &ContextFact) -> &str {
+    fact.payload::<TextPayload>().map_or("", TextPayload::as_str)
 }
 
 fn fact_exists(ctx: &dyn Context, key: ContextKey, id: &str) -> bool {
@@ -522,10 +549,11 @@ fn print_section(title: &str, facts: &[ContextFact]) {
     }
 
     for fact in facts {
-        let preview = if fact.content().len() > 120 {
-            format!("{}...", &fact.content()[..120])
+        let content = fact_text(fact);
+        let preview = if content.len() > 120 {
+            format!("{}...", &content[..120])
         } else {
-            fact.content().to_string()
+            content.to_string()
         };
         println!("  {} ({preview})", fact.id());
     }
