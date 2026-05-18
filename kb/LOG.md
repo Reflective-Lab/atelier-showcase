@@ -7,6 +7,9 @@ Append an entry on every kb/ change. Format mirrors converge.
 
 | Date | File | Change | Author |
 |------|------|--------|--------|
+| 2026-05-18 | Planning/Converge 3.9 API Drift.md | Mark cleared (commit 82e7767). Workspace builds + tests green against Converge 3.9.1 / Organism 1.9.0. Page retained as historical record of the four-pattern migration | mixed |
+| 2026-05-18 | Standards/Code Review.md, Home.md, INDEX.md | Add atelier code review standard for pinned platform drift, path-patched sibling crates, typed protocol boundaries, domain record checks, and verification gates | mixed |
+| 2026-05-14 | truths/High-Risk Claim Portfolio.md, truths/README.md, scenarios/high-risk-claim-portfolio, README.md | Added a product-side Arbiter high-risk claim portfolio exemplar with explicit evidence and CVC5 policy statuses | mixed |
 | 2026-05-06 | Planning/MILESTONES.md | Align planned release to v1.0.0 on the Converge 3.8.1 baseline | mixed |
 | YYYY-MM-DD | _path_ | _summary_ | human/llm/mixed |
 | 2026-05-06 | Philosophy/From Instructions to Intent.md | Add higher-order frame: relocating structure, intent → decisions at runtime | mixed |

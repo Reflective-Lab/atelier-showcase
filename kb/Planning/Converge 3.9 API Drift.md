@@ -1,41 +1,48 @@
 ---
 name: Converge 3.9 API Drift Sweep
-description: Known blocker — atelier-showcase has un-migrated 3.9 API patterns across ~22 files. Tracked, not hidden.
+description: Cleared 2026-05-18 — atelier-showcase fully migrated to Converge 3.9 / Organism 1.9. Retained as the historical record of the four-pattern migration.
 source: mixed
 ---
 
 # Converge 3.9 API Drift Sweep
 
-**Status:** known blocker. **Not** in release scope until cleared.
+**Status:** ✅ **Cleared** on 2026-05-18 by commit `82e7767`
+(scenarios were bumped separately in `c9d9569`). `cargo build
+--workspace` and `cargo test --workspace` are clean against
+Converge 3.9.1 and Organism 1.9.0.
 
-`atelier-showcase` has a dependency-direction breakage against the
-current `converge-pack` 3.9 API. The drift is real, mechanical, and
-isolated to non-critical paths (library helpers, scenarios, several
-tutorials). It is **not** on the organism-dynamics / formation-design
-critical path — `scenarios/truth-driven-formation` and the
-arena-tests integration tests both pass against the broken
-workspace. But `cargo test --workspace` in atelier-showcase **does
-not pass** until this is cleared, so the workspace-wide signal is
+This page is retained as the historical record of the four-pattern
+migration so the same mistakes are not re-introduced.
+
+## Original problem
+
+`atelier-showcase` had a dependency-direction breakage against the
+Converge 3.9 API. The drift was real, mechanical, and isolated to
+non-critical paths (library helpers, scenarios, several tutorials).
+It was **not** on the organism-dynamics / formation-design critical
+path — `scenarios/truth-driven-formation` and the arena-tests
+integration tests both passed against the broken workspace — but
+`cargo test --workspace` did not, so the workspace-wide signal was
 untrustworthy.
 
-The user's instruction was explicit: do not paper over this with
-`[workspace.exclude]`. Leave the broken surfaces visible. Track it
-here and clear in a dedicated migration pass.
+The instruction at the time was explicit: do not paper over the
+breakage with `[workspace.exclude]`. Leave the broken surfaces
+visible, track them here, and clear in a dedicated migration pass.
 
-## Scope
+## Scope (cleared)
 
-- **22 files** with `fact.content()` (74 call sites)
-- **20 files** with `ProposedFact::new` (mostly overlapping)
+- **22 files** with `fact.content()` (74 call sites) — ported.
+- **20 files** with `ProposedFact::new` (mostly overlapping) — ported.
 - Affected crates: `crates/atelier-domain/*`, `crates/organism-domain/*`,
-  6 scenarios under `scenarios/*`, several tutorials under `tutorials/*`
-- One tutorial (`tutorials/06-reconciliation-loop`) was migrated
-  separately on 2026-05-18 as commit `85fbc79`. The other 21 files
-  remain.
+  scenarios under `scenarios/*`, tutorials under `tutorials/*`.
+- `tutorials/06-reconciliation-loop` was the reference port (commit
+  `85fbc79`, 2026-05-18). The remaining 21 files landed in
+  `82e7767` on 2026-05-18.
 
 ## Four mechanical patterns
 
-The 3.9 migration introduced four breaking changes that the broken
-surfaces pre-date. Each affected file needs the same shape of fix:
+These four changes were applied to every affected file. They are
+kept here so a future regression has a checklist:
 
 1. **`ContextFact::content()` removed.** Replace with a small helper
    that extracts the `TextPayload` and returns its `as_str()`:
@@ -48,25 +55,36 @@ surfaces pre-date. Each affected file needs the same shape of fix:
    `T: FactPayload + PartialEq`. Wrap raw `String` JSON payloads in
    `TextPayload::new(...)`.
 3. **`ProposedFact::new` provenance param** takes
-   `impl Into<Provenance>`. `Provenance: From<&'static str>` won't
-   accept a borrowed `self.name()` — provide a `&'static str`
+   `impl Into<Provenance>`. `Provenance: From<&'static str>` will
+   not accept a borrowed `self.name()` — provide a `&'static str`
    constant per crate.
-4. **`Suggestor::provenance()`** defaults to `""`; the kernel rejects
-   facts with empty provenance at promotion (`EmptyProvenance`).
-   Every fact-emitting `Suggestor` must override
-   `fn provenance(&self) -> &'static str`.
+4. **`Suggestor::provenance()`** defaults to `""`; the kernel
+   rejects facts with empty provenance at promotion
+   (`EmptyProvenance`). Every fact-emitting `Suggestor` must
+   override `fn provenance(&self) -> &'static str`.
+
+## Follow-ons absorbed in the same pass
+
+Two follow-ons from in-flight 1.9.x organism work were carried into
+this clearing commit so the workspace would land green in one move:
+
+- Tutorials 11 (`charter-from-intent`) and 12 (`shape-competition`)
+  updated for the `UnitInterval` newtypes that now live on
+  `DerivedCharter.confidence`, `IntentComplexity.*`,
+  `ShapeCandidate.*`, `ShapeObservation.*`, `ShapeCalibration.*`.
+  Added `.as_f64()` at print/format sites and wrapped raw float
+  literals in `UnitInterval::clamped(...)`. Tutorial 12 gained
+  `converge-pack` as a direct dep so the type is in scope.
+- Workspace `[patch.crates-io]` extended to local sources for
+  `organism-planning` / `-adversarial` / `-simulation` / `-learning`
+  / `-notes` / `-intelligence` so the workspace picks up the
+  in-flight 1.9.x changes (MembershipDegree, the bounded-numeric
+  newtypes, the typed-ID newtypes, etc.) before they are
+  republished. **Remove these patches once the 1.9 line stabilises
+  on crates.io.**
 
 ## Reference port
 
-`tutorials/06-reconciliation-loop/src/main.rs` (commit `85fbc79`) is
-the canonical example of all four patterns applied. New cleanup work
-should mirror its shape.
-
-## Out of release scope
-
-The four-pattern sweep across the remaining 21 files is mechanical
-compatibility debt, distinct from architecture correctness work in
-organism/dynamics. It blocks **release readiness** but not feature
-work on the critical path. Do not declare the system release-ready
-until this is cleared or the broken surfaces are explicitly
-documented as out of release scope.
+`tutorials/06-reconciliation-loop/src/main.rs` (commit `85fbc79`)
+remains the canonical example of all four patterns applied. New
+adapter work that wants to follow the same shape should mirror it.
