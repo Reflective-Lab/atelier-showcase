@@ -7,7 +7,7 @@
 //! This module produces a governed, reviewable fill plan and proposed field values.
 //! It is intentionally minimal and deterministic to keep invariants in focus.
 
-use converge_core::{AgentEffect, ContextKey, ProposedFact, Suggestor};
+use converge_core::{AgentEffect, ContextKey, ProposedFact, Suggestor, TextPayload};
 use serde::{Deserialize, Serialize};
 
 const FORM_REQUEST_SEED_ID: &str = "form_filler:request";
@@ -27,7 +27,8 @@ fn parse_form_request(ctx: &dyn converge_core::Context) -> Option<FormRequestSee
     ctx.get(ContextKey::Seeds)
         .iter()
         .find(|seed| seed.id().as_str() == FORM_REQUEST_SEED_ID)
-        .and_then(|seed| serde_json::from_str::<FormRequestSeed>(seed.content()).ok())
+        .and_then(|seed| seed.payload::<TextPayload>().map(TextPayload::as_str))
+        .and_then(|payload| serde_json::from_str::<FormRequestSeed>(payload).ok())
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -84,6 +85,10 @@ impl Suggestor for FormSchemaAgent {
         "FormSchemaAgent"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Seeds]
     }
@@ -102,11 +107,12 @@ impl Suggestor for FormSchemaAgent {
             "fields": request.fields,
         });
 
-        AgentEffect::with_proposal(crate::proposal(
+        AgentEffect::with_proposal(crate::record(
             self.name(),
             ContextKey::Signals,
             SCHEMA_FACT_ID,
-            payload.to_string(),
+            "form_filler.schema",
+            payload,
         ))
     }
 }
@@ -118,6 +124,10 @@ pub struct FieldMappingAgent;
 impl Suggestor for FieldMappingAgent {
     fn name(&self) -> &'static str {
         "FieldMappingAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -133,10 +143,10 @@ impl Suggestor for FieldMappingAgent {
             .get(ContextKey::Signals)
             .iter()
             .find(|fact| fact.id().as_str() == SCHEMA_FACT_ID)
-            .and_then(|fact| serde_json::from_str::<serde_json::Value>(fact.content()).ok());
+            .and_then(crate::record_payload);
 
         let fields = schema
-            .and_then(|value| value.get("fields").cloned())
+            .and_then(|payload| payload.data().get("fields").cloned())
             .and_then(|value| serde_json::from_value::<Vec<String>>(value).ok())
             .unwrap_or_default();
 
@@ -149,11 +159,12 @@ impl Suggestor for FieldMappingAgent {
             .collect();
 
         let payload = serde_json::json!({ "mappings": mappings });
-        AgentEffect::with_proposal(crate::proposal(
+        AgentEffect::with_proposal(crate::record(
             self.name(),
             ContextKey::Hypotheses,
             MAPPINGS_FACT_ID,
-            payload.to_string(),
+            "form_filler.field_mappings",
+            payload,
         ))
     }
 }
@@ -165,6 +176,10 @@ pub struct NormalizationAgent;
 impl Suggestor for NormalizationAgent {
     fn name(&self) -> &'static str {
         "NormalizationAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -181,8 +196,8 @@ impl Suggestor for NormalizationAgent {
             .get(ContextKey::Hypotheses)
             .iter()
             .find(|fact| fact.id().as_str() == MAPPINGS_FACT_ID)
-            .and_then(|fact| serde_json::from_str::<serde_json::Value>(fact.content()).ok())
-            .and_then(|value| value.get("mappings").cloned())
+            .and_then(crate::record_payload)
+            .and_then(|payload| payload.data().get("mappings").cloned())
             .and_then(|value| serde_json::from_value::<Vec<FieldMapping>>(value).ok())
             .unwrap_or_default();
 
@@ -195,11 +210,12 @@ impl Suggestor for NormalizationAgent {
             .collect();
 
         let payload = serde_json::json!({ "normalized": normalized });
-        AgentEffect::with_proposal(crate::proposal(
+        AgentEffect::with_proposal(crate::record(
             self.name(),
             ContextKey::Hypotheses,
             NORMALIZED_FACT_ID,
-            payload.to_string(),
+            "form_filler.normalized_fields",
+            payload,
         ))
     }
 }
@@ -211,6 +227,10 @@ pub struct CompletenessAgent;
 impl Suggestor for CompletenessAgent {
     fn name(&self) -> &'static str {
         "CompletenessAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -227,8 +247,8 @@ impl Suggestor for CompletenessAgent {
             .get(ContextKey::Hypotheses)
             .iter()
             .find(|fact| fact.id().as_str() == NORMALIZED_FACT_ID)
-            .and_then(|fact| serde_json::from_str::<serde_json::Value>(fact.content()).ok())
-            .and_then(|value| value.get("normalized").cloned())
+            .and_then(crate::record_payload)
+            .and_then(|payload| payload.data().get("normalized").cloned())
             .and_then(|value| serde_json::from_value::<Vec<NormalizedField>>(value).ok())
             .unwrap_or_default();
 
@@ -239,11 +259,12 @@ impl Suggestor for CompletenessAgent {
             .collect();
 
         let payload = CompletenessStatus { missing_fields };
-        AgentEffect::with_proposal(crate::proposal(
+        AgentEffect::with_proposal(crate::record(
             self.name(),
             ContextKey::Constraints,
             COMPLETENESS_FACT_ID,
-            serde_json::to_string(&payload).unwrap_or_default(),
+            "form_filler.completeness",
+            serde_json::to_value(&payload).unwrap_or_default(),
         ))
     }
 }
@@ -255,6 +276,10 @@ pub struct RiskClassifierAgent;
 impl Suggestor for RiskClassifierAgent {
     fn name(&self) -> &'static str {
         "RiskClassifierAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -270,10 +295,10 @@ impl Suggestor for RiskClassifierAgent {
             .get(ContextKey::Signals)
             .iter()
             .find(|fact| fact.id().as_str() == SCHEMA_FACT_ID)
-            .and_then(|fact| serde_json::from_str::<serde_json::Value>(fact.content()).ok());
+            .and_then(crate::record_payload);
 
         let fields = schema
-            .and_then(|value| value.get("fields").cloned())
+            .and_then(|payload| payload.data().get("fields").cloned())
             .and_then(|value| serde_json::from_value::<Vec<String>>(value).ok())
             .unwrap_or_default();
 
@@ -283,11 +308,12 @@ impl Suggestor for RiskClassifierAgent {
             .collect::<Vec<_>>();
 
         let payload = RiskClassification { high_risk_fields };
-        AgentEffect::with_proposal(crate::proposal(
+        AgentEffect::with_proposal(crate::record(
             self.name(),
             ContextKey::Constraints,
             RISK_FACT_ID,
-            serde_json::to_string(&payload).unwrap_or_default(),
+            "form_filler.risk_classification",
+            serde_json::to_value(&payload).unwrap_or_default(),
         ))
     }
 }
@@ -299,6 +325,10 @@ pub struct FillPlanAgent;
 impl Suggestor for FillPlanAgent {
     fn name(&self) -> &'static str {
         "FillPlanAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -316,11 +346,12 @@ impl Suggestor for FillPlanAgent {
             .get(ContextKey::Signals)
             .iter()
             .find(|fact| fact.id().as_str() == SCHEMA_FACT_ID)
-            .and_then(|fact| serde_json::from_str::<serde_json::Value>(fact.content()).ok());
+            .and_then(crate::record_payload);
 
         let form_id = schema
-            .and_then(|value| {
-                value
+            .and_then(|payload| {
+                payload
+                    .data()
                     .get("form_id")
                     .and_then(|id| id.as_str())
                     .map(std::string::ToString::to_string)
@@ -331,7 +362,7 @@ impl Suggestor for FillPlanAgent {
             .get(ContextKey::Constraints)
             .iter()
             .find(|fact| fact.id().as_str() == COMPLETENESS_FACT_ID)
-            .and_then(|fact| serde_json::from_str::<CompletenessStatus>(fact.content()).ok())
+            .and_then(crate::record_data::<CompletenessStatus>)
             .map(|status| status.missing_fields)
             .unwrap_or_default();
 
@@ -339,7 +370,7 @@ impl Suggestor for FillPlanAgent {
             .get(ContextKey::Constraints)
             .iter()
             .find(|fact| fact.id().as_str() == RISK_FACT_ID)
-            .and_then(|fact| serde_json::from_str::<RiskClassification>(fact.content()).ok())
+            .and_then(crate::record_data::<RiskClassification>)
             .map(|status| status.high_risk_fields)
             .unwrap_or_default();
 
@@ -351,11 +382,12 @@ impl Suggestor for FillPlanAgent {
             ready_for_submit,
         };
 
-        AgentEffect::with_proposal(crate::proposal(
+        AgentEffect::with_proposal(crate::record(
             self.name(),
             ContextKey::Strategies,
             FILL_PLAN_FACT_ID,
-            serde_json::to_string(&plan).unwrap_or_default(),
+            "form_filler.fill_plan",
+            serde_json::to_value(&plan).unwrap_or_default(),
         ))
     }
 }
@@ -367,6 +399,10 @@ pub struct ProposalEmitterAgent;
 impl Suggestor for ProposalEmitterAgent {
     fn name(&self) -> &'static str {
         "ProposalEmitterAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -382,8 +418,8 @@ impl Suggestor for ProposalEmitterAgent {
             .get(ContextKey::Hypotheses)
             .iter()
             .find(|fact| fact.id().as_str() == NORMALIZED_FACT_ID)
-            .and_then(|fact| serde_json::from_str::<serde_json::Value>(fact.content()).ok())
-            .and_then(|value| value.get("normalized").cloned())
+            .and_then(crate::record_payload)
+            .and_then(|payload| payload.data().get("normalized").cloned())
             .and_then(|value| serde_json::from_value::<Vec<NormalizedField>>(value).ok())
             .unwrap_or_default();
 
@@ -394,14 +430,16 @@ impl Suggestor for ProposalEmitterAgent {
                 ProposedFact::new(
                     ContextKey::Proposals,
                     format!("{}{}", PROPOSAL_PREFIX, field.field_id),
-                    serde_json::json!({
-                        "field_id": field.field_id,
-                        "value": field.normalized_value,
-                        "provenance": "form_filler:deterministic",
-                        "risk": "unknown",
-                    })
-                    .to_string(),
-                    "form_filler:deterministic",
+                    crate::DomainRecordPayload::new(
+                        "form_filler.proposed_field",
+                        serde_json::json!({
+                            "field_id": field.field_id,
+                            "value": field.normalized_value,
+                            "provenance": "form_filler:deterministic",
+                            "risk": "unknown",
+                        }),
+                    ),
+                    crate::ATELIER_DOMAIN_PROVENANCE,
                 )
                 .with_confidence(0.8)
             })
@@ -500,7 +538,10 @@ mod tests {
             .iter()
             .find(|f| f.id().as_str() == id)
             .unwrap_or_else(|| panic!("missing fact {id}"));
-        serde_json::from_str(fact.content()).expect("fact json")
+        crate::record_payload(fact)
+            .unwrap_or_else(|| panic!("fact {id} should carry DomainRecordPayload"))
+            .data()
+            .clone()
     }
 
     #[tokio::test]

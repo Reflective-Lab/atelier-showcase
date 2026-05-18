@@ -51,6 +51,10 @@ impl Suggestor for EvalExecutionAgent {
         &self.name
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         // Dependencies are determined by registered evals
         // For simplicity, we declare all common keys
@@ -112,8 +116,14 @@ impl Suggestor for EvalExecutionAgent {
             .into_iter()
             .map(|result| {
                 // Include agent name in eval ID for traceability
-                let fact = result.to_fact(Some(&self.name));
-                crate::proposal(self.name(), fact.key(), fact.id().as_str(), fact.content())
+                let id = format!("eval:{}:{}", result.eval_name, self.name);
+                crate::record(
+                    self.name(),
+                    ContextKey::Evaluations,
+                    id,
+                    "eval.result",
+                    serde_json::to_value(&result).unwrap_or_default(),
+                )
             })
             .collect();
 

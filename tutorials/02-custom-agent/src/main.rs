@@ -6,7 +6,8 @@
 //! Shows: Suggestor trait, accepts/execute contract, AgentEffect, ProposedFact.
 
 use converge_kernel::{
-    AgentEffect, Context, ContextKey, ContextState, Engine, ProposedFact, Suggestor,
+    AgentEffect, Context, ContextFact, ContextKey, ContextState, Engine, ProposedFact, Suggestor,
+    TextPayload,
 };
 
 const NO_DEPENDENCIES: [ContextKey; 0] = [];
@@ -29,6 +30,10 @@ impl Suggestor for SeedOnceSuggestor {
         self.name
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.custom-agent"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &NO_DEPENDENCIES
     }
@@ -39,8 +44,13 @@ impl Suggestor for SeedOnceSuggestor {
 
     async fn execute(&self, _ctx: &dyn Context) -> AgentEffect {
         AgentEffect::with_proposal(
-            ProposedFact::new(ContextKey::Seeds, self.id, self.content, self.name)
-                .with_confidence(1.0),
+            ProposedFact::new(
+                ContextKey::Seeds,
+                self.id,
+                TextPayload::new(self.content),
+                self.name,
+            )
+            .with_confidence(1.0),
         )
     }
 }
@@ -64,6 +74,10 @@ impl Suggestor for SummaryAgent {
         &self.agent_name
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.custom-agent"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Seeds]
     }
@@ -74,17 +88,13 @@ impl Suggestor for SummaryAgent {
 
     async fn execute(&self, ctx: &dyn Context) -> AgentEffect {
         let seeds = ctx.get(ContextKey::Seeds);
-        let summary = seeds
-            .iter()
-            .map(|f| f.content())
-            .collect::<Vec<_>>()
-            .join("; ");
+        let summary = seeds.iter().map(fact_text).collect::<Vec<_>>().join("; ");
 
         AgentEffect::with_proposal(
             ProposedFact::new(
                 ContextKey::Hypotheses,
                 format!("{}-summary", self.agent_name),
-                format!("Combined signal: {summary}"),
+                TextPayload::new(format!("Combined signal: {summary}")),
                 format!("agent:{}", self.agent_name),
             )
             .with_confidence(0.9),
@@ -115,8 +125,13 @@ async fn main() {
     println!("Converged in {} cycles\n", result.cycles);
 
     for fact in result.context.get(ContextKey::Hypotheses) {
-        println!("Hypothesis: {}", fact.content());
+        println!("Hypothesis: {}", fact_text(fact));
     }
 
     println!("\n=== Done ===");
+}
+
+fn fact_text(fact: &ContextFact) -> &str {
+    fact.payload::<TextPayload>()
+        .map_or("", TextPayload::as_str)
 }

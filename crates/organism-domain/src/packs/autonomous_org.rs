@@ -3,7 +3,11 @@
 //! Fact prefixes: `policy:`, `approval:`, `budget_envelope:`, `exception:`,
 //! `delegation:`, `risk_control:`
 
-use crate::pack::{AgentMeta, ContextKey, InvariantClass, InvariantMeta};
+use crate::{
+    fact_json_of,
+    pack::{AgentMeta, ContextKey, InvariantClass, InvariantMeta},
+    record,
+};
 use organism_pack::{
     AdmissionResult, AdversarialReview, Challenge, DimensionResult, FeasibilityAssessment,
     FeasibilityDimension, Sample, Severity, SimulationDimension, SimulationRecommendation,
@@ -160,21 +164,27 @@ impl converge_pack::Suggestor for SpendAdmissionSuggestor {
         "spend_admission"
     }
 
+    fn provenance(&self) -> &'static str {
+        "organism-domain"
+    }
+
     fn dependencies(&self) -> &[converge_pack::ContextKey] {
         &[converge_pack::ContextKey::Seeds]
     }
 
     fn accepts(&self, ctx: &dyn converge_pack::Context) -> bool {
-        ctx.has(converge_pack::ContextKey::Seeds) && !ctx.has(converge_pack::ContextKey::Signals)
+        ctx.get(converge_pack::ContextKey::Seeds)
+            .iter()
+            .any(|fact| spend_request_json(fact).is_some())
+            && !ctx.has(converge_pack::ContextKey::Signals)
     }
 
     async fn execute(&self, ctx: &dyn converge_pack::Context) -> converge_pack::AgentEffect {
         let seeds = ctx.get(converge_pack::ContextKey::Seeds);
-        let Some(seed) = seeds.first() else {
+        let Some(expense) = seeds.iter().find_map(spend_request_json) else {
             return converge_pack::AgentEffect::empty();
         };
 
-        let expense: serde_json::Value = serde_json::from_str(seed.content()).unwrap_or_default();
         let amount = numeric_field(&expense, "amount").unwrap_or(0.0);
         let category = string_field(&expense, "category").unwrap_or_default();
 
@@ -218,8 +228,11 @@ impl converge_pack::Suggestor for SpendAdmissionSuggestor {
             converge_pack::ProposedFact::new(
                 converge_pack::ContextKey::Signals,
                 "admission:result",
-                serde_json::to_string(&admission).unwrap_or_default(),
-                self.name(),
+                record(
+                    "admission_result",
+                    serde_json::to_value(&admission).unwrap_or_default(),
+                ),
+                "spend_admission",
             )
             .with_confidence(1.0),
         ];
@@ -229,8 +242,8 @@ impl converge_pack::Suggestor for SpendAdmissionSuggestor {
                 converge_pack::ProposedFact::new(
                     converge_pack::ContextKey::Signals,
                     "expense:parsed",
-                    seed.content().to_string(),
-                    self.name(),
+                    record("expense", expense),
+                    "spend_admission",
                 )
                 .with_confidence(1.0),
             );
@@ -251,26 +264,33 @@ impl converge_pack::Suggestor for ApprovalRoutingSuggestor {
         "approval_router"
     }
 
+    fn provenance(&self) -> &'static str {
+        "organism-domain"
+    }
+
     fn dependencies(&self) -> &[converge_pack::ContextKey] {
         &[converge_pack::ContextKey::Signals]
     }
 
     fn accepts(&self, ctx: &dyn converge_pack::Context) -> bool {
-        ctx.has(converge_pack::ContextKey::Signals)
+        ctx.get(converge_pack::ContextKey::Signals)
+            .iter()
+            .any(|fact| {
+                fact.id().as_str() == "expense:parsed" && fact_json_of(fact, "expense").is_some()
+            })
             && !ctx.has(converge_pack::ContextKey::Strategies)
     }
 
     async fn execute(&self, ctx: &dyn converge_pack::Context) -> converge_pack::AgentEffect {
         let signals = ctx.get(converge_pack::ContextKey::Signals);
-        let Some(expense_fact) = signals
+        let Some(expense) = signals
             .iter()
             .find(|fact| fact.id().as_str() == "expense:parsed")
+            .and_then(|fact| fact_json_of(fact, "expense"))
         else {
             return converge_pack::AgentEffect::empty();
         };
 
-        let expense: serde_json::Value =
-            serde_json::from_str(expense_fact.content()).unwrap_or_default();
         let amount = numeric_field(&expense, "amount").unwrap_or(0.0);
         let category = string_field(&expense, "category").unwrap_or_default();
 
@@ -300,8 +320,8 @@ impl converge_pack::Suggestor for ApprovalRoutingSuggestor {
             converge_pack::ProposedFact::new(
                 converge_pack::ContextKey::Strategies,
                 "approval:plan",
-                plan.to_string(),
-                self.name(),
+                record("approval_plan", plan),
+                "approval_router",
             )
             .with_confidence(0.9),
         )
@@ -320,24 +340,33 @@ impl converge_pack::Suggestor for ApprovalPolicySkepticSuggestor {
         "approval_policy_skeptic"
     }
 
+    fn provenance(&self) -> &'static str {
+        "organism-domain"
+    }
+
     fn dependencies(&self) -> &[converge_pack::ContextKey] {
         &[converge_pack::ContextKey::Strategies]
     }
 
     fn accepts(&self, ctx: &dyn converge_pack::Context) -> bool {
-        ctx.has(converge_pack::ContextKey::Strategies)
+        ctx.get(converge_pack::ContextKey::Strategies)
+            .iter()
+            .any(|fact| {
+                fact.id().as_str() == "approval:plan"
+                    && fact_json_of(fact, "approval_plan").is_some()
+            })
             && !ctx.has(converge_pack::ContextKey::Evaluations)
     }
 
     async fn execute(&self, ctx: &dyn converge_pack::Context) -> converge_pack::AgentEffect {
         let strategies = ctx.get(converge_pack::ContextKey::Strategies);
-        let Some(plan_fact) = strategies
+        let Some(plan) = strategies
             .iter()
             .find(|fact| fact.id().as_str() == "approval:plan")
+            .and_then(|fact| fact_json_of(fact, "approval_plan"))
         else {
             return converge_pack::AgentEffect::empty();
         };
-        let plan: serde_json::Value = serde_json::from_str(plan_fact.content()).unwrap_or_default();
 
         let amount = numeric_field(&plan, "amount").unwrap_or(0.0);
         let category = string_field(&plan, "category").unwrap_or_default();
@@ -388,8 +417,8 @@ impl converge_pack::Suggestor for ApprovalPolicySkepticSuggestor {
             converge_pack::ProposedFact::new(
                 converge_pack::ContextKey::Evaluations,
                 "adversarial:review",
-                review.summary().to_string(),
-                self.name(),
+                record("adversarial_review", review.summary()),
+                "approval_policy_skeptic",
             )
             .with_confidence(review.confidence()),
         )
@@ -437,6 +466,10 @@ impl converge_pack::Suggestor for BudgetSimulationSuggestor {
         "budget_simulation"
     }
 
+    fn provenance(&self) -> &'static str {
+        "organism-domain"
+    }
+
     fn dependencies(&self) -> &[converge_pack::ContextKey] {
         &[
             converge_pack::ContextKey::Strategies,
@@ -445,19 +478,25 @@ impl converge_pack::Suggestor for BudgetSimulationSuggestor {
     }
 
     fn accepts(&self, ctx: &dyn converge_pack::Context) -> bool {
-        ctx.has(converge_pack::ContextKey::Evaluations)
+        ctx.get(converge_pack::ContextKey::Strategies)
+            .iter()
+            .any(|fact| {
+                fact.id().as_str() == "approval:plan"
+                    && fact_json_of(fact, "approval_plan").is_some()
+            })
+            && ctx.has(converge_pack::ContextKey::Evaluations)
             && !ctx.has(converge_pack::ContextKey::Proposals)
     }
 
     async fn execute(&self, ctx: &dyn converge_pack::Context) -> converge_pack::AgentEffect {
         let strategies = ctx.get(converge_pack::ContextKey::Strategies);
-        let Some(plan_fact) = strategies
+        let Some(plan) = strategies
             .iter()
             .find(|fact| fact.id().as_str() == "approval:plan")
+            .and_then(|fact| fact_json_of(fact, "approval_plan"))
         else {
             return converge_pack::AgentEffect::empty();
         };
-        let plan: serde_json::Value = serde_json::from_str(plan_fact.content()).unwrap_or_default();
         let amount = numeric_field(&plan, "amount").unwrap_or(0.0);
 
         if let Some(blocked) = blocked_review(ctx) {
@@ -465,13 +504,15 @@ impl converge_pack::Suggestor for BudgetSimulationSuggestor {
                 converge_pack::ProposedFact::new(
                     converge_pack::ContextKey::Proposals,
                     "decision:blocked",
-                    serde_json::json!({
-                        "decision": "rejected",
-                        "reason": "adversarial review blocked the plan",
-                        "blockers": blocked.get("blockers"),
-                    })
-                    .to_string(),
-                    self.name(),
+                    record(
+                        "spend_decision",
+                        serde_json::json!({
+                            "decision": "rejected",
+                            "reason": "adversarial review blocked the plan",
+                            "blockers": blocked.get("blockers"),
+                        }),
+                    ),
+                    "budget_simulation",
                 )
                 .with_confidence(0.95),
             );
@@ -484,8 +525,8 @@ impl converge_pack::Suggestor for BudgetSimulationSuggestor {
             converge_pack::ProposedFact::new(
                 converge_pack::ContextKey::Proposals,
                 "decision:expense",
-                budget_decision_payload(&budget_decision).to_string(),
-                self.name(),
+                record("spend_decision", budget_decision_payload(&budget_decision)),
+                "budget_simulation",
             )
             .with_confidence(budget_decision.result.overall_confidence.as_f64()),
         )
@@ -572,10 +613,14 @@ fn blocked_review(ctx: &dyn converge_pack::Context) -> Option<serde_json::Value>
     ctx.get(converge_pack::ContextKey::Evaluations)
         .iter()
         .find(|fact| fact.id().as_str() == "adversarial:review")
-        .and_then(|fact| serde_json::from_str::<serde_json::Value>(fact.content()).ok())
+        .and_then(|fact| fact_json_of(fact, "adversarial_review"))
         .filter(|review| {
             review.get("verdict").and_then(serde_json::Value::as_str) == Some("blocked")
         })
+}
+
+fn spend_request_json(fact: &converge_pack::ContextFact) -> Option<serde_json::Value> {
+    fact_json_of(fact, "expense_request").or_else(|| fact_json_of(fact, "expense"))
 }
 
 fn numeric_field(json: &serde_json::Value, field: &str) -> Option<f64> {
@@ -596,6 +641,15 @@ mod tests {
     };
     use converge_kernel::{ContextKey, ContextState, Engine};
 
+    fn seed_expense(ctx: &mut ContextState, request: serde_json::Value) {
+        let _ = ctx.add_proposal(converge_pack::ProposedFact::new(
+            ContextKey::Seeds,
+            "expense-1",
+            crate::record("expense_request", request),
+            "autonomous-org-test",
+        ));
+    }
+
     #[tokio::test]
     async fn spend_approval_pipeline_approves_in_budget_request() {
         let mut engine = Engine::new();
@@ -606,12 +660,12 @@ mod tests {
 
         let request = serde_json::json!({
             "employee": "karl@reflective.se",
-            "amount": 2500.00,
+            "amount": 2500,
             "category": "entertainment",
             "description": "Client dinner",
         });
         let mut ctx = ContextState::new();
-        let _ = ctx.add_input(ContextKey::Seeds, "expense-1", request.to_string());
+        seed_expense(&mut ctx, request);
 
         let result = engine.run(ctx).await.expect("expense approval run");
         let decision = result
@@ -620,8 +674,7 @@ mod tests {
             .iter()
             .find(|fact| fact.id().as_str() == "decision:expense")
             .expect("decision proposal");
-        let json: serde_json::Value =
-            serde_json::from_str(decision.content()).expect("decision json");
+        let json = crate::fact_json(decision).expect("decision json");
 
         assert_eq!(
             json.get("decision").and_then(serde_json::Value::as_str),
@@ -641,10 +694,10 @@ mod tests {
 
         let request = serde_json::json!({
             "employee": "karl@reflective.se",
-            "amount": 2500.00,
+            "amount": 2500,
         });
         let mut ctx = ContextState::new();
-        let _ = ctx.add_input(ContextKey::Seeds, "expense-1", request.to_string());
+        seed_expense(&mut ctx, request);
 
         let result = engine.run(ctx).await.expect("admission run");
         let signals = result.context.get(ContextKey::Signals);
@@ -652,8 +705,7 @@ mod tests {
             .iter()
             .find(|fact| fact.id().as_str() == "admission:result")
             .expect("admission result");
-        let json: serde_json::Value =
-            serde_json::from_str(admission.content()).expect("admission json");
+        let json = crate::fact_json(admission).expect("admission json");
 
         assert_eq!(
             json.get("feasible").and_then(serde_json::Value::as_bool),
@@ -664,5 +716,22 @@ mod tests {
                 .iter()
                 .any(|fact| fact.id().as_str() == "expense:parsed")
         );
+    }
+
+    #[tokio::test]
+    async fn spend_admission_ignores_wrong_record_family() {
+        let mut engine = Engine::new();
+        engine.register_suggestor(SpendAdmissionSuggestor);
+
+        let mut ctx = ContextState::new();
+        let _ = ctx.add_proposal(converge_pack::ProposedFact::new(
+            ContextKey::Seeds,
+            "vendor-1",
+            crate::record("vendor", serde_json::json!({ "amount": 2500 })),
+            "autonomous-org-test",
+        ));
+
+        let result = engine.run(ctx).await.expect("admission run");
+        assert!(result.context.get(ContextKey::Signals).is_empty());
     }
 }

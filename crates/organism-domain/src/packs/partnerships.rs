@@ -3,7 +3,11 @@
 //! Fact prefixes: `partner:`, `supplier:`, `p_agreement:`, `vendor_assessment:`,
 //! `integration:`, `diligence:`, `relationship:`, `contract_renewal:`
 
-use crate::pack::{AgentMeta, ContextKey, InvariantClass, InvariantMeta};
+use crate::{
+    fact_json_of,
+    pack::{AgentMeta, ContextKey, InvariantClass, InvariantMeta},
+    record,
+};
 
 pub const AGENTS: &[AgentMeta] = &[
     AgentMeta {
@@ -130,21 +134,27 @@ impl converge_pack::Suggestor for VendorDataSuggestor {
         "vendor_data"
     }
 
+    fn provenance(&self) -> &'static str {
+        "organism-domain"
+    }
+
     fn dependencies(&self) -> &[converge_pack::ContextKey] {
         &[converge_pack::ContextKey::Seeds]
     }
 
     fn accepts(&self, ctx: &dyn converge_pack::Context) -> bool {
-        ctx.has(converge_pack::ContextKey::Seeds) && !ctx.has(converge_pack::ContextKey::Signals)
+        ctx.get(converge_pack::ContextKey::Seeds)
+            .iter()
+            .any(|fact| fact_json_of(fact, "rfp").is_some())
+            && !ctx.has(converge_pack::ContextKey::Signals)
     }
 
     async fn execute(&self, ctx: &dyn converge_pack::Context) -> converge_pack::AgentEffect {
         let seeds = ctx.get(converge_pack::ContextKey::Seeds);
-        let Some(seed) = seeds.first() else {
+        let Some(json) = seeds.iter().find_map(|fact| fact_json_of(fact, "rfp")) else {
             return converge_pack::AgentEffect::empty();
         };
 
-        let json: serde_json::Value = serde_json::from_str(seed.content()).unwrap_or_default();
         let vendors = json.get("vendors").cloned().unwrap_or_default();
 
         let facts: Vec<converge_pack::ProposedFact> = vendors
@@ -159,8 +169,8 @@ impl converge_pack::Suggestor for VendorDataSuggestor {
                 converge_pack::ProposedFact::new(
                     converge_pack::ContextKey::Signals,
                     format!("vendor:{id}"),
-                    vendor.to_string(),
-                    self.name(),
+                    record("vendor", vendor.clone()),
+                    "vendor_data",
                 )
                 .with_confidence(1.0)
             })
@@ -181,26 +191,26 @@ impl converge_pack::Suggestor for VendorPriceEvaluatorSuggestor {
         "price_evaluator"
     }
 
+    fn provenance(&self) -> &'static str {
+        "organism-domain"
+    }
+
     fn dependencies(&self) -> &[converge_pack::ContextKey] {
         &[converge_pack::ContextKey::Signals]
     }
 
     fn accepts(&self, ctx: &dyn converge_pack::Context) -> bool {
-        ctx.has(converge_pack::ContextKey::Signals)
-            && !ctx.has(converge_pack::ContextKey::Evaluations)
+        has_vendor_signals(ctx) && !ctx.has(converge_pack::ContextKey::Evaluations)
     }
 
     async fn execute(&self, ctx: &dyn converge_pack::Context) -> converge_pack::AgentEffect {
         evaluate_vendors(ctx, "price", |vendor| {
-            let price = vendor
-                .get("price")
-                .and_then(serde_json::Value::as_f64)
-                .unwrap_or(999_999.0);
-            if price < 10_000.0 {
+            let price = whole_dollars_field(vendor, "price").unwrap_or(i64::MAX);
+            if price < 10_000 {
                 1.0
-            } else if price < 25_000.0 {
+            } else if price < 25_000 {
                 0.7
-            } else if price < 50_000.0 {
+            } else if price < 50_000 {
                 0.4
             } else {
                 0.1
@@ -220,13 +230,16 @@ impl converge_pack::Suggestor for VendorComplianceEvaluatorSuggestor {
         "compliance_evaluator"
     }
 
+    fn provenance(&self) -> &'static str {
+        "organism-domain"
+    }
+
     fn dependencies(&self) -> &[converge_pack::ContextKey] {
         &[converge_pack::ContextKey::Signals]
     }
 
     fn accepts(&self, ctx: &dyn converge_pack::Context) -> bool {
-        ctx.has(converge_pack::ContextKey::Signals)
-            && !ctx.has(converge_pack::ContextKey::Evaluations)
+        has_vendor_signals(ctx) && !ctx.has(converge_pack::ContextKey::Evaluations)
     }
 
     async fn execute(&self, ctx: &dyn converge_pack::Context) -> converge_pack::AgentEffect {
@@ -255,13 +268,16 @@ impl converge_pack::Suggestor for VendorRiskEvaluatorSuggestor {
         "risk_evaluator"
     }
 
+    fn provenance(&self) -> &'static str {
+        "organism-domain"
+    }
+
     fn dependencies(&self) -> &[converge_pack::ContextKey] {
         &[converge_pack::ContextKey::Signals]
     }
 
     fn accepts(&self, ctx: &dyn converge_pack::Context) -> bool {
-        ctx.has(converge_pack::ContextKey::Signals)
-            && !ctx.has(converge_pack::ContextKey::Evaluations)
+        has_vendor_signals(ctx) && !ctx.has(converge_pack::ContextKey::Evaluations)
     }
 
     async fn execute(&self, ctx: &dyn converge_pack::Context) -> converge_pack::AgentEffect {
@@ -294,13 +310,16 @@ impl converge_pack::Suggestor for VendorTimelineEvaluatorSuggestor {
         "timeline_evaluator"
     }
 
+    fn provenance(&self) -> &'static str {
+        "organism-domain"
+    }
+
     fn dependencies(&self) -> &[converge_pack::ContextKey] {
         &[converge_pack::ContextKey::Signals]
     }
 
     fn accepts(&self, ctx: &dyn converge_pack::Context) -> bool {
-        ctx.has(converge_pack::ContextKey::Signals)
-            && !ctx.has(converge_pack::ContextKey::Evaluations)
+        has_vendor_signals(ctx) && !ctx.has(converge_pack::ContextKey::Evaluations)
     }
 
     async fn execute(&self, ctx: &dyn converge_pack::Context) -> converge_pack::AgentEffect {
@@ -334,12 +353,18 @@ impl converge_pack::Suggestor for VendorConsensusSuggestor {
         "consensus"
     }
 
+    fn provenance(&self) -> &'static str {
+        "organism-domain"
+    }
+
     fn dependencies(&self) -> &[converge_pack::ContextKey] {
         &[converge_pack::ContextKey::Evaluations]
     }
 
     fn accepts(&self, ctx: &dyn converge_pack::Context) -> bool {
-        ctx.has(converge_pack::ContextKey::Evaluations)
+        ctx.get(converge_pack::ContextKey::Evaluations)
+            .iter()
+            .any(|fact| fact_json_of(fact, "vendor_evaluation").is_some())
             && !ctx.has(converge_pack::ContextKey::Proposals)
     }
 
@@ -349,26 +374,27 @@ impl converge_pack::Suggestor for VendorConsensusSuggestor {
             std::collections::HashMap::new();
 
         for eval in evaluations {
-            if let Ok(json) = serde_json::from_str::<serde_json::Value>(eval.content()) {
-                let id = json
-                    .get("vendor_id")
-                    .and_then(serde_json::Value::as_str)
-                    .unwrap_or("?");
-                let score = json
-                    .get("score")
-                    .and_then(serde_json::Value::as_f64)
-                    .unwrap_or(0.0);
-                let entry = scores.entry(id.to_string()).or_insert((0.0, 0));
-                entry.0 += score;
-                entry.1 += 1;
-            }
+            let Some(json) = fact_json_of(eval, "vendor_evaluation") else {
+                continue;
+            };
+            let id = json
+                .get("vendor_id")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("?");
+            let score = json
+                .get("score")
+                .and_then(serde_json::Value::as_f64)
+                .unwrap_or(0.0);
+            let entry = scores.entry(id.to_string()).or_insert((0.0, 0));
+            entry.0 += score;
+            entry.1 += 1;
         }
 
         let mut ranked: Vec<(String, f64)> = scores
             .into_iter()
             .map(|(id, (total, count))| (id, total / f64::from(count)))
             .collect();
-        ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        ranked.sort_by(|a, b| b.1.total_cmp(&a.1));
 
         let proposals: Vec<converge_pack::ProposedFact> = ranked
             .iter()
@@ -377,14 +403,16 @@ impl converge_pack::Suggestor for VendorConsensusSuggestor {
                 converge_pack::ProposedFact::new(
                     converge_pack::ContextKey::Proposals,
                     format!("recommendation:{}", i + 1),
-                    serde_json::json!({
-                        "vendor_id": vendor_id,
-                        "rank": i + 1,
-                        "score": score,
-                        "recommendation": if i == 0 { "recommended" } else { "alternative" }
-                    })
-                    .to_string(),
-                    self.name(),
+                    record(
+                        "vendor_recommendation",
+                        serde_json::json!({
+                            "vendor_id": vendor_id,
+                            "rank": i + 1,
+                            "score": score,
+                            "recommendation": if i == 0 { "recommended" } else { "alternative" }
+                        }),
+                    ),
+                    "consensus",
                 )
                 .with_confidence(if i == 0 { 0.85 } else { 0.6 })
             })
@@ -406,19 +434,21 @@ where
     let evaluations: Vec<converge_pack::ProposedFact> = signals
         .iter()
         .filter_map(|signal| {
-            let vendor: serde_json::Value = serde_json::from_str(signal.content()).ok()?;
+            let vendor = fact_json_of(signal, "vendor")?;
             let id = vendor.get("id").and_then(serde_json::Value::as_str)?;
             let score = scorer(&vendor);
             Some(
                 converge_pack::ProposedFact::new(
                     converge_pack::ContextKey::Evaluations,
                     format!("{criterion}:{id}"),
-                    serde_json::json!({
-                        "vendor_id": id,
-                        "criterion": criterion,
-                        "score": score,
-                    })
-                    .to_string(),
+                    record(
+                        "vendor_evaluation",
+                        serde_json::json!({
+                            "vendor_id": id,
+                            "criterion": criterion,
+                            "score": score,
+                        }),
+                    ),
                     format!("{criterion}_evaluator"),
                 )
                 .with_confidence(1.0),
@@ -427,6 +457,20 @@ where
         .collect();
 
     converge_pack::AgentEffect::with_proposals(evaluations)
+}
+
+fn has_vendor_signals(ctx: &dyn converge_pack::Context) -> bool {
+    ctx.get(converge_pack::ContextKey::Signals)
+        .iter()
+        .any(|fact| fact_json_of(fact, "vendor").is_some())
+}
+
+fn whole_dollars_field(json: &serde_json::Value, field: &str) -> Option<i64> {
+    json.get(field).and_then(|value| {
+        value
+            .as_i64()
+            .or_else(|| value.as_u64().and_then(|n| i64::try_from(n).ok()))
+    })
 }
 
 #[cfg(test)]
@@ -438,8 +482,13 @@ mod tests {
     };
     use converge_kernel::{ContextKey, ContextState, Engine};
 
-    fn rfp(vendors: serde_json::Value) -> String {
-        serde_json::json!({ "vendors": vendors }).to_string()
+    fn seed_rfp(ctx: &mut ContextState, vendors: serde_json::Value) {
+        let _ = ctx.add_proposal(converge_pack::ProposedFact::new(
+            ContextKey::Seeds,
+            "rfp",
+            crate::record("rfp", serde_json::json!({ "vendors": vendors })),
+            "partnerships-test",
+        ));
     }
 
     fn score_for(facts: &[converge_pack::ContextFact], id: &str) -> f64 {
@@ -447,8 +496,7 @@ mod tests {
             .iter()
             .find(|f| f.id().as_str() == id)
             .unwrap_or_else(|| panic!("missing evaluation {id}"));
-        let json: serde_json::Value =
-            serde_json::from_str(fact.content()).expect("evaluation json");
+        let json = crate::fact_json(fact).expect("evaluation json");
         json.get("score")
             .and_then(serde_json::Value::as_f64)
             .expect("score field")
@@ -469,13 +517,12 @@ mod tests {
         engine.register_suggestor(VendorDataSuggestor);
 
         let mut ctx = ContextState::new();
-        let _ = ctx.add_input(
-            ContextKey::Seeds,
-            "rfp",
-            rfp(serde_json::json!([
-                { "id": "alpha", "price": 5_000.0 },
-                { "id": "bravo", "price": 50_000.0 },
-            ])),
+        seed_rfp(
+            &mut ctx,
+            serde_json::json!([
+                { "id": "alpha", "price": 5_000 },
+                { "id": "bravo", "price": 50_000 },
+            ]),
         );
 
         let result = engine.run(ctx).await.expect("converge");
@@ -491,7 +538,32 @@ mod tests {
         engine.register_suggestor(VendorDataSuggestor);
 
         let mut ctx = ContextState::new();
-        let _ = ctx.add_input(ContextKey::Seeds, "rfp", "{}".to_string());
+        let _ = ctx.add_proposal(converge_pack::ProposedFact::new(
+            ContextKey::Seeds,
+            "rfp",
+            crate::record("rfp", serde_json::json!({})),
+            "partnerships-test",
+        ));
+
+        let result = engine.run(ctx).await.expect("converge");
+        assert!(result.context.get(ContextKey::Signals).is_empty());
+    }
+
+    #[tokio::test]
+    async fn vendor_data_ignores_wrong_record_family() {
+        let mut engine = Engine::new();
+        engine.register_suggestor(VendorDataSuggestor);
+
+        let mut ctx = ContextState::new();
+        let _ = ctx.add_proposal(converge_pack::ProposedFact::new(
+            ContextKey::Seeds,
+            "expense-1",
+            crate::record(
+                "expense",
+                serde_json::json!({ "vendors": [{ "id": "alpha", "price": 5_000 }] }),
+            ),
+            "partnerships-test",
+        ));
 
         let result = engine.run(ctx).await.expect("converge");
         assert!(result.context.get(ContextKey::Signals).is_empty());
@@ -504,15 +576,14 @@ mod tests {
         engine.register_suggestor(VendorPriceEvaluatorSuggestor);
 
         let mut ctx = ContextState::new();
-        let _ = ctx.add_input(
-            ContextKey::Seeds,
-            "rfp",
-            rfp(serde_json::json!([
-                { "id": "cheap",  "price": 5_000.0 },
-                { "id": "mid",    "price": 20_000.0 },
-                { "id": "high",   "price": 40_000.0 },
-                { "id": "lux",    "price": 100_000.0 },
-            ])),
+        seed_rfp(
+            &mut ctx,
+            serde_json::json!([
+                { "id": "cheap",  "price": 5_000 },
+                { "id": "mid",    "price": 20_000 },
+                { "id": "high",   "price": 40_000 },
+                { "id": "lux",    "price": 100_000 },
+            ]),
         );
 
         let result = engine.run(ctx).await.expect("converge");
@@ -530,15 +601,14 @@ mod tests {
         engine.register_suggestor(VendorRiskEvaluatorSuggestor);
 
         let mut ctx = ContextState::new();
-        let _ = ctx.add_input(
-            ContextKey::Seeds,
-            "rfp",
-            rfp(serde_json::json!([
+        seed_rfp(
+            &mut ctx,
+            serde_json::json!([
                 { "id": "established", "years_in_business": 15 },
                 { "id": "mature",      "years_in_business": 7 },
                 { "id": "growing",     "years_in_business": 3 },
                 { "id": "startup",     "years_in_business": 1 },
-            ])),
+            ]),
         );
 
         let result = engine.run(ctx).await.expect("converge");
@@ -556,15 +626,14 @@ mod tests {
         engine.register_suggestor(VendorTimelineEvaluatorSuggestor);
 
         let mut ctx = ContextState::new();
-        let _ = ctx.add_input(
-            ContextKey::Seeds,
-            "rfp",
-            rfp(serde_json::json!([
+        seed_rfp(
+            &mut ctx,
+            serde_json::json!([
                 { "id": "fast",    "delivery_weeks": 3 },
                 { "id": "med",     "delivery_weeks": 8 },
                 { "id": "slow",    "delivery_weeks": 12 },
                 { "id": "glacial", "delivery_weeks": 26 },
-            ])),
+            ]),
         );
 
         let result = engine.run(ctx).await.expect("converge");
@@ -582,13 +651,12 @@ mod tests {
         engine.register_suggestor(VendorComplianceEvaluatorSuggestor);
 
         let mut ctx = ContextState::new();
-        let _ = ctx.add_input(
-            ContextKey::Seeds,
-            "rfp",
-            rfp(serde_json::json!([
+        seed_rfp(
+            &mut ctx,
+            serde_json::json!([
                 { "id": "good", "compliant": true },
                 { "id": "bad",  "compliant": false },
-            ])),
+            ]),
         );
 
         let result = engine.run(ctx).await.expect("converge");
@@ -608,25 +676,24 @@ mod tests {
         engine.register_suggestor(VendorConsensusSuggestor);
 
         let mut ctx = ContextState::new();
-        let _ = ctx.add_input(
-            ContextKey::Seeds,
-            "rfp",
-            rfp(serde_json::json!([
+        seed_rfp(
+            &mut ctx,
+            serde_json::json!([
                 {
                     "id": "winner",
-                    "price": 5_000.0,
+                    "price": 5_000,
                     "compliant": true,
                     "years_in_business": 15,
                     "delivery_weeks": 3
                 },
                 {
                     "id": "loser",
-                    "price": 100_000.0,
+                    "price": 100_000,
                     "compliant": false,
                     "years_in_business": 1,
                     "delivery_weeks": 30
                 },
-            ])),
+            ]),
         );
 
         let result = engine.run(ctx).await.expect("converge");
@@ -635,8 +702,7 @@ mod tests {
             .iter()
             .find(|f| f.id().as_str() == "recommendation:1")
             .expect("recommendation:1");
-        let json: serde_json::Value =
-            serde_json::from_str(rec1.content()).expect("recommendation json");
+        let json = crate::fact_json(rec1).expect("recommendation json");
         assert_eq!(
             json.get("vendor_id").and_then(serde_json::Value::as_str),
             Some("winner")

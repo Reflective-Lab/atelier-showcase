@@ -9,7 +9,7 @@
 
 use crate::mock::{MockChatBackend, MockResponse};
 use converge_core::{
-    AgentEffect, Context, ContextKey, ProposedFact,
+    AgentEffect, Context, ContextKey, ProposedFact, TextPayload,
     model_selection::{AgentRequirements, CostClass},
     prompt::PromptFormat,
     traits::{ChatMessage, ChatRequest, ChatRole, DynChatBackend, ResponseFormat},
@@ -40,6 +40,10 @@ impl converge_core::Suggestor for ChatAgentSuggestor {
         &self.name
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &self.deps
     }
@@ -55,7 +59,8 @@ impl converge_core::Suggestor for ChatAgentSuggestor {
         let context_str = ctx
             .get(self.target_key)
             .iter()
-            .map(converge_core::ContextFact::content)
+            .filter_map(|fact| fact.to_wire().ok())
+            .filter_map(|wire| serde_json::to_string(&wire).ok())
             .collect::<Vec<_>>()
             .join("\n");
 
@@ -84,8 +89,8 @@ impl converge_core::Suggestor for ChatAgentSuggestor {
                 let proposal = ProposedFact::new(
                     self.target_key,
                     format!("{}-result", self.name),
-                    response.content,
-                    &self.name,
+                    TextPayload::new(response.content),
+                    crate::ATELIER_DOMAIN_PROVENANCE,
                 )
                 .with_confidence(self.default_confidence);
                 AgentEffect::with_proposal(proposal)

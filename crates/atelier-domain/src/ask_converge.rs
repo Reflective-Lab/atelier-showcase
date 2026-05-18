@@ -7,14 +7,14 @@
 //! This pack enforces grounded answering with explicit recall-only sources.
 
 use converge_core::invariant::{Invariant, InvariantClass, InvariantResult, Violation};
-use converge_core::{AgentEffect, ContextKey, Suggestor};
-use serde::Deserialize;
+use converge_core::{AgentEffect, ContextKey, FactPayload, Suggestor, TextPayload};
+use serde::{Deserialize, Serialize};
 
 const QUESTION_SEED_ID: &str = "ask:question";
 const SOURCE_SEED_PREFIX: &str = "ask:source:";
 const ANSWER_ID: &str = "ask:answer";
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 struct AskSourcePayload {
     #[serde(default)]
     id: Option<String>,
@@ -33,59 +33,81 @@ struct AskSource {
     content: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct AskAnswerPayload {
+    question: String,
+    answer: String,
+    grounded: bool,
+    recall_only: bool,
+    sources: Vec<AskSourcePayload>,
+}
+
+impl FactPayload for AskAnswerPayload {
+    const FAMILY: &'static str = "atelier.ask.answer";
+    const VERSION: u16 = 1;
+}
+
+fn seed_text(seed: &converge_core::ContextFact) -> Option<&str> {
+    seed.payload::<TextPayload>().map(TextPayload::as_str)
+}
+
 fn parse_question(ctx: &dyn converge_core::Context) -> Option<String> {
     ctx.get(ContextKey::Seeds)
         .iter()
         .find(|seed| seed.id().as_str() == QUESTION_SEED_ID)
-        .map(|seed| seed.content().to_string())
+        .and_then(seed_text)
+        .map(str::to_string)
 }
 
 fn parse_sources(ctx: &dyn converge_core::Context) -> Vec<AskSource> {
     ctx.get(ContextKey::Seeds)
         .iter()
         .filter(|seed| seed.id().as_str().starts_with(SOURCE_SEED_PREFIX))
-        .map(|seed| {
-            let payload: Option<AskSourcePayload> = serde_json::from_str(seed.content()).ok();
+        .filter_map(|seed| {
+            let text = seed_text(seed)?;
+            let payload: Option<AskSourcePayload> = serde_json::from_str(text).ok();
             if let Some(payload) = payload {
-                AskSource {
+                Some(AskSource {
                     id: payload.id.unwrap_or_else(|| seed.id().as_str().to_string()),
                     title: payload.title,
                     url: payload.url,
                     content: payload.content,
-                }
+                })
             } else {
-                AskSource {
+                Some(AskSource {
                     id: seed.id().as_str().to_string(),
                     title: None,
                     url: None,
-                    content: seed.content().to_string(),
-                }
+                    content: text.to_string(),
+                })
             }
         })
         .collect()
 }
 
-fn build_answer(question: &str, sources: &[AskSource]) -> serde_json::Value {
+fn build_answer(question: &str, sources: &[AskSource]) -> AskAnswerPayload {
     let source_ids: Vec<&str> = sources.iter().map(|source| source.id.as_str()).collect();
     let answer_text = format!(
         "Grounded response based on sources: {}.",
         source_ids.join(", ")
     );
 
-    serde_json::json!({
-        "question": question,
-        "answer": answer_text,
-        "grounded": true,
-        "recall_only": true,
-        "sources": sources.iter().map(|source| {
-            serde_json::json!({
-                "id": source.id,
-                "title": source.title,
-                "url": source.url,
-                "content": source.content,
+    AskAnswerPayload {
+        question: question.to_string(),
+        answer: answer_text,
+        grounded: true,
+        recall_only: true,
+        sources: sources
+            .iter()
+            .map(|source| AskSourcePayload {
+                id: Some(source.id.clone()),
+                title: source.title.clone(),
+                url: source.url.clone(),
+                content: source.content.clone(),
             })
-        }).collect::<Vec<_>>(),
-    })
+            .collect(),
+    }
 }
 
 /// Suggestor that produces a grounded answer based on provided sources.
@@ -96,6 +118,10 @@ pub struct AskConvergeAgent;
 impl Suggestor for AskConvergeAgent {
     fn name(&self) -> &'static str {
         "ask_converge"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -122,12 +148,7 @@ impl Suggestor for AskConvergeAgent {
         }
 
         let answer = build_answer(&question, &sources);
-        let fact = crate::proposal(
-            self.name(),
-            ContextKey::Strategies,
-            ANSWER_ID,
-            answer.to_string(),
-        );
+        let fact = crate::proposal(self.name(), ContextKey::Strategies, ANSWER_ID, answer);
 
         AgentEffect::with_proposal(fact)
     }
@@ -151,19 +172,13 @@ impl Invariant for GroundedAnswerInvariant {
                 continue;
             }
 
-            let payload: serde_json::Value = match serde_json::from_str(fact.content()) {
-                Ok(payload) => payload,
-                Err(_) => {
-                    return InvariantResult::Violated(Violation::new(
-                        "Ask answer must be valid JSON payload".to_string(),
-                    ));
-                }
+            let Some(payload) = fact.payload::<AskAnswerPayload>() else {
+                return InvariantResult::Violated(Violation::new(
+                    "Ask answer must use AskAnswerPayload".to_string(),
+                ));
             };
 
-            let grounded = payload.get("grounded").and_then(serde_json::Value::as_bool);
-            let sources = payload.get("sources").and_then(|v| v.as_array());
-
-            if grounded != Some(true) || sources.is_none_or(std::vec::Vec::is_empty) {
+            if !payload.grounded || payload.sources.is_empty() {
                 return InvariantResult::Violated(Violation::new(
                     "Ask answer must be grounded with at least one source".to_string(),
                 ));
@@ -192,19 +207,13 @@ impl Invariant for RecallNotEvidenceInvariant {
                 continue;
             }
 
-            let payload: serde_json::Value = match serde_json::from_str(fact.content()) {
-                Ok(payload) => payload,
-                Err(_) => {
-                    return InvariantResult::Violated(Violation::new(
-                        "Ask answer must be valid JSON payload".to_string(),
-                    ));
-                }
+            let Some(payload) = fact.payload::<AskAnswerPayload>() else {
+                return InvariantResult::Violated(Violation::new(
+                    "Ask answer must use AskAnswerPayload".to_string(),
+                ));
             };
 
-            let recall_only = payload
-                .get("recall_only")
-                .and_then(serde_json::Value::as_bool);
-            if recall_only != Some(true) {
+            if !payload.recall_only {
                 return InvariantResult::Violated(Violation::new(
                     "Ask answer must be marked recall_only".to_string(),
                 ));
@@ -218,7 +227,7 @@ impl Invariant for RecallNotEvidenceInvariant {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use converge_core::{ContextState, Engine};
+    use converge_core::{ContextState, Engine, ProposedFact};
 
     fn promoted_context(entries: &[(ContextKey, &str, &str)]) -> ContextState {
         let mut ctx = ContextState::new();
@@ -263,8 +272,19 @@ mod tests {
                 content: "Converge is a semantic governance runtime.".to_string(),
             }],
         );
-        let payload = payload.to_string();
-        let ctx = promoted_context(&[(ContextKey::Strategies, ANSWER_ID, payload.as_str())]);
+        let mut ctx = ContextState::new();
+        ctx.add_proposal(ProposedFact::new(
+            ContextKey::Strategies,
+            ANSWER_ID,
+            payload,
+            crate::ATELIER_DOMAIN_PROVENANCE,
+        ))
+        .unwrap();
+        let ctx = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(Engine::new().run(ctx))
+            .unwrap()
+            .context;
 
         assert!(matches!(
             GroundedAnswerInvariant.check(&ctx),

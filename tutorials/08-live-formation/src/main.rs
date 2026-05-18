@@ -27,17 +27,45 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use converge_kernel::{
-    AgentEffect, Budget, Context, ContextKey, ContextState, Engine, ProposedFact, Suggestor,
+    AgentEffect, Budget, Context, ContextKey, ContextState, Engine, FactPayload, ProposedFact,
+    Suggestor,
     formation::{
         CostClass, DeliberatedFormationTemplate, FormationAssemblySuggestor, FormationCatalog,
         FormationPlan, FormationTemplate, FormationTemplateMetadata, FormationTemplateQuery,
-        LatencyClass, ProfileSnapshot, ProviderAssignment, ProviderRequest,
-        ProviderSelectionSuggestor, SuggestorCapability, SuggestorRole,
+        LatencyClass, ProfileSnapshot, ProviderAssignment, ProviderAssignmentPayload,
+        ProviderRequest, ProviderRequestPayload, ProviderSelectionSuggestor, SuggestorCapability,
+        SuggestorRole,
     },
 };
 use converge_provider::{Backend, BackendKind, Capability};
+use serde::{Deserialize, Serialize};
 
 const MARKET_ENTRY_TEMPLATE_ID: &str = "market-entry";
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct LiveFormationRecord {
+    record_type: String,
+    data: serde_json::Value,
+}
+
+impl LiveFormationRecord {
+    fn new(record_type: impl Into<String>, data: serde_json::Value) -> Self {
+        Self {
+            record_type: record_type.into(),
+            data,
+        }
+    }
+
+    fn data(&self) -> &serde_json::Value {
+        &self.data
+    }
+}
+
+impl FactPayload for LiveFormationRecord {
+    const FAMILY: &'static str = "tutorial.live_formation.record";
+    const VERSION: u16 = 1;
+}
 
 // ── Mock backends (stand-ins for live integrations) ───────────────────────────
 
@@ -129,6 +157,10 @@ impl Suggestor for OpportunitySeeder {
         "opportunity-seeder"
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.live-formation"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[]
     }
@@ -169,8 +201,8 @@ impl Suggestor for OpportunitySeeder {
                 ProposedFact::new(
                     ContextKey::Diagnostic,
                     "formation-template-miss:launch",
-                    diagnostic.to_string(),
-                    self.name(),
+                    LiveFormationRecord::new("formation_template_miss", diagnostic),
+                    self.name().to_owned(),
                 )
                 .with_confidence(1.0),
             );
@@ -198,26 +230,26 @@ impl Suggestor for OpportunitySeeder {
             ProposedFact::new(
                 ContextKey::Seeds,
                 "market-signal",
-                market_signal.to_string(),
-                self.name(),
+                LiveFormationRecord::new("market_signal", market_signal),
+                self.name().to_owned(),
             ),
             ProposedFact::new(
                 ContextKey::Seeds,
                 "formation-request:launch",
-                serde_json::to_string(&formation_req).unwrap(),
-                self.name(),
+                formation_req,
+                self.name().to_owned(),
             ),
             ProposedFact::new(
                 ContextKey::Diagnostic,
                 "formation-template:launch",
-                template_selection.to_string(),
-                self.name(),
+                LiveFormationRecord::new("formation_template_selection", template_selection),
+                self.name().to_owned(),
             ),
             ProposedFact::new(
                 ContextKey::Seeds,
                 "provider-request:launch",
-                serde_json::to_string(&provider_req).unwrap(),
-                self.name(),
+                ProviderRequestPayload::new(provider_req),
+                self.name().to_owned(),
             ),
         ])
     }
@@ -231,11 +263,33 @@ fn formation_plan(ctx: &dyn Context) -> Option<FormationPlan> {
     ctx.get(ContextKey::Strategies)
         .iter()
         .find(|f| f.id() == "formation-plan:launch")
-        .and_then(|f| serde_json::from_str(f.content()).ok())
+        .and_then(|f| f.payload::<FormationPlan>().cloned())
 }
 
 fn in_formation(ctx: &dyn Context, suggestor_name: &str) -> bool {
     formation_plan(ctx).is_some_and(|p| p.assignments.iter().any(|a| a.suggestor == suggestor_name))
+}
+
+fn record_value<'a>(
+    ctx: &'a dyn Context,
+    key: ContextKey,
+    id: &str,
+) -> Option<&'a serde_json::Value> {
+    ctx.get(key)
+        .iter()
+        .find(|f| f.id() == id)
+        .and_then(|f| f.payload::<LiveFormationRecord>())
+        .map(LiveFormationRecord::data)
+}
+
+fn provider_assignment(ctx: &dyn Context) -> Option<ProviderAssignment> {
+    ctx.get(ContextKey::Strategies)
+        .iter()
+        .find(|f| f.id() == "provider-assignment:launch")
+        .and_then(|f| {
+            f.payload::<ProviderAssignmentPayload>()
+                .map(|payload| payload.assignment().clone())
+        })
 }
 
 // Market sizing and growth analysis.
@@ -245,6 +299,10 @@ struct MarketAnalyser;
 impl Suggestor for MarketAnalyser {
     fn name(&self) -> &str {
         "market-analyser"
+    }
+
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.live-formation"
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -260,11 +318,8 @@ impl Suggestor for MarketAnalyser {
     }
 
     async fn execute(&self, ctx: &dyn Context) -> AgentEffect {
-        let signal: serde_json::Value = ctx
-            .get(ContextKey::Seeds)
-            .iter()
-            .find(|f| f.id() == "market-signal")
-            .and_then(|f| serde_json::from_str(f.content()).ok())
+        let signal = record_value(ctx, ContextKey::Seeds, "market-signal")
+            .cloned()
             .unwrap_or_default();
 
         let tam_bn = signal["market_size_usd_bn"].as_f64().unwrap_or(0.0);
@@ -293,8 +348,8 @@ impl Suggestor for MarketAnalyser {
             ProposedFact::new(
                 ContextKey::Evaluations,
                 "analysis:market",
-                analysis.to_string(),
-                self.name(),
+                LiveFormationRecord::new("market_analysis", analysis),
+                self.name().to_owned(),
             )
             .with_confidence(0.88),
         )
@@ -310,6 +365,10 @@ impl Suggestor for TrendForecaster {
         "trend-forecaster"
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.live-formation"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Strategies]
     }
@@ -323,11 +382,8 @@ impl Suggestor for TrendForecaster {
     }
 
     async fn execute(&self, ctx: &dyn Context) -> AgentEffect {
-        let signal: serde_json::Value = ctx
-            .get(ContextKey::Seeds)
-            .iter()
-            .find(|f| f.id() == "market-signal")
-            .and_then(|f| serde_json::from_str(f.content()).ok())
+        let signal = record_value(ctx, ContextKey::Seeds, "market-signal")
+            .cloned()
             .unwrap_or_default();
 
         let win_rate = signal["win_rate_comparable"].as_f64().unwrap_or(0.30);
@@ -361,8 +417,8 @@ impl Suggestor for TrendForecaster {
             ProposedFact::new(
                 ContextKey::Evaluations,
                 "eval:trend-forecast",
-                forecast.to_string(),
-                self.name(),
+                LiveFormationRecord::new("trend_forecast", forecast),
+                self.name().to_owned(),
             )
             .with_confidence(0.74),
         )
@@ -378,6 +434,10 @@ impl Suggestor for CompetitiveScanner {
         "competitive-scanner"
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.live-formation"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Strategies]
     }
@@ -391,11 +451,8 @@ impl Suggestor for CompetitiveScanner {
     }
 
     async fn execute(&self, ctx: &dyn Context) -> AgentEffect {
-        let signal: serde_json::Value = ctx
-            .get(ContextKey::Seeds)
-            .iter()
-            .find(|f| f.id() == "market-signal")
-            .and_then(|f| serde_json::from_str(f.content()).ok())
+        let signal = record_value(ctx, ContextKey::Seeds, "market-signal")
+            .cloned()
             .unwrap_or_default();
 
         let competitors: Vec<&str> = signal["competitors"]
@@ -439,8 +496,8 @@ impl Suggestor for CompetitiveScanner {
             ProposedFact::new(
                 ContextKey::Evaluations,
                 "eval:competitive-risk",
-                eval.to_string(),
-                self.name(),
+                LiveFormationRecord::new("competitive_risk", eval),
+                self.name().to_owned(),
             )
             .with_confidence(0.82),
         )
@@ -455,6 +512,10 @@ struct InvestmentGuard;
 impl Suggestor for InvestmentGuard {
     fn name(&self) -> &str {
         "investment-guard"
+    }
+
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.live-formation"
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -479,14 +540,16 @@ impl Suggestor for InvestmentGuard {
         let risk_score: f64 = evals
             .iter()
             .find(|f| f.id() == "eval:competitive-risk")
-            .and_then(|f| serde_json::from_str::<serde_json::Value>(f.content()).ok())
+            .and_then(|f| f.payload::<LiveFormationRecord>())
+            .map(LiveFormationRecord::data)
             .and_then(|v| v["risk_score"].as_f64())
             .unwrap_or(1.0);
 
         let tam_bn: f64 = evals
             .iter()
             .find(|f| f.id() == "analysis:market")
-            .and_then(|f| serde_json::from_str::<serde_json::Value>(f.content()).ok())
+            .and_then(|f| f.payload::<LiveFormationRecord>())
+            .map(LiveFormationRecord::data)
             .and_then(|v| v["tam_current_usd_bn"].as_f64())
             .unwrap_or(0.0);
 
@@ -514,8 +577,8 @@ impl Suggestor for InvestmentGuard {
             ProposedFact::new(
                 ContextKey::Constraints,
                 "risk-gate",
-                gate.to_string(),
-                self.name(),
+                LiveFormationRecord::new("investment_gate", gate),
+                self.name().to_owned(),
             )
             .with_confidence(0.95),
         )
@@ -532,6 +595,10 @@ impl Suggestor for BudgetAllocator {
         "budget-allocator"
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.live-formation"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Evaluations]
     }
@@ -544,11 +611,8 @@ impl Suggestor for BudgetAllocator {
     }
 
     async fn execute(&self, ctx: &dyn Context) -> AgentEffect {
-        let signal: serde_json::Value = ctx
-            .get(ContextKey::Seeds)
-            .iter()
-            .find(|f| f.id() == "market-signal")
-            .and_then(|f| serde_json::from_str(f.content()).ok())
+        let signal = record_value(ctx, ContextKey::Seeds, "market-signal")
+            .cloned()
             .unwrap_or_default();
 
         let budget = signal["launch_budget_usd"].as_f64().unwrap_or(5_000_000.0);
@@ -588,8 +652,8 @@ impl Suggestor for BudgetAllocator {
             ProposedFact::new(
                 ContextKey::Hypotheses,
                 "plan:budget",
-                plan.to_string(),
-                self.name(),
+                LiveFormationRecord::new("budget_plan", plan),
+                self.name().to_owned(),
             )
             .with_confidence(0.80),
         )
@@ -606,6 +670,10 @@ impl Suggestor for LaunchDirector {
         "launch-director"
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.live-formation"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Constraints]
     }
@@ -619,39 +687,24 @@ impl Suggestor for LaunchDirector {
 
     async fn execute(&self, ctx: &dyn Context) -> AgentEffect {
         // Collect all upstream artefacts.
-        let gate: serde_json::Value = ctx
-            .get(ContextKey::Constraints)
-            .iter()
-            .find(|f| f.id() == "risk-gate")
-            .and_then(|f| serde_json::from_str(f.content()).ok())
+        let gate = record_value(ctx, ContextKey::Constraints, "risk-gate")
+            .cloned()
             .unwrap_or_default();
 
-        let market: serde_json::Value = ctx
-            .get(ContextKey::Evaluations)
-            .iter()
-            .find(|f| f.id() == "analysis:market")
-            .and_then(|f| serde_json::from_str(f.content()).ok())
+        let market = record_value(ctx, ContextKey::Evaluations, "analysis:market")
+            .cloned()
             .unwrap_or_default();
 
-        let forecast: serde_json::Value = ctx
-            .get(ContextKey::Evaluations)
-            .iter()
-            .find(|f| f.id() == "eval:trend-forecast")
-            .and_then(|f| serde_json::from_str(f.content()).ok())
+        let forecast = record_value(ctx, ContextKey::Evaluations, "eval:trend-forecast")
+            .cloned()
             .unwrap_or_default();
 
-        let risk: serde_json::Value = ctx
-            .get(ContextKey::Evaluations)
-            .iter()
-            .find(|f| f.id() == "eval:competitive-risk")
-            .and_then(|f| serde_json::from_str(f.content()).ok())
+        let risk = record_value(ctx, ContextKey::Evaluations, "eval:competitive-risk")
+            .cloned()
             .unwrap_or_default();
 
-        let budget: serde_json::Value = ctx
-            .get(ContextKey::Hypotheses)
-            .iter()
-            .find(|f| f.id() == "plan:budget")
-            .and_then(|f| serde_json::from_str(f.content()).ok())
+        let budget = record_value(ctx, ContextKey::Hypotheses, "plan:budget")
+            .cloned()
             .unwrap_or_default();
 
         // Formation provenance from the plan written by FormationAssemblySuggestor.
@@ -665,13 +718,7 @@ impl Suggestor for LaunchDirector {
             .unwrap_or_default();
 
         // Provider provenance from the assignment written by ProviderSelectionSuggestor.
-        let provider_assignment: Option<ProviderAssignment> = ctx
-            .get(ContextKey::Strategies)
-            .iter()
-            .find(|f| f.id() == "provider-assignment:launch")
-            .and_then(|f| serde_json::from_str(f.content()).ok());
-
-        let providers: Vec<String> = provider_assignment
+        let providers: Vec<String> = provider_assignment(ctx)
             .map(|a| {
                 a.assignments
                     .iter()
@@ -712,8 +759,8 @@ impl Suggestor for LaunchDirector {
             ProposedFact::new(
                 ContextKey::Proposals,
                 "recommendation:launch",
-                recommendation.to_string(),
-                self.name(),
+                LiveFormationRecord::new("launch_recommendation", recommendation),
+                self.name().to_owned(),
             )
             .with_confidence(confidence),
         )
@@ -891,13 +938,7 @@ async fn main() {
     println!("╔══ Phase 1: Self-Assembly ══════════════════════════════════════╗");
     println!();
 
-    if let Some(assignment) = result
-        .context
-        .get(ContextKey::Strategies)
-        .iter()
-        .find(|f| f.id() == "provider-assignment:launch")
-        .and_then(|f| serde_json::from_str::<ProviderAssignment>(f.content()).ok())
-    {
+    if let Some(assignment) = provider_assignment(&result.context) {
         println!(
             "  Provider assignment  (coverage: {:.0}%)",
             assignment.coverage_ratio * 100.0
@@ -912,13 +953,7 @@ async fn main() {
 
     println!();
 
-    if let Some(plan) = result
-        .context
-        .get(ContextKey::Strategies)
-        .iter()
-        .find(|f| f.id() == "formation-plan:launch")
-        .and_then(|f| serde_json::from_str::<FormationPlan>(f.content()).ok())
-    {
+    if let Some(plan) = formation_plan(&result.context) {
         println!(
             "  Formation plan  (coverage: {:.0}%)",
             plan.coverage_ratio * 100.0
@@ -941,7 +976,10 @@ async fn main() {
     for eval in result.context.get(ContextKey::Evaluations) {
         match eval.id().as_str() {
             "analysis:market" => {
-                if let Ok(v) = serde_json::from_str::<serde_json::Value>(eval.content()) {
+                if let Some(v) = eval
+                    .payload::<LiveFormationRecord>()
+                    .map(LiveFormationRecord::data)
+                {
                     println!(
                         "  Market Analysis  [{}]",
                         v["assessment"].as_str().unwrap_or("?")
@@ -961,7 +999,10 @@ async fn main() {
                 }
             }
             "eval:competitive-risk" => {
-                if let Ok(v) = serde_json::from_str::<serde_json::Value>(eval.content()) {
+                if let Some(v) = eval
+                    .payload::<LiveFormationRecord>()
+                    .map(LiveFormationRecord::data)
+                {
                     println!(
                         "  Competitive Risk  [{}]  score: {}",
                         v["risk_level"].as_str().unwrap_or("?"),
@@ -978,7 +1019,10 @@ async fn main() {
                 }
             }
             "eval:trend-forecast" => {
-                if let Ok(v) = serde_json::from_str::<serde_json::Value>(eval.content()) {
+                if let Some(v) = eval
+                    .payload::<LiveFormationRecord>()
+                    .map(LiveFormationRecord::data)
+                {
                     let arr_y1 = v["arr_year1_usd"].as_f64().unwrap_or(0.0) / 1_000_000.0;
                     let arr_y3 = v["arr_year3_usd"].as_f64().unwrap_or(0.0) / 1_000_000.0;
                     println!("  Revenue Forecast  [confidence: {}]", v["confidence"]);
@@ -1000,13 +1044,7 @@ async fn main() {
     println!("╔══ Phase 3: Gate + Budget ══════════════════════════════════════╗");
     println!();
 
-    if let Some(gate) = result
-        .context
-        .get(ContextKey::Constraints)
-        .iter()
-        .find(|f| f.id() == "risk-gate")
-        .and_then(|f| serde_json::from_str::<serde_json::Value>(f.content()).ok())
-    {
+    if let Some(gate) = record_value(&result.context, ContextKey::Constraints, "risk-gate") {
         let decision = gate["decision"].as_str().unwrap_or("block");
         let icon = if decision == "permit" { "✓" } else { "✗" };
         println!("  Investment Gate  {}  [{decision}]", icon);
@@ -1019,13 +1057,7 @@ async fn main() {
 
     println!();
 
-    if let Some(budget) = result
-        .context
-        .get(ContextKey::Hypotheses)
-        .iter()
-        .find(|f| f.id() == "plan:budget")
-        .and_then(|f| serde_json::from_str::<serde_json::Value>(f.content()).ok())
-    {
+    if let Some(budget) = record_value(&result.context, ContextKey::Hypotheses, "plan:budget") {
         println!(
             "  Budget Plan  ${:.1}M  [{}]",
             budget["total_budget_usd"].as_f64().unwrap_or(0.0) / 1_000_000.0,
@@ -1050,13 +1082,11 @@ async fn main() {
     println!("╔══ Phase 4: Recommendation ═════════════════════════════════════╗");
     println!();
 
-    if let Some(rec) = result
-        .context
-        .get(ContextKey::Proposals)
-        .iter()
-        .find(|f| f.id() == "recommendation:launch")
-        .and_then(|f| serde_json::from_str::<serde_json::Value>(f.content()).ok())
-    {
+    if let Some(rec) = record_value(
+        &result.context,
+        ContextKey::Proposals,
+        "recommendation:launch",
+    ) {
         let verdict = rec["verdict"].as_str().unwrap_or("?");
         let confidence = rec["confidence"].as_f64().unwrap_or(0.0);
         let icon = if verdict == "GO" { "▶" } else { "■" };

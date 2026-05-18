@@ -63,6 +63,10 @@
 
 use converge_core::{AgentEffect, ContextFact, ContextKey, Suggestor};
 
+fn routing_text(fact: &ContextFact) -> Option<&str> {
+    crate::domain_text(fact).or_else(|| crate::admitted_text(fact))
+}
+
 /// Suggestor that retrieves and structures task definitions.
 ///
 ///
@@ -75,6 +79,10 @@ impl Suggestor for TaskRetrievalAgent {
         "TaskRetrievalAgent"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Seeds]
     }
@@ -84,7 +92,7 @@ impl Suggestor for TaskRetrievalAgent {
         let has_tasks_seed = ctx
             .get(ContextKey::Seeds)
             .iter()
-            .any(|s| s.id().as_str() == "tasks" || s.content().contains("task"));
+            .any(|s| s.id().as_str() == "tasks" || crate::payload_contains(s, "task"));
         let has_task_signals = ctx
             .get(ContextKey::Signals)
             .iter()
@@ -103,13 +111,18 @@ impl Suggestor for TaskRetrievalAgent {
 
         if let Some(seed) = tasks_seed {
             // Parse tasks from content (simplified: comma-separated)
-            let tasks: Vec<&str> = seed.content().split(',').map(str::trim).collect();
+            let tasks: Vec<&str> = routing_text(seed)
+                .unwrap_or_default()
+                .split(',')
+                .map(str::trim)
+                .collect();
 
             for (i, task) in tasks.iter().enumerate() {
-                facts.push(crate::proposal(
+                facts.push(crate::text(
                     self.name(),
                     ContextKey::Signals,
                     format!("task:{}", i + 1),
+                    "resource_routing.task",
                     format!(
                         "Task {}: {} | Priority: {} | Duration: {} min",
                         i + 1,
@@ -121,16 +134,18 @@ impl Suggestor for TaskRetrievalAgent {
             }
         } else {
             // Default tasks
-            facts.push(crate::proposal(
+            facts.push(crate::text(
                 self.name(),
                 ContextKey::Signals,
                 "task:1",
+                "resource_routing.task",
                 "Task 1: Delivery A | Priority: High | Duration: 30 min",
             ));
-            facts.push(crate::proposal(
+            facts.push(crate::text(
                 self.name(),
                 ContextKey::Signals,
                 "task:2",
+                "resource_routing.task",
                 "Task 2: Delivery B | Priority: Medium | Duration: 60 min",
             ));
         }
@@ -151,6 +166,10 @@ impl Suggestor for ResourceRetrievalAgent {
         "ResourceRetrievalAgent"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Seeds]
     }
@@ -159,8 +178,8 @@ impl Suggestor for ResourceRetrievalAgent {
         // Run once when seeds exist but no resource signals yet
         let has_resources_seed = ctx.get(ContextKey::Seeds).iter().any(|s| {
             s.id().as_str() == "resources"
-                || s.content().contains("resource")
-                || s.content().contains("vehicle")
+                || crate::payload_contains(s, "resource")
+                || crate::payload_contains(s, "vehicle")
         });
         let has_resource_signals = ctx
             .get(ContextKey::Signals)
@@ -178,19 +197,24 @@ impl Suggestor for ResourceRetrievalAgent {
         // Find resources seed
         let resources_seed = seeds.iter().find(|s| {
             s.id().as_str() == "resources"
-                || s.content().contains("resource")
-                || s.content().contains("vehicle")
+                || crate::payload_contains(s, "resource")
+                || crate::payload_contains(s, "vehicle")
         });
 
         if let Some(seed) = resources_seed {
             // Parse resources from content (simplified: comma-separated)
-            let resources: Vec<&str> = seed.content().split(',').map(str::trim).collect();
+            let resources: Vec<&str> = routing_text(seed)
+                .unwrap_or_default()
+                .split(',')
+                .map(str::trim)
+                .collect();
 
             for (i, resource) in resources.iter().enumerate() {
-                facts.push(crate::proposal(
+                facts.push(crate::text(
                     self.name(),
                     ContextKey::Signals,
                     format!("resource:{}", i + 1),
+                    "resource_routing.resource",
                     format!(
                         "Resource {}: {} | Capacity: {} tasks | Status: Available",
                         i + 1,
@@ -201,16 +225,18 @@ impl Suggestor for ResourceRetrievalAgent {
             }
         } else {
             // Default resources
-            facts.push(crate::proposal(
+            facts.push(crate::text(
                 self.name(),
                 ContextKey::Signals,
                 "resource:1",
+                "resource_routing.resource",
                 "Resource 1: Vehicle 1 | Capacity: 3 tasks | Status: Available",
             ));
-            facts.push(crate::proposal(
+            facts.push(crate::text(
                 self.name(),
                 ContextKey::Signals,
                 "resource:2",
+                "resource_routing.resource",
                 "Resource 2: Vehicle 2 | Capacity: 2 tasks | Status: Available",
             ));
         }
@@ -229,6 +255,10 @@ pub struct ConstraintValidationAgent;
 impl Suggestor for ConstraintValidationAgent {
     fn name(&self) -> &str {
         "ConstraintValidationAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -266,28 +296,31 @@ impl Suggestor for ConstraintValidationAgent {
             .count();
 
         // Define capacity constraints
-        facts.push(crate::proposal(
+        facts.push(crate::text(
             self.name(),
             ContextKey::Constraints,
             "constraint:capacity",
+            "resource_routing.constraint",
             format!(
                 "Capacity constraint: {task_count} tasks must be assigned to {resource_count} resources"
             ),
         ));
 
         // Define objective
-        facts.push(crate::proposal(
+        facts.push(crate::text(
             self.name(),
             ContextKey::Constraints,
             "constraint:objective",
+            "resource_routing.constraint",
             "Objective: Minimize total delivery time",
         ));
 
         // Define feasibility requirement
-        facts.push(crate::proposal(
+        facts.push(crate::text(
             self.name(),
             ContextKey::Constraints,
             "constraint:feasibility",
+            "resource_routing.constraint",
             "All tasks must be assigned | No resource exceeds capacity",
         ));
 
@@ -306,6 +339,10 @@ pub struct SolverAgent;
 impl Suggestor for SolverAgent {
     fn name(&self) -> &str {
         "SolverAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -345,10 +382,8 @@ impl Suggestor for SolverAgent {
 
             for (res_idx, resource) in resources.iter().enumerate() {
                 // Extract capacity from resource content
-                let capacity = resource
-                    .content()
-                    .split("Capacity: ")
-                    .nth(1)
+                let capacity = routing_text(resource)
+                    .and_then(|text| text.split("Capacity: ").nth(1))
                     .and_then(|s| s.split_whitespace().next())
                     .and_then(|s| s.parse::<usize>().ok())
                     .unwrap_or(2);
@@ -366,10 +401,17 @@ impl Suggestor for SolverAgent {
                     .strip_prefix("resource:")
                     .unwrap_or("unknown");
 
-                facts.push(crate::proposal(
+                let resource_capacity = routing_text(resources[res_idx])
+                    .and_then(|text| text.split("Capacity: ").nth(1))
+                    .and_then(|s| s.split_whitespace().next())
+                    .and_then(|s| s.parse::<usize>().ok())
+                    .unwrap_or(2);
+
+                facts.push(crate::text(
                     self.name(),
                     ContextKey::Strategies,
                     format!("assignment:{assignment_id}"),
+                    "resource_routing.assignment",
                     format!(
                         "Assignment {}: {} → {} | Load: {}/{}",
                         assignment_id,
@@ -379,13 +421,7 @@ impl Suggestor for SolverAgent {
                             .unwrap_or("unknown"),
                         resource_id,
                         resource_loads[res_idx],
-                        resources[res_idx]
-                            .content()
-                            .split("Capacity: ")
-                            .nth(1)
-                            .and_then(|s| s.split_whitespace().next())
-                            .and_then(|s| s.parse::<usize>().ok())
-                            .unwrap_or(2)
+                        resource_capacity
                     ),
                 ));
                 assignment_id += 1;
@@ -394,10 +430,11 @@ impl Suggestor for SolverAgent {
 
         // If no assignments were made, create a fallback
         if facts.is_empty() {
-            facts.push(crate::proposal(
+            facts.push(crate::text(
                 self.name(),
                 ContextKey::Strategies,
                 "assignment:infeasible",
+                "resource_routing.assignment",
                 "Assignment: INFEASIBLE | Reason: Insufficient capacity",
             ));
         }
@@ -416,6 +453,10 @@ pub struct FeasibilityAgent;
 impl Suggestor for FeasibilityAgent {
     fn name(&self) -> &str {
         "FeasibilityAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -441,7 +482,7 @@ impl Suggestor for FeasibilityAgent {
             .count();
         let assignment_count = strategies
             .iter()
-            .filter(|s| !s.content().contains("INFEASIBLE"))
+            .filter(|s| !crate::payload_contains(s, "INFEASIBLE"))
             .count();
 
         // Check feasibility
@@ -451,13 +492,13 @@ impl Suggestor for FeasibilityAgent {
         if is_feasible {
             // Evaluate each assignment
             for (i, assignment) in strategies.iter().enumerate() {
-                if assignment.content().contains("INFEASIBLE") {
+                if crate::payload_contains(assignment, "INFEASIBLE") {
                     continue;
                 }
 
                 let (score, rationale) = evaluate_assignment(assignment, i, all_tasks_assigned);
 
-                facts.push(crate::proposal(
+                facts.push(crate::text(
                     self.name(),
                     ContextKey::Evaluations,
                     format!(
@@ -467,6 +508,7 @@ impl Suggestor for FeasibilityAgent {
                             .strip_prefix("assignment:")
                             .unwrap_or(assignment.id().as_str())
                     ),
+                    "resource_routing.feasibility",
                     format!(
                         "Score: {}/100 | {} | Rationale: {}",
                         score,
@@ -480,10 +522,11 @@ impl Suggestor for FeasibilityAgent {
                 ));
             }
         } else {
-            facts.push(crate::proposal(
+            facts.push(crate::text(
                 self.name(),
                 ContextKey::Evaluations,
                 "eval:infeasible",
+                "resource_routing.feasibility",
                 format!(
                     "Score: 0/100 | INFEASIBLE | Rationale: Only {assignment_count}/{task_count} tasks assigned"
                 ),
@@ -492,10 +535,11 @@ impl Suggestor for FeasibilityAgent {
 
         // Ensure at least one evaluation
         if facts.is_empty() {
-            facts.push(crate::proposal(
+            facts.push(crate::text(
                 self.name(),
                 ContextKey::Evaluations,
                 "eval:unknown",
+                "resource_routing.feasibility",
                 "Score: 0/100 | UNKNOWN | Rationale: Unable to evaluate assignments",
             ));
         }
@@ -510,16 +554,16 @@ fn evaluate_assignment(
     _rank: usize,
     all_assigned: bool,
 ) -> (u32, &'static str) {
-    let content = &assignment.content();
-
     if !all_assigned {
         return (50, "Partial assignment, not all tasks assigned");
     }
 
     // Prefer balanced load distribution
-    if content.contains("Load: 1/") || content.contains("Load: 2/") {
+    if crate::payload_contains(assignment, "Load: 1/")
+        || crate::payload_contains(assignment, "Load: 2/")
+    {
         (95, "Optimal assignment with balanced resource utilization")
-    } else if content.contains("Load: 3/") {
+    } else if crate::payload_contains(assignment, "Load: 3/") {
         (85, "Good assignment, resource fully utilized")
     } else {
         (75, "Valid assignment within capacity constraints")
@@ -561,7 +605,7 @@ impl Invariant for RequireAllTasksAssigned {
             .count();
         let assignment_count = strategies
             .iter()
-            .filter(|s| !s.content().contains("INFEASIBLE"))
+            .filter(|s| !crate::payload_contains(s, "INFEASIBLE"))
             .count();
 
         if assignment_count < task_count {
@@ -608,10 +652,12 @@ impl Invariant for RequireCapacityRespected {
         // Count assignments per resource
         for assignment in strategies
             .iter()
-            .filter(|s| !s.content().contains("INFEASIBLE"))
+            .filter(|s| !crate::payload_contains(s, "INFEASIBLE"))
         {
             // Extract resource from assignment content
-            if let Some(resource_part) = assignment.content().split("→").nth(1) {
+            if let Some(resource_part) =
+                routing_text(assignment).and_then(|text| text.split("→").nth(1))
+            {
                 let resource_id = resource_part.split('|').next().unwrap_or("").trim();
                 *resource_loads.entry(resource_id.to_string()).or_insert(0) += 1;
             }
@@ -624,10 +670,8 @@ impl Invariant for RequireCapacityRespected {
                 .as_str()
                 .strip_prefix("resource:")
                 .unwrap_or("unknown");
-            let capacity = resource
-                .content()
-                .split("Capacity: ")
-                .nth(1)
+            let capacity = routing_text(resource)
+                .and_then(|text| text.split("Capacity: ").nth(1))
                 .and_then(|s| s.split_whitespace().next())
                 .and_then(|s| s.parse::<usize>().ok())
                 .unwrap_or(0);
@@ -832,21 +876,26 @@ mod tests {
         assert_eq!(r1.cycles, r2.cycles);
 
         // Same assignments (compare content, ignoring timestamps that may differ across runs)
-        let content = |facts: &[converge_core::ContextFact]| {
+        let payloads = |facts: &[converge_core::ContextFact]| {
             facts
                 .iter()
-                .map(|f| (f.id().clone(), f.content().to_string()))
+                .map(|f| {
+                    (
+                        f.id().clone(),
+                        f.to_wire().expect("fact serializes").payload.payload,
+                    )
+                })
                 .collect::<Vec<_>>()
         };
         assert_eq!(
-            content(r1.context.get(ContextKey::Strategies)),
-            content(r2.context.get(ContextKey::Strategies))
+            payloads(r1.context.get(ContextKey::Strategies)),
+            payloads(r2.context.get(ContextKey::Strategies))
         );
 
         // Same evaluations
         assert_eq!(
-            content(r1.context.get(ContextKey::Evaluations)),
-            content(r2.context.get(ContextKey::Evaluations))
+            payloads(r1.context.get(ContextKey::Evaluations)),
+            payloads(r2.context.get(ContextKey::Evaluations))
         );
     }
 }

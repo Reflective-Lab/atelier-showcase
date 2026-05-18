@@ -11,6 +11,7 @@
 //! problem classes — without any human design.
 
 use chrono::{Duration, Utc};
+use converge_pack::UnitInterval;
 use organism_intent::{IntentPacket, Reversibility};
 use organism_pack::{
     CollaborationTopology, ShapeCompetition, ShapeMetric, ShapeObservation, calibrate_shape,
@@ -43,7 +44,7 @@ fn main() {
     for (i, c) in candidates.iter().enumerate() {
         println!("  Candidate {}: {:?}", i + 1, c.charter.topology);
         println!("    Rationale:   {}", c.rationale);
-        println!("    Prior score: {:.2}", c.prior_score);
+        println!("    Prior score: {:.2}", c.prior_score.as_f64());
         println!();
     }
 
@@ -58,10 +59,10 @@ fn main() {
                 "  {:?}: {} hypotheses, {:.2} avg confidence, {:.1}% contradictions, {} cycles, {:.0}% budget",
                 c.charter.topology,
                 obs.hypothesis_count,
-                obs.avg_confidence,
-                obs.contradiction_rate * 100.0,
+                obs.avg_confidence.as_f64(),
+                obs.contradiction_rate.as_f64() * 100.0,
                 obs.cycles_to_stability,
-                obs.budget_used_fraction * 100.0,
+                obs.budget_used_fraction.as_f64() * 100.0,
             );
             ShapeObservation {
                 candidate_id: c.id,
@@ -121,7 +122,7 @@ fn main() {
         let cal = calibrate_shape(&problem_class, c.charter.topology, score, &calibrations);
         println!(
             "  {:?}: prior={:.3} → posterior={:.3} (obs={})",
-            cal.topology, cal.prior_score, cal.posterior_score, cal.observation_count
+            cal.topology, cal.prior_score.as_f64(), cal.posterior_score.as_f64(), cal.observation_count
         );
         calibrations.push(cal);
     }
@@ -140,7 +141,7 @@ fn main() {
 
         print!("  Episode {episode}:");
         for cal in &episode_cals {
-            print!("  {:?}={:.3}", cal.topology, cal.posterior_score);
+            print!("  {:?}={:.3}", cal.topology, cal.posterior_score.as_f64());
         }
         println!();
 
@@ -156,7 +157,7 @@ fn main() {
     for c in &new_candidates {
         println!(
             "    {:?} — prior_score={:.3}, rationale: {}",
-            c.charter.topology, c.prior_score, c.rationale
+            c.charter.topology, c.prior_score.as_f64(), c.rationale
         );
     }
     println!();
@@ -183,34 +184,34 @@ fn simulate_trial(topology: CollaborationTopology) -> ShapeObservation {
         CollaborationTopology::Panel => ShapeObservation {
             candidate_id: Uuid::nil(),
             hypothesis_count: 35,
-            avg_confidence: 0.85,
-            contradiction_rate: 0.08,
+            avg_confidence: UnitInterval::clamped(0.85),
+            contradiction_rate: UnitInterval::clamped(0.08),
             cycles_to_stability: 8,
-            budget_used_fraction: 0.7,
+            budget_used_fraction: UnitInterval::clamped(0.7),
         },
         CollaborationTopology::Huddle => ShapeObservation {
             candidate_id: Uuid::nil(),
             hypothesis_count: 25,
-            avg_confidence: 0.78,
-            contradiction_rate: 0.12,
+            avg_confidence: UnitInterval::clamped(0.78),
+            contradiction_rate: UnitInterval::clamped(0.12),
             cycles_to_stability: 5,
-            budget_used_fraction: 0.45,
+            budget_used_fraction: UnitInterval::clamped(0.45),
         },
         CollaborationTopology::DiscussionGroup => ShapeObservation {
             candidate_id: Uuid::nil(),
             hypothesis_count: 20,
-            avg_confidence: 0.72,
-            contradiction_rate: 0.15,
+            avg_confidence: UnitInterval::clamped(0.72),
+            contradiction_rate: UnitInterval::clamped(0.15),
             cycles_to_stability: 6,
-            budget_used_fraction: 0.5,
+            budget_used_fraction: UnitInterval::clamped(0.5),
         },
         CollaborationTopology::SelfOrganizing => ShapeObservation {
             candidate_id: Uuid::nil(),
             hypothesis_count: 40,
-            avg_confidence: 0.65,
-            contradiction_rate: 0.22,
+            avg_confidence: UnitInterval::clamped(0.65),
+            contradiction_rate: UnitInterval::clamped(0.22),
             cycles_to_stability: 12,
-            budget_used_fraction: 0.85,
+            budget_used_fraction: UnitInterval::clamped(0.85),
         },
     }
 }

@@ -105,7 +105,7 @@ fn main() {
             derived.charter.topology,
             derived.charter.discipline,
             derived.charter.consensus_rule,
-            derived.confidence,
+            derived.confidence.as_f64(),
         );
     }
 }
@@ -115,11 +115,11 @@ fn print_derived(title: &str, derived: &organism_pack::DerivedCharter) {
 
     println!("  Complexity signals:");
     let c = &derived.intent_complexity;
-    println!("    constraint_pressure:  {:.2}", c.constraint_pressure);
-    println!("    authority_breadth:    {:.2}", c.authority_breadth);
-    println!("    forbidden_density:    {:.2}", c.forbidden_density);
-    println!("    time_pressure:        {:.2}", c.time_pressure);
-    println!("    reversibility_weight: {:.2}", c.reversibility_weight);
+    println!("    constraint_pressure:  {:.2}", c.constraint_pressure.as_f64());
+    println!("    authority_breadth:    {:.2}", c.authority_breadth.as_f64());
+    println!("    forbidden_density:    {:.2}", c.forbidden_density.as_f64());
+    println!("    time_pressure:        {:.2}", c.time_pressure.as_f64());
+    println!("    reversibility_weight: {:.2}", c.reversibility_weight.as_f64());
     println!("    escalation_required:  {}", c.escalation_required);
     println!();
 
@@ -141,7 +141,7 @@ fn print_derived(title: &str, derived: &organism_pack::DerivedCharter) {
             .map(|r| r.label())
             .collect::<Vec<_>>()
     );
-    println!("    Confidence:     {:.2}", derived.confidence);
+    println!("    Confidence:     {:.2}", derived.confidence.as_f64());
     println!();
 
     let r = &derived.rationale;

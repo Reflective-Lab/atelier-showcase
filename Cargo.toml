@@ -116,11 +116,21 @@ opt-level = 3
 lto = true
 codegen-units = 1
 
-# Local Organism development override.
+# Local Organism development override. The 1.9 line is still in flight —
+# organism-planning needed the MembershipDegree migration (commit 823bf17
+# on the bedrock-platform/organism `next` branch) and the crates.io copy
+# does not yet carry it. Patch the affected crates to local until 1.9.1
+# is published.
 [patch.crates-io]
 organism-pack = { path = "../bedrock-platform/organism/crates/pack" }
 organism-runtime = { path = "../bedrock-platform/organism/crates/runtime" }
 organism-intent = { path = "../bedrock-platform/organism/crates/intent" }
+organism-planning = { path = "../bedrock-platform/organism/crates/planning" }
+organism-adversarial = { path = "../bedrock-platform/organism/crates/adversarial" }
+organism-simulation = { path = "../bedrock-platform/organism/crates/simulation" }
+organism-learning = { path = "../bedrock-platform/organism/crates/learning" }
+organism-notes = { path = "../bedrock-platform/organism/crates/notes" }
+organism-intelligence = { path = "../bedrock-platform/organism/crates/intelligence" }
 converge-prism-analytics = { path = "../mosaic-extensions/prism-analytics/crates/prism" }
 # axiom-truth 0.7.0 on crates.io imports `converge_provider::select_healthy_chat_backend`,
 # which now lives in `converge-manifold-adapters` (lib name `manifold`). Local source is

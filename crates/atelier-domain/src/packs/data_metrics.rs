@@ -49,14 +49,19 @@ impl Suggestor for MetricRegistrarAgent {
         "metric_registrar"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Seeds]
     }
 
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
-        ctx.get(ContextKey::Seeds)
-            .iter()
-            .any(|s| s.content().contains("metric.define") || s.content().contains("metric.update"))
+        ctx.get(ContextKey::Seeds).iter().any(|s| {
+            crate::payload_contains(s, "metric.define")
+                || crate::payload_contains(s, "metric.update")
+        })
     }
 
     async fn execute(&self, ctx: &dyn converge_core::Context) -> AgentEffect {
@@ -64,10 +69,10 @@ impl Suggestor for MetricRegistrarAgent {
         let mut facts = Vec::new();
 
         for trigger in triggers {
-            if trigger.content().contains("metric.define")
-                || trigger.content().contains("metric.update")
+            if crate::payload_contains(trigger, "metric.define")
+                || crate::payload_contains(trigger, "metric.update")
             {
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", METRIC_PREFIX, trigger.id()),
@@ -78,8 +83,7 @@ impl Suggestor for MetricRegistrarAgent {
                         "version": "1.0.0",
                         "formula": "to_be_defined",
                         "created_at": "2026-01-12T12:00:00Z"
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -98,13 +102,18 @@ impl Suggestor for SourceConnectorAgent {
         "source_connector"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Seeds]
     }
 
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
         ctx.get(ContextKey::Seeds).iter().any(|s| {
-            s.content().contains("source.register") || s.content().contains("source.connect")
+            crate::payload_contains(s, "source.register")
+                || crate::payload_contains(s, "source.connect")
         })
     }
 
@@ -113,10 +122,10 @@ impl Suggestor for SourceConnectorAgent {
         let mut facts = Vec::new();
 
         for trigger in triggers {
-            if trigger.content().contains("source.register")
-                || trigger.content().contains("source.connect")
+            if crate::payload_contains(trigger, "source.register")
+                || crate::payload_contains(trigger, "source.connect")
             {
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Signals,
                     format!("{}{}", SOURCE_PREFIX, trigger.id()),
@@ -127,8 +136,7 @@ impl Suggestor for SourceConnectorAgent {
                         "source_type": "detected",
                         "freshness_sla_minutes": 60,
                         "registered_at": "2026-01-12T12:00:00Z"
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -147,6 +155,10 @@ impl Suggestor for PipelineCoordinatorAgent {
         "pipeline_coordinator"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Signals]
     }
@@ -154,7 +166,7 @@ impl Suggestor for PipelineCoordinatorAgent {
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
         ctx.get(ContextKey::Signals).iter().any(|s| {
             s.id().as_str().starts_with(SOURCE_PREFIX)
-                && s.content().contains("\"state\":\"healthy\"")
+                && crate::payload_contains(s, "\"state\":\"healthy\"")
         })
     }
 
@@ -164,9 +176,9 @@ impl Suggestor for PipelineCoordinatorAgent {
 
         for source in signals {
             if source.id().starts_with(SOURCE_PREFIX)
-                && source.content().contains("\"state\":\"healthy\"")
+                && crate::payload_contains(source, "\"state\":\"healthy\"")
             {
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", PIPELINE_PREFIX, source.id()),
@@ -177,8 +189,7 @@ impl Suggestor for PipelineCoordinatorAgent {
                         "schedule": "*/15 * * * *",
                         "timeout_minutes": 30,
                         "created_at": "2026-01-12T12:00:00Z"
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -197,13 +208,18 @@ impl Suggestor for DataValidatorAgent {
         "data_validator"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Proposals]
     }
 
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
         ctx.get(ContextKey::Proposals).iter().any(|p| {
-            p.id().starts_with(PIPELINE_PREFIX) && p.content().contains("\"state\":\"succeeded\"")
+            p.id().starts_with(PIPELINE_PREFIX)
+                && crate::payload_contains(p, "\"state\":\"succeeded\"")
         })
     }
 
@@ -213,9 +229,9 @@ impl Suggestor for DataValidatorAgent {
 
         for pipeline in proposals {
             if pipeline.id().starts_with(PIPELINE_PREFIX)
-                && pipeline.content().contains("\"state\":\"succeeded\"")
+                && crate::payload_contains(pipeline, "\"state\":\"succeeded\"")
             {
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Evaluations,
                     format!("{}{}", VALIDATION_PREFIX, pipeline.id()),
@@ -227,8 +243,7 @@ impl Suggestor for DataValidatorAgent {
                         "range_check_ok": true,
                         "freshness_ok": true,
                         "validated_at": "2026-01-12T12:00:00Z"
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -247,20 +262,25 @@ impl Suggestor for AnomalyDetectorAgent {
         "anomaly_detector"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Evaluations]
     }
 
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
         ctx.get(ContextKey::Evaluations).iter().any(|e| {
-            e.id().starts_with(VALIDATION_PREFIX) && e.content().contains("\"schema_valid\":true")
+            e.id().starts_with(VALIDATION_PREFIX)
+                && crate::payload_contains(e, "\"schema_valid\":true")
         })
     }
 
     async fn execute(&self, _ctx: &dyn converge_core::Context) -> AgentEffect {
         // In real implementation, would analyze data for anomalies
         // For now, creates a placeholder showing no anomalies detected
-        AgentEffect::with_proposal(crate::proposal(
+        AgentEffect::with_proposal(crate::json_record(
             self.name(),
             ContextKey::Evaluations,
             format!("{}scan:latest", ANOMALY_PREFIX),
@@ -270,8 +290,7 @@ impl Suggestor for AnomalyDetectorAgent {
                 "metrics_scanned": 10,
                 "methods_used": ["statistical", "threshold"],
                 "scanned_at": "2026-01-12T12:00:00Z"
-            })
-            .to_string(),
+            }),
         ))
     }
 }
@@ -286,13 +305,18 @@ impl Suggestor for DashboardBuilderAgent {
         "dashboard_builder"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Seeds]
     }
 
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
         ctx.get(ContextKey::Seeds).iter().any(|s| {
-            s.content().contains("dashboard.create") || s.content().contains("dashboard.update")
+            crate::payload_contains(s, "dashboard.create")
+                || crate::payload_contains(s, "dashboard.update")
         })
     }
 
@@ -301,10 +325,10 @@ impl Suggestor for DashboardBuilderAgent {
         let mut facts = Vec::new();
 
         for trigger in triggers {
-            if trigger.content().contains("dashboard.create")
-                || trigger.content().contains("dashboard.update")
+            if crate::payload_contains(trigger, "dashboard.create")
+                || crate::payload_contains(trigger, "dashboard.update")
             {
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", DASHBOARD_PREFIX, trigger.id()),
@@ -315,8 +339,7 @@ impl Suggestor for DashboardBuilderAgent {
                         "widgets": [],
                         "refresh_rate": "5m",
                         "created_at": "2026-01-12T12:00:00Z"
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -335,13 +358,18 @@ impl Suggestor for ReportGeneratorAgent {
         "report_generator"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Seeds]
     }
 
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
         ctx.get(ContextKey::Seeds).iter().any(|s| {
-            s.content().contains("report.generate") || s.content().contains("report.schedule")
+            crate::payload_contains(s, "report.generate")
+                || crate::payload_contains(s, "report.schedule")
         })
     }
 
@@ -350,10 +378,10 @@ impl Suggestor for ReportGeneratorAgent {
         let mut facts = Vec::new();
 
         for trigger in triggers {
-            if trigger.content().contains("report.generate")
-                || trigger.content().contains("report.schedule")
+            if crate::payload_contains(trigger, "report.generate")
+                || crate::payload_contains(trigger, "report.schedule")
             {
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", REPORT_PREFIX, trigger.id()),
@@ -364,8 +392,7 @@ impl Suggestor for ReportGeneratorAgent {
                         "format": "pdf",
                         "recipients": [],
                         "generated_at": "2026-01-12T12:00:00Z"
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -384,6 +411,10 @@ impl Suggestor for AlertEvaluatorAgent {
         "alert_evaluator"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Evaluations]
     }
@@ -391,7 +422,8 @@ impl Suggestor for AlertEvaluatorAgent {
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
         // Check if there are anomalies that need alerting
         ctx.get(ContextKey::Evaluations).iter().any(|e| {
-            e.id().starts_with(ANOMALY_PREFIX) && e.content().contains("\"anomalies_detected\"")
+            e.id().starts_with(ANOMALY_PREFIX)
+                && crate::payload_contains(e, "\"anomalies_detected\"")
         })
     }
 
@@ -402,7 +434,7 @@ impl Suggestor for AlertEvaluatorAgent {
         for eval in evaluations {
             if eval.id().starts_with(ANOMALY_PREFIX) {
                 // Parse anomaly count - in real impl would check if > 0
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Evaluations,
                     format!("{}evaluation:{}", ALERT_PREFIX, eval.id()),
@@ -412,8 +444,7 @@ impl Suggestor for AlertEvaluatorAgent {
                         "alerts_triggered": 0,
                         "alerts_evaluated": 5,
                         "evaluated_at": "2026-01-12T12:00:00Z"
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -432,6 +463,10 @@ impl Suggestor for FreshnessMonitorAgent {
         "freshness_monitor"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Signals]
     }
@@ -448,7 +483,7 @@ impl Suggestor for FreshnessMonitorAgent {
 
         for source in signals {
             if source.id().starts_with(SOURCE_PREFIX) {
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Evaluations,
                     format!("freshness:{}", source.id()),
@@ -459,8 +494,7 @@ impl Suggestor for FreshnessMonitorAgent {
                         "last_data_at": "2026-01-12T11:55:00Z",
                         "sla_minutes": 60,
                         "checked_at": "2026-01-12T12:00:00Z"
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -479,13 +513,17 @@ impl Suggestor for MetricCalculatorAgent {
         "metric_calculator"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Proposals, ContextKey::Evaluations]
     }
 
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
         let has_metrics = ctx.get(ContextKey::Proposals).iter().any(|p| {
-            p.id().starts_with(METRIC_PREFIX) && p.content().contains("\"state\":\"active\"")
+            p.id().starts_with(METRIC_PREFIX) && crate::payload_contains(p, "\"state\":\"active\"")
         });
         let has_validation = ctx
             .get(ContextKey::Evaluations)
@@ -500,9 +538,9 @@ impl Suggestor for MetricCalculatorAgent {
 
         for metric in proposals {
             if metric.id().starts_with(METRIC_PREFIX)
-                && metric.content().contains("\"state\":\"active\"")
+                && crate::payload_contains(metric, "\"state\":\"active\"")
             {
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Evaluations,
                     format!("calculated:{}", metric.id()),
@@ -512,8 +550,7 @@ impl Suggestor for MetricCalculatorAgent {
                         "value": 0.0,
                         "unit": "count",
                         "calculated_at": "2026-01-12T12:00:00Z"
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -541,7 +578,9 @@ impl Invariant for MetricDefinitionVersionedInvariant {
 
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
         for metric in ctx.get(ContextKey::Proposals) {
-            if metric.id().starts_with(METRIC_PREFIX) && !metric.content().contains("\"version\"") {
+            if metric.id().starts_with(METRIC_PREFIX)
+                && !crate::payload_contains(metric, "\"version\"")
+            {
                 return InvariantResult::Violated(Violation::with_facts(
                     format!("Metric {} has no version", metric.id()),
                     vec![metric.id().clone()],
@@ -568,8 +607,8 @@ impl Invariant for DashboardCitesSourcesInvariant {
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
         for dashboard in ctx.get(ContextKey::Proposals) {
             if dashboard.id().starts_with(DASHBOARD_PREFIX)
-                && dashboard.content().contains("\"state\":\"published\"")
-                && !dashboard.content().contains("\"data_source\"")
+                && crate::payload_contains(dashboard, "\"state\":\"published\"")
+                && !crate::payload_contains(dashboard, "\"data_source\"")
             {
                 return InvariantResult::Violated(Violation::with_facts(
                     format!("Dashboard {} does not cite data sources", dashboard.id()),
@@ -597,8 +636,8 @@ impl Invariant for AlertHasOwnerInvariant {
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
         for alert in ctx.get(ContextKey::Proposals) {
             if alert.id().starts_with(ALERT_PREFIX)
-                && alert.content().contains("\"state\":\"active\"")
-                && !alert.content().contains("\"owner\"")
+                && crate::payload_contains(alert, "\"state\":\"active\"")
+                && !crate::payload_contains(alert, "\"owner\"")
             {
                 return InvariantResult::Violated(Violation::with_facts(
                     format!("Alert {} has no owner", alert.id()),
@@ -625,8 +664,8 @@ impl Invariant for DataFreshnessInvariant {
 
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
         for check in ctx.get(ContextKey::Evaluations) {
-            if check.content().contains("\"type\":\"freshness_check\"")
-                && check.content().contains("\"is_fresh\":false")
+            if crate::payload_contains(check, "\"type\":\"freshness_check\"")
+                && crate::payload_contains(check, "\"is_fresh\":false")
             {
                 return InvariantResult::Violated(Violation::with_facts(
                     format!("Data source {} is stale", check.id()),

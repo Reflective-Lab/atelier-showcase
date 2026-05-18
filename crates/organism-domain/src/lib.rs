@@ -52,6 +52,68 @@ pub use standard_packs::{register_standard_packs, registry_with_standard_packs};
 // consumers keep working with `organism_domain::pack::*` paths.
 pub use organism_pack::pack;
 
+/// Structured payload for organism-domain pack records that are represented as
+/// JSON-shaped domain data.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct OrgDomainRecord {
+    record_type: String,
+    data: serde_json::Value,
+}
+
+impl OrgDomainRecord {
+    #[must_use]
+    pub fn new(record_type: impl Into<String>, data: serde_json::Value) -> Self {
+        Self {
+            record_type: record_type.into(),
+            data,
+        }
+    }
+
+    #[must_use]
+    pub fn record_type(&self) -> &str {
+        &self.record_type
+    }
+
+    #[must_use]
+    pub fn data(&self) -> &serde_json::Value {
+        &self.data
+    }
+}
+
+impl converge_pack::FactPayload for OrgDomainRecord {
+    const FAMILY: &'static str = "organism.domain_record";
+    const VERSION: u16 = 1;
+}
+
+#[must_use]
+pub fn record(record_type: impl Into<String>, data: serde_json::Value) -> OrgDomainRecord {
+    OrgDomainRecord::new(record_type, data)
+}
+
+#[must_use]
+pub fn fact_json(fact: &converge_pack::ContextFact) -> Option<serde_json::Value> {
+    fact.payload::<OrgDomainRecord>()
+        .map(|payload| payload.data().clone())
+}
+
+#[must_use]
+pub fn fact_record<'a>(
+    fact: &'a converge_pack::ContextFact,
+    record_type: &str,
+) -> Option<&'a OrgDomainRecord> {
+    fact.payload::<OrgDomainRecord>()
+        .filter(|payload| payload.record_type() == record_type)
+}
+
+#[must_use]
+pub fn fact_json_of(
+    fact: &converge_pack::ContextFact,
+    record_type: &str,
+) -> Option<serde_json::Value> {
+    fact_record(fact, record_type).map(|payload| payload.data().clone())
+}
+
 #[cfg(test)]
 mod tests {
     use crate::pack::{ContextKey, InvariantClass, Pack, PackProfile};

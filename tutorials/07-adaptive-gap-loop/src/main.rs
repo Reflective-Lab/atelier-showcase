@@ -17,7 +17,7 @@ use std::collections::BTreeSet;
 
 use converge_kernel::{
     AgentEffect, Budget, Context, ContextFact, ContextKey, ContextState, ConvergeResult, Engine,
-    Suggestor,
+    FactPayload, Suggestor, TextPayload,
 };
 use serde::{Deserialize, Serialize};
 
@@ -44,13 +44,20 @@ struct ArtifactProfile {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 struct SurveyRequest {
     root: String,
     target: String,
     reason: String,
 }
 
+impl FactPayload for SurveyRequest {
+    const FAMILY: &'static str = "tutorial.adaptive_gap.survey_request";
+    const VERSION: u16 = 1;
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 struct ArtifactSignal {
     root: String,
     target: String,
@@ -59,7 +66,13 @@ struct ArtifactSignal {
     depends_on: Vec<String>,
 }
 
+impl FactPayload for ArtifactSignal {
+    const FAMILY: &'static str = "tutorial.adaptive_gap.artifact_signal";
+    const VERSION: u16 = 1;
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 struct GapNotice {
     root: String,
     source: String,
@@ -67,7 +80,13 @@ struct GapNotice {
     message: String,
 }
 
+impl FactPayload for GapNotice {
+    const FAMILY: &'static str = "tutorial.adaptive_gap.gap_notice";
+    const VERSION: u16 = 1;
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 struct ClosureSummary {
     root: String,
     surveyed: Vec<String>,
@@ -76,12 +95,21 @@ struct ClosureSummary {
     open_dependencies: Vec<String>,
 }
 
+impl FactPayload for ClosureSummary {
+    const FAMILY: &'static str = "tutorial.adaptive_gap.closure_summary";
+    const VERSION: u16 = 1;
+}
+
 struct ArtifactSurveySuggestor;
 
 #[async_trait::async_trait]
 impl Suggestor for ArtifactSurveySuggestor {
     fn name(&self) -> &str {
         "artifact-survey"
+    }
+
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.adaptive-gap-loop"
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -119,8 +147,8 @@ impl Suggestor for ArtifactSurveySuggestor {
                         converge_kernel::ProposedFact::new(
                             ContextKey::Signals,
                             signal_id(&request.root, &request.target),
-                            serde_json::to_string(&signal).unwrap_or_default(),
-                            self.name(),
+                            signal,
+                            self.name().to_owned(),
                         )
                         .with_confidence(0.92),
                     );
@@ -140,8 +168,8 @@ impl Suggestor for ArtifactSurveySuggestor {
                         converge_kernel::ProposedFact::new(
                             ContextKey::Signals,
                             signal_id(&request.root, &request.target),
-                            serde_json::to_string(&signal).unwrap_or_default(),
-                            self.name(),
+                            signal,
+                            self.name().to_owned(),
                         )
                         .with_confidence(0.7),
                     );
@@ -149,11 +177,11 @@ impl Suggestor for ArtifactSurveySuggestor {
                         converge_kernel::ProposedFact::new(
                             ContextKey::Diagnostic,
                             format!("{UNKNOWN_PREFIX}{}:{}", request.root, request.target),
-                            format!(
+                            TextPayload::new(format!(
                                 "{} had no catalog entry, so the loop treated it as a leaf",
                                 request.target
-                            ),
-                            self.name(),
+                            )),
+                            self.name().to_owned(),
                         )
                         .with_confidence(0.75),
                     );
@@ -171,6 +199,10 @@ struct GapHuddleSuggestor;
 impl Suggestor for GapHuddleSuggestor {
     fn name(&self) -> &str {
         "gap-huddle"
+    }
+
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.adaptive-gap-loop"
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -216,8 +248,8 @@ impl Suggestor for GapHuddleSuggestor {
                     converge_kernel::ProposedFact::new(
                         ContextKey::Hypotheses,
                         gap_id(&signal.root, &signal.target, dependency),
-                        serde_json::to_string(&gap).unwrap_or_default(),
-                        self.name(),
+                        gap,
+                        self.name().to_owned(),
                     )
                     .with_confidence(0.83),
                 );
@@ -225,8 +257,8 @@ impl Suggestor for GapHuddleSuggestor {
                     converge_kernel::ProposedFact::new(
                         ContextKey::Strategies,
                         request_id(&signal.root, dependency),
-                        serde_json::to_string(&request).unwrap_or_default(),
-                        self.name(),
+                        request,
+                        self.name().to_owned(),
                     )
                     .with_confidence(0.9),
                 );
@@ -243,6 +275,10 @@ struct ClosureSuggestor;
 impl Suggestor for ClosureSuggestor {
     fn name(&self) -> &str {
         "closure"
+    }
+
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.adaptive-gap-loop"
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -271,8 +307,8 @@ impl Suggestor for ClosureSuggestor {
                 converge_kernel::ProposedFact::new(
                     ContextKey::Diagnostic,
                     summary_id(&root),
-                    serde_json::to_string(&summary).unwrap_or_default(),
-                    self.name(),
+                    summary,
+                    self.name().to_owned(),
                 )
                 .with_confidence(0.96),
             );
@@ -400,10 +436,10 @@ fn pending_surveys(ctx: &dyn Context) -> Vec<SurveyRequest> {
             continue;
         }
 
-        if let Ok(request) = serde_json::from_str::<SurveyRequest>(fact.content())
+        if let Some(request) = fact.payload::<SurveyRequest>()
             && seen.insert((request.root.clone(), request.target.clone()))
         {
-            pending.push(request);
+            pending.push(request.clone());
         }
     }
 
@@ -424,7 +460,7 @@ fn signals(ctx: &dyn Context) -> Vec<ArtifactSignal> {
     ctx.get(ContextKey::Signals)
         .iter()
         .filter(|fact| fact.id().starts_with(SIGNAL_PREFIX))
-        .filter_map(|fact| serde_json::from_str::<ArtifactSignal>(fact.content()).ok())
+        .filter_map(|fact| fact.payload::<ArtifactSignal>().cloned())
         .collect()
 }
 
@@ -475,11 +511,11 @@ fn closure_inputs(ctx: &dyn Context, root: &str) -> Option<ClosureSummary> {
             continue;
         }
 
-        let Ok(request) = serde_json::from_str::<SurveyRequest>(fact.content()) else {
+        let Some(request) = fact.payload::<SurveyRequest>() else {
             continue;
         };
         if request.root == root && !surveyed.contains(&request.target) {
-            pending_requests.insert(request.target);
+            pending_requests.insert(request.target.clone());
         }
     }
 
@@ -507,7 +543,7 @@ fn parse_summary(ctx: &dyn Context, root: &str) -> Option<ClosureSummary> {
     ctx.get(ContextKey::Diagnostic)
         .iter()
         .find(|fact| fact.id().as_str() == summary_id)
-        .and_then(|fact| serde_json::from_str(fact.content()).ok())
+        .and_then(|fact| fact.payload::<ClosureSummary>().cloned())
 }
 
 fn print_section(title: &str, facts: &[ContextFact]) {
@@ -518,14 +554,33 @@ fn print_section(title: &str, facts: &[ContextFact]) {
     }
 
     for fact in facts {
-        let preview = if fact.content().len() > 120 {
-            format!("{}...", &fact.content()[..120])
-        } else {
-            fact.content().to_string()
-        };
+        let preview = fact_preview(fact);
         println!("  {} ({preview})", fact.id());
     }
     println!();
+}
+
+fn fact_preview(fact: &ContextFact) -> String {
+    if let Some(text) = fact.payload::<TextPayload>() {
+        return text.as_str().to_owned();
+    }
+    if let Some(payload) = fact.payload::<SurveyRequest>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<ArtifactSignal>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<GapNotice>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<ClosureSummary>() {
+        return format!("{payload:?}");
+    }
+    format!(
+        "<typed payload {} v{}>",
+        fact.payload_family(),
+        fact.payload_version()
+    )
 }
 
 fn root_id(root: &str) -> String {

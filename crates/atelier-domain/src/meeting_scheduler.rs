@@ -64,6 +64,10 @@
 
 use converge_core::{AgentEffect, ContextFact, ContextKey, Suggestor};
 
+fn meeting_text(fact: &ContextFact) -> Option<&str> {
+    crate::domain_text(fact).or_else(|| crate::admitted_text(fact))
+}
+
 /// Suggestor that retrieves availability for participants.
 ///
 ///
@@ -75,6 +79,10 @@ pub struct AvailabilityRetrievalAgent;
 impl Suggestor for AvailabilityRetrievalAgent {
     fn name(&self) -> &str {
         "AvailabilityRetrievalAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -90,36 +98,39 @@ impl Suggestor for AvailabilityRetrievalAgent {
         let seeds = ctx.get(ContextKey::Seeds);
 
         // Extract participants from seeds
-        let participants_seed = seeds
-            .iter()
-            .find(|s| s.id().as_str() == "participants" || s.content().contains("participants"));
+        let participants_seed = seeds.iter().find(|s| {
+            s.id().as_str() == "participants" || crate::payload_contains(s, "participants")
+        });
 
         let mut facts = Vec::new();
 
         if let Some(seed) = participants_seed {
             // Deterministic availability generation based on participants
-            let content = &seed.content();
+            let content = meeting_text(seed).unwrap_or_default();
             if content.contains("Alice") {
-                facts.push(crate::proposal(
+                facts.push(crate::text(
                     self.name(),
                     ContextKey::Signals,
                     "availability:alice",
+                    "meeting.availability",
                     "Alice: Mon 9-17, Tue 9-17, Wed 9-17, Thu 9-17, Fri 9-17 (UTC)",
                 ));
             }
             if content.contains("Bob") {
-                facts.push(crate::proposal(
+                facts.push(crate::text(
                     self.name(),
                     ContextKey::Signals,
                     "availability:bob",
+                    "meeting.availability",
                     "Bob: Mon 10-18, Tue 10-18, Wed 10-18, Thu 10-18, Fri 10-18 (UTC)",
                 ));
             }
             if content.contains("Carol") {
-                facts.push(crate::proposal(
+                facts.push(crate::text(
                     self.name(),
                     ContextKey::Signals,
                     "availability:carol",
+                    "meeting.availability",
                     "Carol: Mon 8-16, Tue 8-16, Wed 8-16, Thu 8-16, Fri 8-16 (UTC)",
                 ));
             }
@@ -127,10 +138,11 @@ impl Suggestor for AvailabilityRetrievalAgent {
 
         // Always emit baseline availability if no specific data
         if facts.is_empty() {
-            facts.push(crate::proposal(
+            facts.push(crate::text(
                 self.name(),
                 ContextKey::Signals,
                 "availability:default",
+                "meeting.availability",
                 "Default: Mon-Fri 9-17 UTC",
             ));
         }
@@ -149,6 +161,10 @@ pub struct TimeZoneNormalizationAgent;
 impl Suggestor for TimeZoneNormalizationAgent {
     fn name(&self) -> &str {
         "TimeZoneNormalizationAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -184,10 +200,11 @@ impl Suggestor for TimeZoneNormalizationAgent {
         if !availability_signals.is_empty() {
             // Normalize to UTC and find common windows
             // For simplicity, assume all are already in UTC and find overlap
-            facts.push(crate::proposal(
+            facts.push(crate::text(
                 self.name(),
                 ContextKey::Signals,
                 "normalized:common-window",
+                "meeting.normalized_window",
                 "Common availability: Mon-Fri 10-16 UTC (all participants)",
             ));
         }
@@ -206,6 +223,10 @@ pub struct WorkingHoursConstraintAgent;
 impl Suggestor for WorkingHoursConstraintAgent {
     fn name(&self) -> &str {
         "WorkingHoursConstraintAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -236,7 +257,8 @@ impl Suggestor for WorkingHoursConstraintAgent {
         let duration = seeds
             .iter()
             .find(|s| s.id().as_str() == "duration")
-            .and_then(|s| s.content().parse::<u32>().ok())
+            .and_then(meeting_text)
+            .and_then(|s| s.parse::<u32>().ok())
             .unwrap_or(60);
 
         // Define working hours constraint based on normalized availability
@@ -245,22 +267,24 @@ impl Suggestor for WorkingHoursConstraintAgent {
             .find(|s| s.id().as_str().starts_with("normalized:"));
 
         if let Some(norm) = normalized {
-            facts.push(crate::proposal(
+            facts.push(crate::text(
                 self.name(),
                 ContextKey::Constraints,
                 "working-hours:policy",
+                "meeting.working_hours",
                 format!(
                     "Working hours: {} | Minimum duration: {} minutes",
-                    norm.content(),
+                    meeting_text(norm).unwrap_or_default(),
                     duration
                 ),
             ));
         } else {
             // Default constraint
-            facts.push(crate::proposal(
+            facts.push(crate::text(
                 self.name(),
                 ContextKey::Constraints,
                 "working-hours:default",
+                "meeting.working_hours",
                 format!("Working hours: Mon-Fri 9-17 UTC | Duration: {duration} minutes"),
             ));
         }
@@ -279,6 +303,10 @@ pub struct SlotOptimizationAgent;
 impl Suggestor for SlotOptimizationAgent {
     fn name(&self) -> &str {
         "SlotOptimizationAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -301,9 +329,11 @@ impl Suggestor for SlotOptimizationAgent {
             .iter()
             .find(|c| c.id().starts_with("working-hours:"))
             .and_then(|c| {
-                c.content()
-                    .split("Duration: ")
-                    .nth(1)
+                meeting_text(c)
+                    .and_then(|text| text.split("Duration: ").nth(1))
+                    .or_else(|| {
+                        meeting_text(c).and_then(|text| text.split("Minimum duration: ").nth(1))
+                    })
                     .and_then(|s| s.split_whitespace().next())
                     .and_then(|s| s.parse::<u32>().ok())
             })
@@ -322,10 +352,11 @@ impl Suggestor for SlotOptimizationAgent {
         ];
 
         for (start, end, rank) in slots {
-            facts.push(crate::proposal(
+            facts.push(crate::text(
                 self.name(),
                 ContextKey::Strategies,
                 format!("slot:{rank}"),
+                "meeting.candidate_slot",
                 format!("Candidate slot {rank}: {start} - {end} ({duration} minutes)"),
             ));
         }
@@ -344,6 +375,10 @@ pub struct ConflictDetectionAgent;
 impl Suggestor for ConflictDetectionAgent {
     fn name(&self) -> &str {
         "ConflictDetectionAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -366,12 +401,12 @@ impl Suggestor for ConflictDetectionAgent {
             // Check if slot respects working hours
             let is_valid = constraints
                 .iter()
-                .any(|c| c.content().contains("10-16") || c.content().contains("9-17"));
+                .any(|c| crate::payload_contains(c, "10-16") || crate::payload_contains(c, "9-17"));
 
             if is_valid {
                 let (score, rationale) = evaluate_slot(slot, i);
 
-                facts.push(crate::proposal(
+                facts.push(crate::text(
                     self.name(),
                     ContextKey::Evaluations,
                     format!(
@@ -381,6 +416,7 @@ impl Suggestor for ConflictDetectionAgent {
                             .strip_prefix("slot:")
                             .unwrap_or(slot.id().as_str())
                     ),
+                    "meeting.slot_evaluation",
                     format!(
                         "Score: {}/100 | {} | Rationale: {}",
                         score,
@@ -393,10 +429,11 @@ impl Suggestor for ConflictDetectionAgent {
 
         // Ensure at least one valid slot
         if facts.is_empty() {
-            facts.push(crate::proposal(
+            facts.push(crate::text(
                 self.name(),
                 ContextKey::Evaluations,
                 "eval:no-slot",
+                "meeting.slot_evaluation",
                 "Score: 0/100 | INFEASIBLE | Rationale: No valid slots found within constraints",
             ));
         }
@@ -408,15 +445,15 @@ impl Suggestor for ConflictDetectionAgent {
 /// Deterministic slot evaluation function.
 fn evaluate_slot(slot: &ContextFact, _rank: usize) -> (u32, &'static str) {
     // Prefer earlier slots and morning times
-    let content = &slot.content();
-
-    if content.contains("Mon 10:00") || content.contains("Tue 10:00") {
+    if crate::payload_contains(slot, "Mon 10:00") || crate::payload_contains(slot, "Tue 10:00") {
         (90, "Early week morning slot, minimal disruption")
-    } else if content.contains("Wed 10:00") || content.contains("Thu 10:00") {
+    } else if crate::payload_contains(slot, "Wed 10:00")
+        || crate::payload_contains(slot, "Thu 10:00")
+    {
         (85, "Mid-week morning slot, good balance")
-    } else if content.contains("Fri 10:00") {
+    } else if crate::payload_contains(slot, "Fri 10:00") {
         (80, "Friday morning slot, end of week")
-    } else if content.contains("14:00") {
+    } else if crate::payload_contains(slot, "14:00") {
         (75, "Afternoon slot, acceptable but less preferred")
     } else {
         (70, "Valid slot within constraints")
@@ -452,9 +489,9 @@ impl Invariant for RequireValidSlot {
         let evaluations = ctx.get(ContextKey::Evaluations);
 
         // Check if there's at least one valid (non-INFEASIBLE) evaluation
-        let has_valid = evaluations
-            .iter()
-            .any(|e| !e.content().contains("INFEASIBLE") && e.content().contains("Score:"));
+        let has_valid = evaluations.iter().any(|e| {
+            !crate::payload_contains(e, "INFEASIBLE") && crate::payload_contains(e, "Score:")
+        });
 
         if !has_valid {
             return InvariantResult::Violated(Violation::new(
@@ -508,12 +545,12 @@ impl Invariant for RequireParticipantAvailability {
         // Check if recommended slot respects availability
         let recommended = evaluations
             .iter()
-            .find(|e| e.content().contains("RECOMMENDED"));
+            .find(|e| crate::payload_contains(e, "RECOMMENDED"));
 
         if let Some(rec) = recommended {
             // For simplicity, assume slots in 10-16 range are valid
             // In a real system, this would cross-check with availability signals
-            if rec.content().contains("INFEASIBLE") {
+            if crate::payload_contains(rec, "INFEASIBLE") {
                 return InvariantResult::Violated(Violation::with_facts(
                     "recommended slot conflicts with participant availability",
                     vec![rec.id().clone()],
@@ -552,16 +589,19 @@ impl Invariant for RequirePositiveDuration {
         let duration_from_seeds = seeds
             .iter()
             .find(|s| s.id().as_str() == "duration")
-            .and_then(|s| s.content().parse::<u32>().ok());
+            .and_then(meeting_text)
+            .and_then(|s| s.parse::<u32>().ok());
 
         // Check duration in constraints
         let duration_from_constraints = constraints
             .iter()
             .find(|c| c.id().starts_with("working-hours:"))
             .and_then(|c| {
-                c.content()
-                    .split("Duration: ")
-                    .nth(1)
+                meeting_text(c)
+                    .and_then(|text| text.split("Duration: ").nth(1))
+                    .or_else(|| {
+                        meeting_text(c).and_then(|text| text.split("Minimum duration: ").nth(1))
+                    })
                     .and_then(|s| s.split_whitespace().next())
                     .and_then(|s| s.parse::<u32>().ok())
             });
@@ -691,7 +731,11 @@ mod tests {
 
         let evals = result.context.get(ContextKey::Evaluations);
         assert!(!evals.is_empty());
-        assert!(evals.iter().any(|e| e.content().contains("RECOMMENDED")));
+        assert!(
+            evals
+                .iter()
+                .any(|e| crate::payload_contains(e, "RECOMMENDED"))
+        );
     }
 
     #[tokio::test]
@@ -719,14 +763,14 @@ mod tests {
         // wall-clock time, so two runs separated by a tick boundary
         // would otherwise diff on `created_at` / `promoted_at` even
         // though every other field matches.
-        let project = |facts: &[ContextFact]| -> Vec<(ContextKey, String, String)> {
+        let project = |facts: &[ContextFact]| -> Vec<(ContextKey, String, serde_json::Value)> {
             facts
                 .iter()
                 .map(|f| {
                     (
                         f.key(),
                         f.id().as_str().to_string(),
-                        f.content().to_string(),
+                        f.to_wire().expect("fact serializes").payload.payload,
                     )
                 })
                 .collect()

@@ -41,6 +41,10 @@ impl Suggestor for PromiseCreatorAgent {
         "promise_creator"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Seeds]
     }
@@ -48,7 +52,7 @@ impl Suggestor for PromiseCreatorAgent {
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
         ctx.get(ContextKey::Seeds)
             .iter()
-            .any(|s| s.content().contains("deal.closed_won"))
+            .any(|s| crate::payload_contains(s, "deal.closed_won"))
             && !ctx
                 .get(ContextKey::Proposals)
                 .iter()
@@ -60,8 +64,8 @@ impl Suggestor for PromiseCreatorAgent {
         let mut facts = Vec::new();
 
         for trigger in triggers {
-            if trigger.content().contains("deal.closed_won") {
-                facts.push(crate::proposal(
+            if crate::payload_contains(trigger, "deal.closed_won") {
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", PROMISE_PREFIX, trigger.id()),
@@ -71,8 +75,7 @@ impl Suggestor for PromiseCreatorAgent {
                         "state": "draft",
                         "customer_id": "extracted",
                         "created_at": "2026-01-12"
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -91,13 +94,17 @@ impl Suggestor for ScopeExtractorAgent {
         "scope_extractor"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Proposals]
     }
 
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
         ctx.get(ContextKey::Proposals).iter().any(|p| {
-            p.id().starts_with(PROMISE_PREFIX) && p.content().contains("\"state\":\"draft\"")
+            p.id().starts_with(PROMISE_PREFIX) && crate::payload_contains(p, "\"state\":\"draft\"")
         })
     }
 
@@ -107,9 +114,9 @@ impl Suggestor for ScopeExtractorAgent {
 
         for promise in proposals {
             if promise.id().starts_with(PROMISE_PREFIX)
-                && promise.content().contains("\"state\":\"draft\"")
+                && crate::payload_contains(promise, "\"state\":\"draft\"")
             {
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", SCOPE_PREFIX, promise.id()),
@@ -119,8 +126,7 @@ impl Suggestor for ScopeExtractorAgent {
                         "deliverables": [],
                         "success_criteria": [],
                         "timeline": "30 days"
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -137,6 +143,10 @@ pub struct WorkBreakdownAgent;
 impl Suggestor for WorkBreakdownAgent {
     fn name(&self) -> &'static str {
         "work_breakdown"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -161,7 +171,7 @@ impl Suggestor for WorkBreakdownAgent {
 
         for item in proposals {
             if item.id().starts_with(SCOPE_PREFIX) {
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{}1:{}", TASK_PREFIX, item.id()),
@@ -171,8 +181,7 @@ impl Suggestor for WorkBreakdownAgent {
                         "title": "Implementation task",
                         "state": "pending",
                         "estimated_hours": 40
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -191,14 +200,18 @@ impl Suggestor for BlockerDetectorAgent {
         "blocker_detector"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Proposals]
     }
 
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
-        ctx.get(ContextKey::Proposals)
-            .iter()
-            .any(|t| t.id().starts_with(TASK_PREFIX) && t.content().contains("\"blocked\":true"))
+        ctx.get(ContextKey::Proposals).iter().any(|t| {
+            t.id().starts_with(TASK_PREFIX) && crate::payload_contains(t, "\"blocked\":true")
+        })
     }
 
     async fn execute(&self, ctx: &dyn converge_core::Context) -> AgentEffect {
@@ -207,9 +220,9 @@ impl Suggestor for BlockerDetectorAgent {
 
         for task in proposals {
             if task.id().as_str().starts_with(TASK_PREFIX)
-                && task.content().contains("\"blocked\":true")
+                && crate::payload_contains(task, "\"blocked\":true")
             {
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", BLOCKER_PREFIX, task.id()),
@@ -219,8 +232,7 @@ impl Suggestor for BlockerDetectorAgent {
                         "state": "raised",
                         "severity": "medium",
                         "description": "Task is blocked"
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -239,13 +251,17 @@ impl Suggestor for BlockerRouterAgent {
         "blocker_router"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Proposals]
     }
 
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
         ctx.get(ContextKey::Proposals).iter().any(|b| {
-            b.id().starts_with(BLOCKER_PREFIX) && b.content().contains("\"state\":\"raised\"")
+            b.id().starts_with(BLOCKER_PREFIX) && crate::payload_contains(b, "\"state\":\"raised\"")
         })
     }
 
@@ -255,9 +271,9 @@ impl Suggestor for BlockerRouterAgent {
 
         for blocker in proposals {
             if blocker.id().starts_with(BLOCKER_PREFIX)
-                && blocker.content().contains("\"state\":\"raised\"")
+                && crate::payload_contains(blocker, "\"state\":\"raised\"")
             {
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{}routed:{}", BLOCKER_PREFIX, blocker.id()),
@@ -267,8 +283,7 @@ impl Suggestor for BlockerRouterAgent {
                         "state": "assigned",
                         "owner": "tech_lead",
                         "sla_hours": 24
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -285,6 +300,10 @@ pub struct RiskAssessorAgent;
 impl Suggestor for RiskAssessorAgent {
     fn name(&self) -> &'static str {
         "risk_assessor"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -322,7 +341,7 @@ impl Suggestor for RiskAssessorAgent {
                     "low"
                 };
 
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Evaluations,
                     format!("{}{}", RISK_PREFIX, promise.id()),
@@ -332,8 +351,7 @@ impl Suggestor for RiskAssessorAgent {
                         "risk_level": risk_level,
                         "blocker_count": blocker_count,
                         "mitigation_required": risk_level != "low"
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -350,6 +368,10 @@ pub struct StatusAggregatorAgent;
 impl Suggestor for StatusAggregatorAgent {
     fn name(&self) -> &'static str {
         "status_aggregator"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -384,13 +406,17 @@ impl Suggestor for AcceptanceRequestorAgent {
         "acceptance_requestor"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Proposals]
     }
 
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
         ctx.get(ContextKey::Proposals).iter().any(|p| {
-            p.id().starts_with(PROMISE_PREFIX) && p.content().contains("\"state\":\"review\"")
+            p.id().starts_with(PROMISE_PREFIX) && crate::payload_contains(p, "\"state\":\"review\"")
         })
     }
 
@@ -400,9 +426,9 @@ impl Suggestor for AcceptanceRequestorAgent {
 
         for promise in proposals {
             if promise.id().starts_with(PROMISE_PREFIX)
-                && promise.content().contains("\"state\":\"review\"")
+                && crate::payload_contains(promise, "\"state\":\"review\"")
             {
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", ACCEPTANCE_PREFIX, promise.id()),
@@ -411,8 +437,7 @@ impl Suggestor for AcceptanceRequestorAgent {
                         "promise_id": promise.id(),
                         "state": "pending",
                         "requested_at": "2026-01-12"
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -431,13 +456,18 @@ impl Suggestor for PostmortemSchedulerAgent {
         "postmortem_scheduler"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Proposals]
     }
 
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
         ctx.get(ContextKey::Proposals).iter().any(|p| {
-            p.id().starts_with(PROMISE_PREFIX) && p.content().contains("\"state\":\"completed\"")
+            p.id().starts_with(PROMISE_PREFIX)
+                && crate::payload_contains(p, "\"state\":\"completed\"")
         })
     }
 
@@ -447,9 +477,9 @@ impl Suggestor for PostmortemSchedulerAgent {
 
         for promise in proposals {
             if promise.id().starts_with(PROMISE_PREFIX)
-                && promise.content().contains("\"state\":\"completed\"")
+                && crate::payload_contains(promise, "\"state\":\"completed\"")
             {
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", POSTMORTEM_PREFIX, promise.id()),
@@ -458,8 +488,7 @@ impl Suggestor for PostmortemSchedulerAgent {
                         "promise_id": promise.id(),
                         "scheduled_for": "2026-01-19",
                         "participants": ["delivery_team", "customer_success"]
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -488,7 +517,7 @@ impl Invariant for PromiseHasDealInvariant {
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
         for promise in ctx.get(ContextKey::Proposals) {
             if promise.id().starts_with(PROMISE_PREFIX)
-                && !promise.content().contains("\"deal_id\":")
+                && !crate::payload_contains(promise, "\"deal_id\":")
             {
                 return InvariantResult::Violated(Violation::with_facts(
                     format!("Promise {} missing deal_id", promise.id()),
@@ -519,13 +548,13 @@ impl Invariant for BlockerHasResolutionPathInvariant {
         for blocker in proposals {
             // Check blockers that are raised but not yet routed
             if blocker.id().starts_with(BLOCKER_PREFIX)
-                && blocker.content().contains("\"state\":\"raised\"")
+                && crate::payload_contains(blocker, "\"state\":\"raised\"")
             {
                 // Look for a corresponding routed blocker
                 let routed_id = format!("{}routed:{}", BLOCKER_PREFIX, blocker.id());
                 let has_route = proposals.iter().any(|p| p.id().as_str() == routed_id);
 
-                if !has_route && !blocker.content().contains("\"owner\":") {
+                if !has_route && !crate::payload_contains(blocker, "\"owner\":") {
                     return InvariantResult::Violated(Violation::with_facts(
                         format!(
                             "Blocker {} has no resolution path or owner assigned",
@@ -555,11 +584,12 @@ impl Invariant for ScopeChangeRequiresApprovalInvariant {
 
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
         for scope in ctx.get(ContextKey::Proposals) {
-            if scope.id().starts_with(SCOPE_PREFIX) && scope.content().contains("\"change_type\":")
+            if scope.id().starts_with(SCOPE_PREFIX)
+                && crate::payload_contains(scope, "\"change_type\":")
             {
                 // Scope has been modified - check for approval
-                if !scope.content().contains("\"approved\":true")
-                    && !scope.content().contains("\"approval_status\":\"approved\"")
+                if !crate::payload_contains(scope, "\"approved\":true")
+                    && !crate::payload_contains(scope, "\"approval_status\":\"approved\"")
                 {
                     return InvariantResult::Violated(Violation::with_facts(
                         format!("Scope change {} requires approval", scope.id()),
@@ -590,13 +620,13 @@ impl Invariant for CompletedPromiseHasAcceptanceInvariant {
 
         for promise in proposals {
             if promise.id().starts_with(PROMISE_PREFIX)
-                && promise.content().contains("\"state\":\"completed\"")
+                && crate::payload_contains(promise, "\"state\":\"completed\"")
             {
                 // Look for acceptance record
                 let acceptance_id = format!("{}{}", ACCEPTANCE_PREFIX, promise.id());
                 let has_acceptance = proposals.iter().any(|p| {
                     p.id().as_str() == acceptance_id
-                        && p.content().contains("\"state\":\"accepted\"")
+                        && crate::payload_contains(p, "\"state\":\"accepted\"")
                 });
 
                 if !has_acceptance {

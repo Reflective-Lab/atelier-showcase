@@ -17,12 +17,13 @@
 use std::sync::Arc;
 
 use converge_kernel::{
-    AgentEffect, Budget, Context, ContextKey, ContextState, ConvergeResult, Engine, ProposedFact,
-    Suggestor,
+    AgentEffect, Budget, Context, ContextKey, ContextState, ConvergeResult, Engine, FactPayload,
+    ProposedFact, Suggestor, TextPayload,
     formation::{
         Capability, CostClass, FormationAssemblySuggestor, FormationPlan, FormationRequest,
-        LatencyClass, ProfileSnapshot, ProviderAssignment, ProviderRequest,
-        ProviderSelectionSuggestor, SuggestorCapability, SuggestorProfile, SuggestorRole,
+        LatencyClass, ProfileSnapshot, ProviderAssignment, ProviderAssignmentPayload,
+        ProviderRequest, ProviderRequestPayload, ProviderSelectionSuggestor, SuggestorCapability,
+        SuggestorProfile, SuggestorRole,
     },
 };
 use converge_provider::{Backend, BackendKind};
@@ -50,7 +51,8 @@ const CONTEXT_KEYS: [ContextKey; 9] = [
     ContextKey::Diagnostic,
 ];
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
 struct IntentRoute {
     request_id: String,
     objective: String,
@@ -58,6 +60,61 @@ struct IntentRoute {
     required_roles: Vec<SuggestorRole>,
     required_provider_capabilities: Vec<Capability>,
     notes: Vec<String>,
+}
+
+impl FactPayload for IntentRoute {
+    const FAMILY: &'static str = "tutorial.intent_codec.route";
+    const VERSION: u16 = 1;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct ProviderGapNotice {
+    request_id: String,
+    suggestor: String,
+    role: SuggestorRole,
+    missing_capabilities: Vec<Capability>,
+    message: String,
+}
+
+impl FactPayload for ProviderGapNotice {
+    const FAMILY: &'static str = "tutorial.intent_codec.provider_gap";
+    const VERSION: u16 = 1;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct MemberNote {
+    request_id: String,
+    suggestor: String,
+    role: SuggestorRole,
+    summary: String,
+    provider_needs: Vec<Capability>,
+    provider_backends: Vec<String>,
+}
+
+impl FactPayload for MemberNote {
+    const FAMILY: &'static str = "tutorial.intent_codec.member_note";
+    const VERSION: u16 = 1;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct LoopStatus {
+    request_id: String,
+    ready: bool,
+    formation_coverage_ratio: f64,
+    provider_coverage_ratio: f64,
+    assigned_suggestors: Vec<String>,
+    provider_backends: Vec<String>,
+    unmatched_roles: Vec<SuggestorRole>,
+    unmatched_capabilities: Vec<Capability>,
+    provider_gaps: Vec<String>,
+}
+
+impl FactPayload for LoopStatus {
+    const FAMILY: &'static str = "tutorial.intent_codec.loop_status";
+    const VERSION: u16 = 1;
 }
 
 #[derive(Debug, Clone)]
@@ -129,6 +186,10 @@ impl Suggestor for ProfiledMember {
         self.name
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.intent-codec-loop"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Strategies]
     }
@@ -172,19 +233,21 @@ impl Suggestor for ProfiledMember {
                 .collect();
 
             if !missing.is_empty() {
-                let content = serde_json::json!({
-                    "request_id": request_id,
-                    "suggestor": self.name(),
-                    "role": self.role,
-                    "missing_capabilities": missing,
-                    "message": "formation member selected, but provider routing does not yet satisfy its needs",
-                });
+                let gap = ProviderGapNotice {
+                    request_id: request_id.clone(),
+                    suggestor: self.name().to_string(),
+                    role: self.role,
+                    missing_capabilities: missing,
+                    message:
+                        "formation member selected, but provider routing does not yet satisfy its needs"
+                            .to_string(),
+                };
                 proposals.push(
                     ProposedFact::new(
                         ContextKey::Constraints,
                         self.provider_gap_id(&request_id),
-                        content.to_string(),
-                        self.name(),
+                        gap,
+                        self.name().to_owned(),
                     )
                     .with_confidence(1.0),
                 );
@@ -193,20 +256,20 @@ impl Suggestor for ProfiledMember {
 
             let provider_backends =
                 provider_backends_for(&provider_assignment, &self.provider_needs);
-            let content = serde_json::json!({
-                "request_id": request_id,
-                "suggestor": self.name(),
-                "role": self.role,
-                "summary": self.synopsis,
-                "provider_needs": self.provider_needs,
-                "provider_backends": provider_backends,
-            });
+            let note = MemberNote {
+                request_id: request_id.clone(),
+                suggestor: self.name().to_string(),
+                role: self.role,
+                summary: self.synopsis.to_string(),
+                provider_needs: self.provider_needs.clone(),
+                provider_backends,
+            };
             proposals.push(
                 ProposedFact::new(
                     self.output_key(),
                     self.note_id(&request_id),
-                    content.to_string(),
-                    self.name(),
+                    note,
+                    self.name().to_owned(),
                 )
                 .with_confidence(f64::from(self.confidence_max)),
             );
@@ -222,6 +285,10 @@ struct IntentCodecSuggestor;
 impl Suggestor for IntentCodecSuggestor {
     fn name(&self) -> &str {
         "intent-codec"
+    }
+
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.intent-codec-loop"
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -248,7 +315,11 @@ impl Suggestor for IntentCodecSuggestor {
                 continue;
             }
 
-            let compiled = compile_intent(fact.content());
+            let Some(spec) = fact.payload::<TextPayload>() else {
+                continue;
+            };
+
+            let compiled = compile_intent(spec.as_str());
             let formation_request = FormationRequest {
                 id: request_id.to_string(),
                 required_roles: compiled.required_roles.clone(),
@@ -274,8 +345,8 @@ impl Suggestor for IntentCodecSuggestor {
                 ProposedFact::new(
                     ContextKey::Seeds,
                     format!("{FORMATION_REQUEST_PREFIX}{request_id}"),
-                    serde_json::to_string(&formation_request).unwrap_or_default(),
-                    self.name(),
+                    formation_request,
+                    self.name().to_owned(),
                 )
                 .with_confidence(0.85),
             );
@@ -283,8 +354,8 @@ impl Suggestor for IntentCodecSuggestor {
                 ProposedFact::new(
                     ContextKey::Seeds,
                     format!("{PROVIDER_REQUEST_PREFIX}{request_id}"),
-                    serde_json::to_string(&provider_request).unwrap_or_default(),
-                    self.name(),
+                    ProviderRequestPayload::new(provider_request),
+                    self.name().to_owned(),
                 )
                 .with_confidence(0.85),
             );
@@ -292,8 +363,8 @@ impl Suggestor for IntentCodecSuggestor {
                 ProposedFact::new(
                     ContextKey::Strategies,
                     format!("{ROUTE_PREFIX}{request_id}"),
-                    serde_json::to_string(&route).unwrap_or_default(),
-                    self.name(),
+                    route,
+                    self.name().to_owned(),
                 )
                 .with_confidence(0.8),
             );
@@ -311,6 +382,10 @@ impl Suggestor for LoopStatusSuggestor {
         "loop-status"
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.intent-codec-loop"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[
             ContextKey::Hypotheses,
@@ -325,7 +400,7 @@ impl Suggestor for LoopStatusSuggestor {
         ctx.get(ContextKey::Strategies)
             .iter()
             .filter(|fact| fact.id().starts_with(FORMATION_PLAN_PREFIX))
-            .filter_map(|fact| serde_json::from_str::<FormationPlan>(fact.content()).ok())
+            .filter_map(|fact| fact.payload::<FormationPlan>().cloned())
             .any(|plan| {
                 !fact_exists(
                     ctx,
@@ -342,7 +417,7 @@ impl Suggestor for LoopStatusSuggestor {
             .get(ContextKey::Strategies)
             .iter()
             .filter(|fact| fact.id().starts_with(FORMATION_PLAN_PREFIX))
-            .filter_map(|fact| serde_json::from_str::<FormationPlan>(fact.content()).ok())
+            .filter_map(|fact| fact.payload::<FormationPlan>().cloned())
         {
             let status_id = format!("{LOOP_STATUS_PREFIX}{}", plan.request_id);
             if fact_exists(ctx, ContextKey::Diagnostic, &status_id) {
@@ -381,28 +456,36 @@ impl Suggestor for LoopStatusSuggestor {
                 continue;
             }
 
-            let content = serde_json::json!({
-                "request_id": plan.request_id,
-                "ready": plan.unmatched_roles.is_empty()
+            let content = LoopStatus {
+                request_id: plan.request_id.clone(),
+                ready: plan.unmatched_roles.is_empty()
                     && provider_assignment.unmatched.is_empty()
                     && provider_gaps.is_empty()
                     && all_notes_present,
-                "formation_coverage_ratio": plan.coverage_ratio,
-                "provider_coverage_ratio": provider_assignment.coverage_ratio,
-                "assigned_suggestors": plan.assignments.iter().map(|assignment| assignment.suggestor.clone()).collect::<Vec<_>>(),
-                "provider_backends": provider_assignment.assignments.iter().map(|assignment| assignment.backend_name.clone()).collect::<Vec<_>>(),
-                "unmatched_roles": plan.unmatched_roles,
-                "unmatched_capabilities": provider_assignment.unmatched,
-                "provider_gaps": provider_gaps,
-            });
+                formation_coverage_ratio: plan.coverage_ratio,
+                provider_coverage_ratio: provider_assignment.coverage_ratio,
+                assigned_suggestors: plan
+                    .assignments
+                    .iter()
+                    .map(|assignment| assignment.suggestor.clone())
+                    .collect(),
+                provider_backends: provider_assignment
+                    .assignments
+                    .iter()
+                    .map(|assignment| assignment.backend_name.clone())
+                    .collect(),
+                unmatched_roles: plan.unmatched_roles.clone(),
+                unmatched_capabilities: provider_assignment.unmatched.clone(),
+                provider_gaps,
+            };
 
             let confidence = plan.coverage_ratio.min(provider_assignment.coverage_ratio);
             proposals.push(
                 ProposedFact::new(
                     ContextKey::Diagnostic,
                     status_id,
-                    content.to_string(),
-                    self.name(),
+                    content,
+                    self.name().to_owned(),
                 )
                 .with_confidence(confidence),
             );
@@ -490,14 +573,45 @@ fn print_section(title: &str, facts: &[converge_kernel::ContextFact]) {
     }
 
     for fact in facts {
-        let preview = if fact.content().len() > 120 {
-            format!("{}...", &fact.content()[..120])
-        } else {
-            fact.content().to_string()
-        };
+        let preview = fact_preview(fact);
         println!("  {} ({preview})", fact.id());
     }
     println!();
+}
+
+fn fact_preview(fact: &converge_kernel::ContextFact) -> String {
+    if let Some(text) = fact.payload::<TextPayload>() {
+        return text.as_str().to_owned();
+    }
+    if let Some(payload) = fact.payload::<FormationRequest>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<ProviderRequestPayload>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<FormationPlan>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<ProviderAssignmentPayload>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<IntentRoute>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<ProviderGapNotice>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<MemberNote>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<LoopStatus>() {
+        return format!("{payload:?}");
+    }
+    format!(
+        "<typed payload {} v{}>",
+        fact.payload_family(),
+        fact.payload_version()
+    )
 }
 
 fn compile_intent(spec: &str) -> CompiledIntent {
@@ -769,7 +883,7 @@ fn assigned_requests(ctx: &dyn Context, suggestor_name: &str) -> Vec<String> {
     ctx.get(ContextKey::Strategies)
         .iter()
         .filter(|fact| fact.id().starts_with(FORMATION_PLAN_PREFIX))
-        .filter_map(|fact| serde_json::from_str::<FormationPlan>(fact.content()).ok())
+        .filter_map(|fact| fact.payload::<FormationPlan>().cloned())
         .filter(|plan| {
             plan.assignments
                 .iter()
@@ -784,7 +898,10 @@ fn provider_assignment_for(ctx: &dyn Context, request_id: &str) -> Option<Provid
     ctx.get(ContextKey::Strategies)
         .iter()
         .find(|fact| fact.id().as_str() == assignment_id)
-        .and_then(|fact| serde_json::from_str(fact.content()).ok())
+        .and_then(|fact| {
+            fact.payload::<ProviderAssignmentPayload>()
+                .map(|payload| payload.assignment().clone())
+        })
 }
 
 fn route_exists(ctx: &dyn Context, request_id: &str) -> bool {
@@ -999,15 +1116,15 @@ And policy gates should block non-compliant synthesis"#,
             .await
             .expect("run should converge");
 
-        let status: serde_json::Value = result
+        let status = result
             .context
             .get(ContextKey::Diagnostic)
             .iter()
             .find(|fact| fact.id() == "loop-status:dd-acme-metrics")
-            .and_then(|fact| serde_json::from_str(fact.content()).ok())
+            .and_then(|fact| fact.payload::<LoopStatus>())
             .expect("loop status should exist");
 
-        assert_eq!(status["ready"].as_bool(), Some(false));
+        assert!(!status.ready);
         assert!(
             result
                 .context
@@ -1033,17 +1150,17 @@ And policy gates should block non-compliant synthesis"#,
             .get(ContextKey::Strategies)
             .iter()
             .find(|fact| fact.id() == "formation-plan:dd-acme-metrics")
-            .and_then(|fact| serde_json::from_str::<FormationPlan>(fact.content()).ok())
+            .and_then(|fact| fact.payload::<FormationPlan>().cloned())
             .expect("formation plan should exist");
-        let status: serde_json::Value = result
+        let status = result
             .context
             .get(ContextKey::Diagnostic)
             .iter()
             .find(|fact| fact.id() == "loop-status:dd-acme-metrics")
-            .and_then(|fact| serde_json::from_str(fact.content()).ok())
+            .and_then(|fact| fact.payload::<LoopStatus>())
             .expect("loop status should exist");
 
         assert_eq!(plan.unmatched_roles, vec![SuggestorRole::Constraint]);
-        assert_eq!(status["ready"].as_bool(), Some(false));
+        assert!(!status.ready);
     }
 }

@@ -5,7 +5,7 @@
 //!
 //! Seeds -> Signals (research notes) -> Strategies (draft output)
 
-use converge_core::{AgentEffect, ContextKey, Suggestor};
+use converge_core::{AgentEffect, ContextKey, Suggestor, TextPayload};
 
 const DRAFT_RESEARCH_PREFIX: &str = "drafting_research:";
 const DRAFT_OUTPUT_PREFIX: &str = "drafting_output:";
@@ -17,6 +17,10 @@ pub struct DraftingResearchAgent;
 impl Suggestor for DraftingResearchAgent {
     fn name(&self) -> &'static str {
         "DraftingResearchAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -35,14 +39,15 @@ impl Suggestor for DraftingResearchAgent {
         let summary = ctx
             .get(ContextKey::Seeds)
             .iter()
-            .map(|seed| seed.content().to_string())
+            .filter_map(|seed| seed.payload::<TextPayload>().map(TextPayload::as_str))
             .collect::<Vec<_>>()
             .join(" | ");
 
-        AgentEffect::with_proposal(crate::proposal(
+        AgentEffect::with_proposal(crate::text(
             self.name(),
             ContextKey::Signals,
             format!("{DRAFT_RESEARCH_PREFIX}notes"),
+            "drafting.research_notes",
             format!("Drafting research notes: {summary}"),
         ))
     }
@@ -55,6 +60,10 @@ pub struct DraftingComposerAgent;
 impl Suggestor for DraftingComposerAgent {
     fn name(&self) -> &'static str {
         "DraftingComposerAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -76,14 +85,15 @@ impl Suggestor for DraftingComposerAgent {
             .get(ContextKey::Signals)
             .iter()
             .filter(|fact| fact.id().as_str().starts_with(DRAFT_RESEARCH_PREFIX))
-            .map(|fact| fact.content().to_string())
+            .filter_map(|fact| crate::domain_text(fact).or_else(|| crate::admitted_text(fact)))
             .collect::<Vec<_>>()
             .join("\n");
 
-        AgentEffect::with_proposal(crate::proposal(
+        AgentEffect::with_proposal(crate::text(
             self.name(),
             ContextKey::Strategies,
             format!("{DRAFT_OUTPUT_PREFIX}v0"),
+            "drafting.output",
             format!("Draft output (deterministic):\n{notes}"),
         ))
     }
@@ -154,8 +164,11 @@ mod tests {
         let proposals = effect.proposals();
         assert_eq!(proposals.len(), 1);
         assert_eq!(proposals[0].key, ContextKey::Signals);
-        assert!(proposals[0].content.contains("topic A"));
-        assert!(proposals[0].content.contains("topic B"));
+        let payload = proposals[0]
+            .payload::<crate::DomainTextPayload>()
+            .expect("drafting research uses DomainTextPayload");
+        assert!(payload.as_str().contains("topic A"));
+        assert!(payload.as_str().contains("topic B"));
     }
 
     #[test]
@@ -215,8 +228,11 @@ mod tests {
         let proposals = effect.proposals();
         assert_eq!(proposals.len(), 1);
         assert_eq!(proposals[0].key, ContextKey::Strategies);
-        assert!(proposals[0].content.contains("first"));
-        assert!(proposals[0].content.contains("second"));
-        assert!(!proposals[0].content.contains("ignored"));
+        let payload = proposals[0]
+            .payload::<crate::DomainTextPayload>()
+            .expect("drafting output uses DomainTextPayload");
+        assert!(payload.as_str().contains("first"));
+        assert!(payload.as_str().contains("second"));
+        assert!(!payload.as_str().contains("ignored"));
     }
 }

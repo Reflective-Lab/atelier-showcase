@@ -12,8 +12,38 @@
 //! Requires: ANTHROPIC_API_KEY environment variable.
 
 use converge_kernel::{AgentEffect, Context, ContextKey, Engine, ProposedFact, Suggestor};
+use converge_pack::{FactPayload, TextPayload};
 
 use organism_pack::{CONFIDENCE_STEP_MAJOR, CONFIDENCE_STEP_MEDIUM, Severity, SkepticismKind};
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DebatePlan {
+    version: u8,
+    plan: String,
+    intent: String,
+    addressed_challenges: usize,
+}
+
+impl FactPayload for DebatePlan {
+    const FAMILY: &'static str = "atelier_showcase.debate_plan";
+    const VERSION: u16 = 1;
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+struct DebateChallenge {
+    review_type: String,
+    kind: String,
+    severity: String,
+    critique: String,
+    approved: bool,
+}
+
+impl FactPayload for DebateChallenge {
+    const FAMILY: &'static str = "atelier_showcase.debate_challenge";
+    const VERSION: u16 = 1;
+}
 
 // ── LLM Client ─────────────────────────────────────────────────────
 
@@ -66,6 +96,10 @@ impl Suggestor for LlmPlannerAgent {
         "llm_planner"
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.debate-loop"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Seeds]
     }
@@ -87,13 +121,20 @@ impl Suggestor for LlmPlannerAgent {
 
     async fn execute(&self, ctx: &dyn Context) -> AgentEffect {
         let seeds = ctx.get(ContextKey::Seeds);
-        let intent = seeds.first().map(|s| s.content()).unwrap_or("(no intent)");
+        let intent = seeds
+            .first()
+            .and_then(|s| s.payload::<TextPayload>())
+            .map(TextPayload::as_str)
+            .unwrap_or("(no intent)");
 
         let evaluations = ctx.get(ContextKey::Evaluations);
         let challenges: Vec<String> = evaluations
             .iter()
             .filter(|e| e.id().starts_with("challenge:"))
-            .map(|e| e.content().to_string())
+            .filter_map(|e| {
+                e.payload::<DebateChallenge>()
+                    .map(|challenge| challenge.critique.clone())
+            })
             .collect();
 
         if challenges.is_empty() {
@@ -111,13 +152,13 @@ impl Suggestor for LlmPlannerAgent {
                 ProposedFact::new(
                     ContextKey::Proposals,
                     "plan:initial",
-                    serde_json::json!({
-                        "version": 1,
-                        "plan": plan,
-                        "intent": intent,
-                    })
-                    .to_string(),
-                    self.name(),
+                    DebatePlan {
+                        version: 1,
+                        plan,
+                        intent: intent.to_string(),
+                        addressed_challenges: 0,
+                    },
+                    "llm_planner",
                 )
                 .with_confidence(0.5)
                 .adjust_confidence(CONFIDENCE_STEP_MAJOR),
@@ -134,8 +175,13 @@ impl Suggestor for LlmPlannerAgent {
             let original_plan = proposals
                 .iter()
                 .find(|p| p.id() == "plan:initial")
-                .map(|p| p.content().to_string())
+                .and_then(|p| p.payload::<DebatePlan>())
+                .map(|plan| plan.plan.clone())
                 .unwrap_or_default();
+            let original_intent = proposals
+                .iter()
+                .find_map(|p| p.payload::<DebatePlan>().map(|plan| plan.intent.clone()))
+                .unwrap_or_else(|| intent.to_string());
 
             let revised = call_claude(
                 "You are an organizational planner. Your initial plan was challenged by skeptics. \
@@ -152,14 +198,13 @@ impl Suggestor for LlmPlannerAgent {
                 ProposedFact::new(
                     ContextKey::Proposals,
                     "plan:revised",
-                    serde_json::json!({
-                        "version": 2,
-                        "plan": revised,
-                        "addressed_challenges": challenges.len(),
-                        "intent": proposals.first().map(|p| p.content()).unwrap_or(""),
-                    })
-                    .to_string(),
-                    self.name(),
+                    DebatePlan {
+                        version: 2,
+                        plan: revised,
+                        intent: original_intent,
+                        addressed_challenges: challenges.len(),
+                    },
+                    "llm_planner",
                 )
                 .with_confidence(0.7)
                 .adjust_confidence(CONFIDENCE_STEP_MEDIUM),
@@ -178,6 +223,10 @@ struct LlmSkepticAgent;
 impl Suggestor for LlmSkepticAgent {
     fn name(&self) -> &str {
         "llm_skeptic"
+    }
+
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.debate-loop"
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -215,7 +264,10 @@ impl Suggestor for LlmSkepticAgent {
             proposals.iter().find(|p| p.id() == "plan:initial")
         };
 
-        let plan_content = plan_fact.map(|p| p.content()).unwrap_or("(no plan)");
+        let plan_content = plan_fact
+            .and_then(|p| p.payload::<DebatePlan>())
+            .map(|plan| plan.plan.as_str())
+            .unwrap_or("(no plan)");
 
         let review_type = if is_final_review {
             "final review of revised plan"
@@ -276,15 +328,14 @@ impl Suggestor for LlmSkepticAgent {
             ProposedFact::new(
                 ContextKey::Evaluations,
                 challenge_id,
-                serde_json::json!({
-                    "review_type": review_type,
-                    "kind": format!("{kind:?}"),
-                    "severity": format!("{severity:?}"),
-                    "critique": critique,
-                    "approved": is_approved,
-                })
-                .to_string(),
-                self.name(),
+                DebateChallenge {
+                    review_type: review_type.to_string(),
+                    kind: format!("{kind:?}"),
+                    severity: format!("{severity:?}"),
+                    critique,
+                    approved: is_approved,
+                },
+                "llm_skeptic",
             )
             .with_confidence(0.75)
             .adjust_confidence(if is_approved {
@@ -323,7 +374,12 @@ async fn main() {
     println!("--- Debate begins ---\n");
 
     let mut ctx = converge_kernel::ContextState::new();
-    let _ = ctx.add_input(ContextKey::Seeds, "intent-1", intent.to_string());
+    let _ = ctx.add_proposal(ProposedFact::new(
+        ContextKey::Seeds,
+        "intent-1",
+        TextPayload::new(intent),
+        "debate-loop-input",
+    ));
 
     match engine.run(ctx).await {
         Ok(result) => {
@@ -335,31 +391,24 @@ async fn main() {
 
             println!("Proposals ({}):", proposals.len());
             for p in proposals {
-                if let Ok(json) = serde_json::from_str::<serde_json::Value>(p.content()) {
-                    let version = json.get("version").and_then(|v| v.as_u64()).unwrap_or(0);
-                    let plan = json.get("plan").and_then(|v| v.as_str()).unwrap_or("?");
-                    println!("  [v{version}] {}", truncate(plan, 300));
+                if let Some(plan) = p.payload::<DebatePlan>() {
+                    println!("  [v{}] {}", plan.version, truncate(&plan.plan, 300));
                 }
             }
 
             println!("\nChallenges ({}):", evaluations.len());
             for e in evaluations {
-                if let Ok(json) = serde_json::from_str::<serde_json::Value>(e.content()) {
-                    let review_type = json
-                        .get("review_type")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("?");
-                    let severity = json.get("severity").and_then(|v| v.as_str()).unwrap_or("?");
-                    let approved = json
-                        .get("approved")
-                        .and_then(|v| v.as_bool())
-                        .unwrap_or(false);
-                    let critique = json.get("critique").and_then(|v| v.as_str()).unwrap_or("?");
+                if let Some(challenge) = e.payload::<DebateChallenge>() {
+                    let approved_marker = if challenge.approved {
+                        " → APPROVED"
+                    } else {
+                        ""
+                    };
                     println!(
-                        "  [{severity}] {review_type}{}",
-                        if approved { " → APPROVED" } else { "" }
+                        "  [{}] {}{}",
+                        challenge.severity, challenge.review_type, approved_marker
                     );
-                    println!("    {}", truncate(critique, 300));
+                    println!("    {}", truncate(&challenge.critique, 300));
                 }
             }
 
@@ -367,15 +416,11 @@ async fn main() {
                 .iter()
                 .find(|e| e.id() == "challenge:final-review");
             if let Some(review) = final_review
-                && let Ok(json) = serde_json::from_str::<serde_json::Value>(review.content())
+                && let Some(challenge) = review.payload::<DebateChallenge>()
             {
-                let approved = json
-                    .get("approved")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
                 println!(
                     "\nVerdict: {}",
-                    if approved {
+                    if challenge.approved {
                         "PLAN APPROVED"
                     } else {
                         "PLAN NEEDS WORK"

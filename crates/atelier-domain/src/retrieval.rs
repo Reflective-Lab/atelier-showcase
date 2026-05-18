@@ -228,7 +228,7 @@ impl RetrievalResult {
         ProposedFact::new(
             target_key,
             format!("retrieved-{}", self.id),
-            self.content.clone(),
+            crate::DomainTextPayload::new("retrieval.result", self.content.clone()),
             provenance,
         )
         .with_confidence(self.final_score)
@@ -802,9 +802,9 @@ mod tests {
         let proposal = &proposals[0];
         assert_eq!(proposal.key, ContextKey::Signals);
         assert!(proposal.id.starts_with("retrieved-"));
-        assert!(proposal.provenance.contains("retrieval:"));
-        assert!(proposal.provenance.contains("embedder=mock-embedder"));
-        assert!(proposal.provenance.contains("reranker=mock-reranker"));
+        assert!(proposal.provenance().contains("retrieval:"));
+        assert!(proposal.provenance().contains("embedder=mock-embedder"));
+        assert!(proposal.provenance().contains("reranker=mock-reranker"));
     }
 
     #[test]

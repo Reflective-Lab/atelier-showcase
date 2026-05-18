@@ -103,6 +103,10 @@ impl Suggestor for InvoiceCreatorAgent {
         "invoice_creator"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Seeds]
     }
@@ -110,9 +114,9 @@ impl Suggestor for InvoiceCreatorAgent {
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
         // Accept when we have triggers but haven't created invoices yet
         let has_triggers = ctx.get(ContextKey::Seeds).iter().any(|f| {
-            f.content().contains("deal.closed_won")
-                || f.content().contains("milestone.completed")
-                || f.content().contains("subscription.cycle")
+            crate::payload_contains(f, "deal.closed_won")
+                || crate::payload_contains(f, "milestone.completed")
+                || crate::payload_contains(f, "subscription.cycle")
         });
         let has_invoices = ctx
             .get(ContextKey::Proposals)
@@ -126,8 +130,8 @@ impl Suggestor for InvoiceCreatorAgent {
         let mut facts = Vec::new();
 
         for trigger in triggers {
-            if trigger.content().contains("deal.closed_won") {
-                facts.push(crate::proposal(
+            if crate::payload_contains(trigger, "deal.closed_won") {
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{}draft:{}", INVOICE_PREFIX, trigger.id()),
@@ -139,8 +143,7 @@ impl Suggestor for InvoiceCreatorAgent {
                         "line_items": [],
                         "amount": 0,
                         "currency": "USD"
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -180,6 +183,10 @@ impl Suggestor for InvoiceIssuerAgent {
         "invoice_issuer"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Proposals]
     }
@@ -187,7 +194,7 @@ impl Suggestor for InvoiceIssuerAgent {
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
         ctx.get(ContextKey::Proposals).iter().any(|invoice| {
             invoice.id().as_str().starts_with(INVOICE_PREFIX)
-                && invoice.content().contains("\"state\":\"ready_to_issue\"")
+                && crate::payload_contains(invoice, "\"state\":\"ready_to_issue\"")
                 && !invoice_issue_final_output_exists(ctx, invoice.id())
         })
     }
@@ -198,14 +205,13 @@ impl Suggestor for InvoiceIssuerAgent {
 
         for invoice in proposals {
             if !invoice.id().as_str().starts_with(INVOICE_PREFIX)
-                || !invoice.content().contains("\"state\":\"ready_to_issue\"")
+                || !crate::payload_contains(invoice, "\"state\":\"ready_to_issue\"")
                 || invoice_issue_final_output_exists(ctx, invoice.id())
             {
                 continue;
             }
 
-            let Ok(invoice_json) = serde_json::from_str::<serde_json::Value>(invoice.content())
-            else {
+            let Some(invoice_json) = crate::json_value(invoice) else {
                 continue;
             };
 
@@ -257,7 +263,7 @@ impl Suggestor for InvoiceIssuerAgent {
                 .expect("built-in invoice issuance policy should evaluate");
 
             match decision.outcome {
-                FlowGateOutcome::Promote => facts.push(crate::proposal(
+                FlowGateOutcome::Promote => facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{INVOICE_PREFIX}issued:{}", invoice.id()),
@@ -271,12 +277,11 @@ impl Suggestor for InvoiceIssuerAgent {
                         "currency": invoice_json.get("currency").cloned().unwrap_or(serde_json::json!("USD")),
                         "human_approval_present": human_approval_present,
                         "policy_reason": decision.reason
-                    })
-                    .to_string(),
+                    }),
                 )),
                 FlowGateOutcome::Escalate => {
                     if !invoice_issue_request_exists(ctx, invoice.id()) {
-                        facts.push(crate::proposal(
+                        facts.push(crate::json_record(
                             self.name(),
                             ContextKey::Proposals,
                             format!("{INVOICE_PREFIX}issue_request:{}", invoice.id()),
@@ -288,12 +293,11 @@ impl Suggestor for InvoiceIssuerAgent {
                                 "pending_approval": true,
                                 "policy_outcome": decision.outcome,
                                 "policy_reason": decision.reason
-                            })
-                            .to_string(),
+                            }),
                         ));
                     }
                 }
-                FlowGateOutcome::Reject => facts.push(crate::proposal(
+                FlowGateOutcome::Reject => facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{INVOICE_PREFIX}issue_rejected:{}", invoice.id()),
@@ -302,8 +306,7 @@ impl Suggestor for InvoiceIssuerAgent {
                         "invoice_id": invoice.id(),
                         "policy_outcome": decision.outcome,
                         "policy_reason": decision.reason
-                    })
-                    .to_string(),
+                    }),
                 )),
             }
         }
@@ -327,6 +330,10 @@ impl Suggestor for PaymentAllocatorAgent {
         "payment_allocator"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Proposals]
     }
@@ -334,7 +341,8 @@ impl Suggestor for PaymentAllocatorAgent {
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
         // Accept when we have unallocated payments
         ctx.get(ContextKey::Proposals).iter().any(|p| {
-            p.id().starts_with(PAYMENT_PREFIX) && p.content().contains("\"state\":\"unallocated\"")
+            p.id().starts_with(PAYMENT_PREFIX)
+                && crate::payload_contains(p, "\"state\":\"unallocated\"")
         })
     }
 
@@ -344,7 +352,7 @@ impl Suggestor for PaymentAllocatorAgent {
             .iter()
             .filter(|p| {
                 p.id().starts_with(PAYMENT_PREFIX)
-                    && p.content().contains("\"state\":\"unallocated\"")
+                    && crate::payload_contains(p, "\"state\":\"unallocated\"")
             })
             .collect();
         let invoices: Vec<_> = proposals
@@ -357,7 +365,7 @@ impl Suggestor for PaymentAllocatorAgent {
         for payment in &payments {
             // Try to find matching invoice
             if let Some(invoice) = invoices.first() {
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!(
@@ -372,8 +380,7 @@ impl Suggestor for PaymentAllocatorAgent {
                         "invoice_id": invoice.id(),
                         "amount": "full",
                         "match_method": "exact_amount"
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -392,6 +399,10 @@ pub struct ReconciliationMatcherAgent;
 impl Suggestor for ReconciliationMatcherAgent {
     fn name(&self) -> &'static str {
         "reconciliation_matcher"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -428,7 +439,7 @@ impl Suggestor for ReconciliationMatcherAgent {
 
         for txn in &bank_txns {
             if let Some(invoice) = invoices.first() {
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{}{}->{}", LEDGER_PREFIX, txn.id(), invoice.id()),
@@ -438,8 +449,7 @@ impl Suggestor for ReconciliationMatcherAgent {
                         "matched_doc_id": invoice.id(),
                         "match_confidence": 0.95,
                         "match_method": "exact"
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -463,6 +473,10 @@ impl Suggestor for OverdueDetectorAgent {
         "overdue_detector"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Proposals]
     }
@@ -471,9 +485,9 @@ impl Suggestor for OverdueDetectorAgent {
         // Check for open/partial invoices past due date
         ctx.get(ContextKey::Proposals).iter().any(|inv| {
             inv.id().starts_with(INVOICE_PREFIX)
-                && (inv.content().contains("\"state\":\"open\"")
-                    || inv.content().contains("\"state\":\"partial\""))
-                && inv.content().contains("\"overdue\":true")
+                && (crate::payload_contains(inv, "\"state\":\"open\"")
+                    || crate::payload_contains(inv, "\"state\":\"partial\""))
+                && crate::payload_contains(inv, "\"overdue\":true")
         })
     }
 
@@ -483,9 +497,9 @@ impl Suggestor for OverdueDetectorAgent {
 
         for invoice in proposals {
             if invoice.id().as_str().starts_with(INVOICE_PREFIX)
-                && invoice.content().contains("\"overdue\":true")
+                && crate::payload_contains(invoice, "\"overdue\":true")
             {
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{}overdue_action:{}", INVOICE_PREFIX, invoice.id()),
@@ -495,8 +509,7 @@ impl Suggestor for OverdueDetectorAgent {
                         "new_state": "overdue",
                         "action": "reminder_email",
                         "days_overdue": 7
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -538,6 +551,10 @@ impl Suggestor for PeriodCloserAgent {
         "period_closer"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Proposals]
     }
@@ -546,7 +563,7 @@ impl Suggestor for PeriodCloserAgent {
         // Accept when period is in "closing" state and all reconciliation complete
         ctx.get(ContextKey::Proposals).iter().any(|period| {
             period.id().starts_with(PERIOD_PREFIX)
-                && period.content().contains("\"state\":\"closing\"")
+                && crate::payload_contains(period, "\"state\":\"closing\"")
                 && !period_close_final_output_exists(ctx, period.id())
         })
     }
@@ -557,14 +574,13 @@ impl Suggestor for PeriodCloserAgent {
 
         for period in proposals {
             if !period.id().starts_with(PERIOD_PREFIX)
-                || !period.content().contains("\"state\":\"closing\"")
+                || !crate::payload_contains(period, "\"state\":\"closing\"")
                 || period_close_final_output_exists(ctx, period.id())
             {
                 continue;
             }
 
-            let Ok(period_json) = serde_json::from_str::<serde_json::Value>(period.content())
-            else {
+            let Some(period_json) = crate::json_value(period) else {
                 continue;
             };
 
@@ -595,7 +611,7 @@ impl Suggestor for PeriodCloserAgent {
                 .expect("built-in period close policy should evaluate");
 
             match decision.outcome {
-                FlowGateOutcome::Promote => facts.push(crate::proposal(
+                FlowGateOutcome::Promote => facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{PERIOD_PREFIX}closed:{}", period.id()),
@@ -605,12 +621,11 @@ impl Suggestor for PeriodCloserAgent {
                         "state": "closed",
                         "human_approval_present": human_approval_present,
                         "policy_reason": decision.reason
-                    })
-                    .to_string(),
+                    }),
                 )),
                 FlowGateOutcome::Escalate => {
                     if !period_close_request_exists(ctx, period.id()) {
-                        facts.push(crate::proposal(
+                        facts.push(crate::json_record(
                             self.name(),
                             ContextKey::Proposals,
                             format!("{PERIOD_PREFIX}close_request:{}", period.id()),
@@ -622,12 +637,11 @@ impl Suggestor for PeriodCloserAgent {
                                 "pending_approval": true,
                                 "policy_outcome": decision.outcome,
                                 "policy_reason": decision.reason
-                            })
-                            .to_string(),
+                            }),
                         ));
                     }
                 }
-                FlowGateOutcome::Reject => facts.push(crate::proposal(
+                FlowGateOutcome::Reject => facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{PERIOD_PREFIX}close_rejected:{}", period.id()),
@@ -636,8 +650,7 @@ impl Suggestor for PeriodCloserAgent {
                         "period_id": period.id(),
                         "policy_outcome": decision.outcome,
                         "policy_reason": decision.reason
-                    })
-                    .to_string(),
+                    }),
                 )),
             }
         }
@@ -666,7 +679,7 @@ impl Invariant for InvoiceHasCustomerInvariant {
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
         for invoice in ctx.get(ContextKey::Proposals) {
             if invoice.id().as_str().starts_with(INVOICE_PREFIX)
-                && !invoice.content().contains("customer_id")
+                && !crate::payload_contains(invoice, "customer_id")
             {
                 return InvariantResult::Violated(Violation::with_facts(
                     format!("Invoice {} missing customer_id", invoice.id()),
@@ -695,7 +708,7 @@ impl Invariant for PaymentAllocationCompleteInvariant {
         // Check that paid invoices have allocations summing to total
         for invoice in ctx.get(ContextKey::Proposals) {
             if invoice.id().as_str().starts_with(INVOICE_PREFIX)
-                && invoice.content().contains("\"state\":\"paid\"")
+                && crate::payload_contains(invoice, "\"state\":\"paid\"")
             {
                 // Verify allocations exist and sum correctly
                 // Simplified check for now
@@ -722,7 +735,7 @@ impl Invariant for ClosedPeriodReadonlyInvariant {
         // Check that facts in closed periods have override references
         for period in ctx.get(ContextKey::Proposals) {
             if period.id().starts_with(PERIOD_PREFIX)
-                && period.content().contains("\"state\":\"closed\"")
+                && crate::payload_contains(period, "\"state\":\"closed\"")
             {
                 // Verify no modifications without override
             }
@@ -784,9 +797,7 @@ mod tests {
                 .iter()
                 .any(|fact| {
                     fact.id() == "invoice:issue_request:invoice:draft:deal_123"
-                        && fact
-                            .content()
-                            .contains("\"required_role\":\"finance_manager\"")
+                        && crate::payload_contains(fact, "\"required_role\":\"finance_manager\"")
                 })
         );
     }
@@ -817,7 +828,7 @@ mod tests {
                 .iter()
                 .any(|fact| {
                     fact.id() == "invoice:issued:invoice:draft:deal_123"
-                        && fact.content().contains("\"state\":\"issued\"")
+                        && crate::payload_contains(fact, "\"state\":\"issued\"")
                 })
         );
     }
@@ -848,7 +859,7 @@ mod tests {
                 .iter()
                 .any(|fact| {
                     fact.id() == "period:closed:period:2026-03"
-                        && fact.content().contains("\"state\":\"closed\"")
+                        && crate::payload_contains(fact, "\"state\":\"closed\"")
                 })
         );
     }

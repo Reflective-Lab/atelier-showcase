@@ -11,7 +11,8 @@
 //! - Fixed-point convergence: engine stops when context stabilizes
 
 use converge_kernel::{
-    AgentEffect, Context, ContextKey, ContextState, Engine, ProposedFact, Suggestor,
+    AgentEffect, Context, ContextFact, ContextKey, ContextState, Engine, ProposedFact, Suggestor,
+    TextPayload,
 };
 
 const NO_DEPENDENCIES: [ContextKey; 0] = [];
@@ -35,6 +36,10 @@ impl Suggestor for SeedOnceSuggestor {
         self.name
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.hello-convergence"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &NO_DEPENDENCIES
     }
@@ -45,8 +50,13 @@ impl Suggestor for SeedOnceSuggestor {
 
     async fn execute(&self, _ctx: &dyn Context) -> AgentEffect {
         AgentEffect::with_proposal(
-            ProposedFact::new(ContextKey::Seeds, self.id, self.content, self.name)
-                .with_confidence(1.0),
+            ProposedFact::new(
+                ContextKey::Seeds,
+                self.id,
+                TextPayload::new(self.content),
+                self.name,
+            )
+            .with_confidence(1.0),
         )
     }
 }
@@ -69,6 +79,10 @@ impl Suggestor for ReactOnceSuggestor {
         self.name
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.hello-convergence"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &SEED_DEPENDENCIES
     }
@@ -79,8 +93,13 @@ impl Suggestor for ReactOnceSuggestor {
 
     async fn execute(&self, _ctx: &dyn Context) -> AgentEffect {
         AgentEffect::with_proposal(
-            ProposedFact::new(ContextKey::Hypotheses, self.id, self.content, self.name)
-                .with_confidence(0.95),
+            ProposedFact::new(
+                ContextKey::Hypotheses,
+                self.id,
+                TextPayload::new(self.content),
+                self.name,
+            )
+            .with_confidence(0.95),
         )
     }
 }
@@ -125,13 +144,18 @@ async fn main() {
 
     println!("Seeds:");
     for fact in result.context.get(ContextKey::Seeds) {
-        println!("  [{:?}] {}: {}", fact.key(), fact.id(), fact.content());
+        println!("  [{:?}] {}: {}", fact.key(), fact.id(), fact_text(fact));
     }
 
     println!("\nHypotheses:");
     for fact in result.context.get(ContextKey::Hypotheses) {
-        println!("  [{:?}] {}: {}", fact.key(), fact.id(), fact.content());
+        println!("  [{:?}] {}: {}", fact.key(), fact.id(), fact_text(fact));
     }
 
     println!("\n=== Done ===");
+}
+
+fn fact_text(fact: &ContextFact) -> &str {
+    fact.payload::<TextPayload>()
+        .map_or("", TextPayload::as_str)
 }

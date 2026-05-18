@@ -14,8 +14,23 @@ use converge_kernel::{
     AgentEffect, Budget, Context, ContextKey, ContextState, Engine, ProposedFact, Suggestor,
 };
 use converge_optimization::packs::budget_allocation::BudgetAllocationPack;
-use converge_pack::PackSuggestor;
+use converge_pack::{FactPayload, PackInputPayload, PackPlanPayload, PackSuggestor, TextPayload};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+struct ReasoningEvaluation {
+    strategy_id: String,
+    assessment: String,
+    confidence: f64,
+    recommendation: String,
+}
+
+impl FactPayload for ReasoningEvaluation {
+    const FAMILY: &'static str = "tutorial.formation_mixed.reasoning_evaluation";
+    const VERSION: u16 = 1;
+}
 
 // ── Seed Agent ────────────────────────────────────────────────────────
 // In real usage, Organism seeds the context from the IntentPacket.
@@ -26,6 +41,9 @@ struct IntentSeeder;
 impl Suggestor for IntentSeeder {
     fn name(&self) -> &str {
         "intent-seeder"
+    }
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.formation-mixed"
     }
     fn dependencies(&self) -> &[ContextKey] {
         &[]
@@ -47,7 +65,7 @@ impl Suggestor for IntentSeeder {
         AgentEffect::with_proposal(ProposedFact::new(
             ContextKey::Seeds,
             "budget-intent",
-            problem.to_string(),
+            PackInputPayload::new("budget-allocation", problem),
             "organism",
         ))
     }
@@ -66,6 +84,9 @@ struct ReasoningAgent;
 impl Suggestor for ReasoningAgent {
     fn name(&self) -> &str {
         "llm-reasoning"
+    }
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.formation-mixed"
     }
     fn dependencies(&self) -> &[ContextKey] {
         // Depends on Constraints — fires after policy has evaluated
@@ -91,16 +112,16 @@ impl Suggestor for ReasoningAgent {
                 continue; // Skip blocked strategies
             }
             // In production: send to Claude/GPT for evaluation
-            let evaluation = serde_json::json!({
-                "strategy_id": strategy.id(),
-                "assessment": "allocation meets priority ordering",
-                "confidence": 0.85,
-                "recommendation": "proceed"
-            });
+            let evaluation = ReasoningEvaluation {
+                strategy_id: strategy.id().to_string(),
+                assessment: "allocation meets priority ordering".to_string(),
+                confidence: 0.85,
+                recommendation: "proceed".to_string(),
+            };
             proposals.push(ProposedFact::new(
                 ContextKey::Evaluations,
                 format!("eval-{}", strategy.id()),
-                evaluation.to_string(),
+                evaluation,
                 "llm-reasoning",
             ));
         }
@@ -158,29 +179,17 @@ async fn main() {
     // Show results
     println!("Seeds:");
     for fact in result.context.get(ContextKey::Seeds) {
-        println!(
-            "  {} ({})",
-            fact.id(),
-            fact.content().chars().take(60).collect::<String>()
-        );
+        println!("  {} ({})", fact.id(), fact_preview(fact));
     }
 
     println!("\nStrategies (solver output):");
     for fact in result.context.get(ContextKey::Strategies) {
-        println!(
-            "  {} ({})",
-            fact.id(),
-            fact.content().chars().take(80).collect::<String>()
-        );
+        println!("  {} ({})", fact.id(), fact_preview(fact));
     }
 
     println!("\nEvaluations (LLM output):");
     for fact in result.context.get(ContextKey::Evaluations) {
-        println!(
-            "  {} ({})",
-            fact.id(),
-            fact.content().chars().take(80).collect::<String>()
-        );
+        println!("  {} ({})", fact.id(), fact_preview(fact));
     }
 
     println!("\nConstraints (policy violations):");
@@ -189,9 +198,29 @@ async fn main() {
         println!("  (none — all policies passed)");
     } else {
         for fact in constraints {
-            println!("  {} ({})", fact.id(), fact.content());
+            println!("  {} ({})", fact.id(), fact_preview(fact));
         }
     }
 
     println!("\n=== Done ===");
+}
+
+fn fact_preview(fact: &converge_kernel::ContextFact) -> String {
+    if let Some(payload) = fact.payload::<TextPayload>() {
+        return payload.as_str().to_owned();
+    }
+    if let Some(payload) = fact.payload::<PackInputPayload>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<PackPlanPayload>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<ReasoningEvaluation>() {
+        return format!("{payload:?}");
+    }
+    format!(
+        "<typed payload {} v{}>",
+        fact.payload_family(),
+        fact.payload_version()
+    )
 }

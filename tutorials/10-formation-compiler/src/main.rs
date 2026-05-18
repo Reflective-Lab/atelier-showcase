@@ -6,7 +6,7 @@
 use converge_kernel::formation::{
     FormationTemplateQuery, ProfileSnapshot, SuggestorCapability, SuggestorRole,
 };
-use converge_kernel::{AgentEffect, Context, ContextKey, ProposedFact, Suggestor};
+use converge_kernel::{AgentEffect, Context, ContextKey, ProposedFact, Suggestor, TextPayload};
 use converge_provider::{
     BackendKind, BackendRequirements, Capability, ComplianceLevel, CostClass, DataSovereignty,
     LatencyClass,
@@ -272,6 +272,10 @@ impl Suggestor for FixtureSuggestor {
         self.name
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.formation-compiler"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &self.dependencies
     }
@@ -284,7 +288,7 @@ impl Suggestor for FixtureSuggestor {
         AgentEffect::with_proposal(ProposedFact::new(
             self.output,
             format!("{}-fixture-output", self.name),
-            format!("{} fixture output", self.name),
+            TextPayload::new(format!("{} fixture output", self.name)),
             self.name,
         ))
     }

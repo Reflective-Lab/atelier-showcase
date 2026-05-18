@@ -57,7 +57,7 @@ impl Eval for MeetingScheduleFeasibilityEval {
         // Extract working hours from constraints
         let working_hours = constraints
             .iter()
-            .any(|c| c.content().contains("10-16") || c.content().contains("9-17"));
+            .any(|c| crate::payload_contains(c, "10-16") || crate::payload_contains(c, "9-17"));
 
         if !working_hours {
             return EvalResult::new(
@@ -74,8 +74,8 @@ impl Eval for MeetingScheduleFeasibilityEval {
         for strategy in strategies {
             // Simplified: check if content mentions valid time slots
             // In production, this would parse structured time data
-            let is_valid =
-                strategy.content().contains("10-16") || strategy.content().contains("9-17");
+            let is_valid = crate::payload_contains(strategy, "10-16")
+                || crate::payload_contains(strategy, "9-17");
 
             if is_valid {
                 valid_count += 1;
@@ -152,8 +152,8 @@ impl Eval for InvoiceAccuracyEval {
 
         let mut valid_count = 0;
         for invoice in &invoices {
-            let has_amount = invoice.content().contains("amount");
-            let has_customer = invoice.content().contains("customer");
+            let has_amount = crate::payload_contains(invoice, "amount");
+            let has_customer = crate::payload_contains(invoice, "customer");
             if has_amount && has_customer {
                 valid_count += 1;
             }
@@ -222,7 +222,7 @@ impl Eval for PaymentReconciliationEval {
 
         let matched = payments
             .iter()
-            .filter(|p| p.content().contains("invoice_id"))
+            .filter(|p| crate::payload_contains(p, "invoice_id"))
             .count();
         let ratio = matched as f64 / payments.len() as f64;
 
@@ -289,9 +289,9 @@ impl Eval for PromiseFulfillmentEval {
         let fulfilled = promises
             .iter()
             .filter(|p| {
-                p.content().contains("delivered")
-                    || p.content().contains("accepted")
-                    || p.content().contains("complete")
+                crate::payload_contains(p, "delivered")
+                    || crate::payload_contains(p, "accepted")
+                    || crate::payload_contains(p, "complete")
             })
             .count();
 
@@ -337,7 +337,7 @@ impl Eval for ScopeCreepDetectionEval {
         let proposals = ctx.get(ContextKey::Proposals);
         let scope_changes: Vec<_> = proposals
             .iter()
-            .filter(|p| p.id().starts_with("scope:") && p.content().contains("change"))
+            .filter(|p| p.id().starts_with("scope:") && crate::payload_contains(p, "change"))
             .collect();
 
         if scope_changes.is_empty() {
@@ -351,7 +351,7 @@ impl Eval for ScopeCreepDetectionEval {
 
         let approved = scope_changes
             .iter()
-            .filter(|s| s.content().contains("approved"))
+            .filter(|s| crate::payload_contains(s, "approved"))
             .count();
         let ratio = approved as f64 / scope_changes.len() as f64;
 
@@ -398,7 +398,7 @@ impl Eval for AccessComplianceEval {
         let proposals = ctx.get(ContextKey::Proposals);
         let terminated: Vec<_> = proposals
             .iter()
-            .filter(|p| p.id().starts_with("employee:") && p.content().contains("terminated"))
+            .filter(|p| p.id().starts_with("employee:") && crate::payload_contains(p, "terminated"))
             .collect();
 
         if terminated.is_empty() {
@@ -412,7 +412,7 @@ impl Eval for AccessComplianceEval {
 
         let revoked = terminated
             .iter()
-            .filter(|t| t.content().contains("revoked"))
+            .filter(|t| crate::payload_contains(t, "revoked"))
             .count();
         let ratio = revoked as f64 / terminated.len() as f64;
 
@@ -541,7 +541,9 @@ impl Eval for RbacEnforcementEval {
 
         let enforced = access_attempts
             .iter()
-            .filter(|a| a.content().contains("role") || a.content().contains("permission"))
+            .filter(|a| {
+                crate::payload_contains(a, "role") || crate::payload_contains(a, "permission")
+            })
             .count();
 
         let ratio = enforced as f64 / access_attempts.len() as f64;
@@ -610,7 +612,9 @@ impl Eval for MetricDefinitionQualityEval {
 
         let quality = metrics
             .iter()
-            .filter(|m| m.content().contains("formula") || m.content().contains("definition"))
+            .filter(|m| {
+                crate::payload_contains(m, "formula") || crate::payload_contains(m, "definition")
+            })
             .count();
 
         let ratio = quality as f64 / metrics.len() as f64;
@@ -676,7 +680,7 @@ impl Eval for DashboardSourceEval {
 
         let cited = dashboards
             .iter()
-            .filter(|d| d.content().contains("source"))
+            .filter(|d| crate::payload_contains(d, "source"))
             .count();
         let ratio = cited as f64 / dashboards.len() as f64;
 

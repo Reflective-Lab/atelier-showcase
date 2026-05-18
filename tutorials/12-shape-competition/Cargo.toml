@@ -7,5 +7,6 @@ publish = false
 [dependencies]
 organism-pack.workspace = true
 organism-intent.workspace = true
+converge-pack.workspace = true
 chrono.workspace = true
 uuid.workspace = true

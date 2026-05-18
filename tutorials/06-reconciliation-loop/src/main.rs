@@ -12,7 +12,7 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use converge_kernel::{
     AgentEffect, Budget, Context, ContextFact, ContextKey, ContextState, ConvergeResult, Engine,
-    Suggestor, TextPayload,
+    FactPayload, ProposedFact, Suggestor,
 };
 use converge_optimization::assignment::{AssignmentProblem, solve as solve_assignment};
 use serde::{Deserialize, Serialize};
@@ -34,6 +34,7 @@ const EVALUATION_DEPENDENCIES: [ContextKey; 1] = [ContextKey::Evaluations];
 const STRATEGY_DEPENDENCIES: [ContextKey; 1] = [ContextKey::Strategies];
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 struct LedgerTransaction {
     id: String,
     posted_day: i32,
@@ -42,7 +43,8 @@ struct LedgerTransaction {
     reference: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 struct ReconciliationSeed {
     left_label: String,
     right_label: String,
@@ -53,7 +55,13 @@ struct ReconciliationSeed {
     right: Vec<LedgerTransaction>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl FactPayload for ReconciliationSeed {
+    const FAMILY: &'static str = "tutorial.reconciliation.seed";
+    const VERSION: u16 = 1;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 struct CandidateScore {
     left_id: String,
     right_id: String,
@@ -63,7 +71,8 @@ struct CandidateScore {
     token_overlap: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 struct CandidateMatrix {
     left_ids: Vec<String>,
     right_ids: Vec<String>,
@@ -71,7 +80,13 @@ struct CandidateMatrix {
     scores: Vec<CandidateScore>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl FactPayload for CandidateMatrix {
+    const FAMILY: &'static str = "tutorial.reconciliation.candidate_matrix";
+    const VERSION: u16 = 1;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 struct MatchedPair {
     left_id: String,
     right_id: String,
@@ -81,7 +96,8 @@ struct MatchedPair {
     token_overlap: usize,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 struct ReconciliationResult {
     matched: Vec<MatchedPair>,
     unmatched_left: Vec<String>,
@@ -89,13 +105,24 @@ struct ReconciliationResult {
     total_cost: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl FactPayload for ReconciliationResult {
+    const FAMILY: &'static str = "tutorial.reconciliation.result";
+    const VERSION: u16 = 1;
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 struct ReconciliationSummary {
     matched_count: usize,
     unmatched_left: Vec<String>,
     unmatched_right: Vec<String>,
     suspicious_matches: Vec<String>,
     total_cost: i64,
+}
+
+impl FactPayload for ReconciliationSummary {
+    const FAMILY: &'static str = "tutorial.reconciliation.summary";
+    const VERSION: u16 = 1;
 }
 
 struct CandidateScorerSuggestor;
@@ -125,10 +152,10 @@ impl Suggestor for CandidateScorerSuggestor {
 
         let matrix = build_candidate_matrix(&seed);
         AgentEffect::with_proposal(
-            converge_kernel::ProposedFact::new(
+            ProposedFact::new(
                 ContextKey::Evaluations,
                 MATRIX_ID,
-                TextPayload::new(serde_json::to_string(&matrix).unwrap_or_default()),
+                matrix,
                 RECONCILIATION_PROVENANCE,
             )
             .with_confidence(0.9),
@@ -163,10 +190,10 @@ impl Suggestor for ExactAssignmentSuggestor {
 
         let result = reconcile_exact(&matrix);
         AgentEffect::with_proposal(
-            converge_kernel::ProposedFact::new(
+            ProposedFact::new(
                 ContextKey::Strategies,
                 RESULT_ID,
-                TextPayload::new(serde_json::to_string(&result).unwrap_or_default()),
+                result,
                 RECONCILIATION_PROVENANCE,
             )
             .with_confidence(0.94),
@@ -216,10 +243,10 @@ impl Suggestor for ResidueSummarySuggestor {
         };
 
         AgentEffect::with_proposal(
-            converge_kernel::ProposedFact::new(
+            ProposedFact::new(
                 ContextKey::Diagnostic,
                 SUMMARY_ID,
-                TextPayload::new(serde_json::to_string(&summary).unwrap_or_default()),
+                summary,
                 RECONCILIATION_PROVENANCE,
             )
             .with_confidence(0.96),
@@ -279,12 +306,12 @@ fn build_engine() -> Engine {
 fn seed_context(seed: &ReconciliationSeed) -> ContextState {
     let mut context = ContextState::new();
     context
-        .add_input_with_provenance(
+        .add_proposal(ProposedFact::new(
             ContextKey::Seeds,
             SEED_ID,
-            serde_json::to_string(seed).unwrap_or_default(),
+            seed.clone(),
             "example:reconciliation-loop",
-        )
+        ))
         .expect("should stage seed");
     context
 }
@@ -343,36 +370,28 @@ fn seed(ctx: &dyn Context) -> Option<ReconciliationSeed> {
     ctx.get(ContextKey::Seeds)
         .iter()
         .find(|fact| fact.id() == SEED_ID)
-        .and_then(|fact| serde_json::from_str(fact_text(fact)).ok())
+        .and_then(|fact| fact.payload::<ReconciliationSeed>().cloned())
 }
 
 fn candidate_matrix(ctx: &dyn Context) -> Option<CandidateMatrix> {
     ctx.get(ContextKey::Evaluations)
         .iter()
         .find(|fact| fact.id() == MATRIX_ID)
-        .and_then(|fact| serde_json::from_str(fact_text(fact)).ok())
+        .and_then(|fact| fact.payload::<CandidateMatrix>().cloned())
 }
 
 fn reconciliation_result(ctx: &dyn Context) -> Option<ReconciliationResult> {
     ctx.get(ContextKey::Strategies)
         .iter()
         .find(|fact| fact.id() == RESULT_ID)
-        .and_then(|fact| serde_json::from_str(fact_text(fact)).ok())
+        .and_then(|fact| fact.payload::<ReconciliationResult>().cloned())
 }
 
 fn reconciliation_summary(ctx: &dyn Context) -> Option<ReconciliationSummary> {
     ctx.get(ContextKey::Diagnostic)
         .iter()
         .find(|fact| fact.id() == SUMMARY_ID)
-        .and_then(|fact| serde_json::from_str(fact_text(fact)).ok())
-}
-
-/// Pull a fact's text payload as a `&str`. Returns `""` when the fact's
-/// payload is not a `TextPayload` (these accessor functions only look at
-/// fact ids that this tutorial wrote, so non-text payloads aren't
-/// expected — the empty fallback keeps the call sites infallible).
-fn fact_text(fact: &ContextFact) -> &str {
-    fact.payload::<TextPayload>().map_or("", TextPayload::as_str)
+        .and_then(|fact| fact.payload::<ReconciliationSummary>().cloned())
 }
 
 fn fact_exists(ctx: &dyn Context, key: ContextKey, id: &str) -> bool {
@@ -549,15 +568,33 @@ fn print_section(title: &str, facts: &[ContextFact]) {
     }
 
     for fact in facts {
-        let content = fact_text(fact);
-        let preview = if content.len() > 120 {
-            format!("{}...", &content[..120])
-        } else {
-            content.to_string()
-        };
+        let content = fact_preview(fact);
+        let preview = content
+            .char_indices()
+            .nth(120)
+            .map_or(content.clone(), |(idx, _)| {
+                format!("{}...", &content[..idx])
+            });
         println!("  {} ({preview})", fact.id());
     }
     println!();
+}
+
+fn fact_preview(fact: &ContextFact) -> String {
+    if let Some(payload) = fact.payload::<CandidateMatrix>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<ReconciliationResult>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<ReconciliationSummary>() {
+        return format!("{payload:?}");
+    }
+    format!(
+        "<typed payload {} v{}>",
+        fact.payload_family(),
+        fact.payload_version()
+    )
 }
 
 #[cfg(test)]

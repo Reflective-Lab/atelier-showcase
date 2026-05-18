@@ -15,7 +15,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use converge_kernel::{
     AgentEffect, Budget, Context, ContextFact, ContextKey, ContextState, ConvergeError,
-    ConvergeResult, Engine, Suggestor,
+    ConvergeResult, Engine, FactPayload, Suggestor, TextPayload,
 };
 use converge_optimization::graph::{Graph, NodeId, dijkstra::shortest_path};
 use serde::{Deserialize, Serialize};
@@ -42,13 +42,20 @@ struct ArtifactProfile {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 struct SurveyRequest {
     root: String,
     target: String,
     reason: String,
 }
 
+impl FactPayload for SurveyRequest {
+    const FAMILY: &'static str = "tutorial.fixed_point.survey_request";
+    const VERSION: u16 = 1;
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 struct ArtifactSignal {
     root: String,
     target: String,
@@ -57,7 +64,13 @@ struct ArtifactSignal {
     depends_on: Vec<String>,
 }
 
+impl FactPayload for ArtifactSignal {
+    const FAMILY: &'static str = "tutorial.fixed_point.artifact_signal";
+    const VERSION: u16 = 1;
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 struct FrontierChoice {
     root: String,
     target: String,
@@ -66,13 +79,24 @@ struct FrontierChoice {
     reason: String,
 }
 
+impl FactPayload for FrontierChoice {
+    const FAMILY: &'static str = "tutorial.fixed_point.frontier_choice";
+    const VERSION: u16 = 1;
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 struct FixedPointSummary {
     root: String,
     surveyed: Vec<String>,
     request_order: Vec<String>,
     longest_route: Vec<String>,
     longest_distance: i64,
+}
+
+impl FactPayload for FixedPointSummary {
+    const FAMILY: &'static str = "tutorial.fixed_point.summary";
+    const VERSION: u16 = 1;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -88,6 +112,10 @@ struct ArtifactSurveySuggestor;
 impl Suggestor for ArtifactSurveySuggestor {
     fn name(&self) -> &str {
         "artifact-survey"
+    }
+
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.fixed-point-vs-budget"
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -128,8 +156,8 @@ impl Suggestor for ArtifactSurveySuggestor {
                 converge_kernel::ProposedFact::new(
                     ContextKey::Signals,
                     signal_id(&request.root, &request.target),
-                    serde_json::to_string(&signal).unwrap_or_default(),
-                    self.name(),
+                    signal,
+                    self.name().to_owned(),
                 )
                 .with_confidence(0.93),
             );
@@ -145,6 +173,10 @@ struct FrontierPlannerSuggestor;
 impl Suggestor for FrontierPlannerSuggestor {
     fn name(&self) -> &str {
         "frontier-planner"
+    }
+
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.fixed-point-vs-budget"
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -189,8 +221,8 @@ impl Suggestor for FrontierPlannerSuggestor {
                 converge_kernel::ProposedFact::new(
                     ContextKey::Hypotheses,
                     choice_id(&root, &candidate.target),
-                    serde_json::to_string(&choice).unwrap_or_default(),
-                    self.name(),
+                    choice,
+                    self.name().to_owned(),
                 )
                 .with_confidence(0.82),
             );
@@ -198,8 +230,8 @@ impl Suggestor for FrontierPlannerSuggestor {
                 converge_kernel::ProposedFact::new(
                     ContextKey::Strategies,
                     request_id(&root, &candidate.target),
-                    serde_json::to_string(&request).unwrap_or_default(),
-                    self.name(),
+                    request,
+                    self.name().to_owned(),
                 )
                 .with_confidence(0.88),
             );
@@ -215,6 +247,10 @@ struct SummarySuggestor;
 impl Suggestor for SummarySuggestor {
     fn name(&self) -> &str {
         "fixed-point-summary"
+    }
+
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.fixed-point-vs-budget"
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -243,8 +279,8 @@ impl Suggestor for SummarySuggestor {
                 converge_kernel::ProposedFact::new(
                     ContextKey::Diagnostic,
                     summary_id(&root),
-                    serde_json::to_string(&summary).unwrap_or_default(),
-                    self.name(),
+                    summary,
+                    self.name().to_owned(),
                 )
                 .with_confidence(0.96),
             );
@@ -390,10 +426,10 @@ fn pending_surveys(ctx: &dyn Context) -> Vec<SurveyRequest> {
             continue;
         }
 
-        if let Ok(request) = serde_json::from_str::<SurveyRequest>(fact.content())
+        if let Some(request) = fact.payload::<SurveyRequest>()
             && seen.insert((request.root.clone(), request.target.clone()))
         {
-            pending.push(request);
+            pending.push(request.clone());
         }
     }
 
@@ -414,7 +450,7 @@ fn signals_for_root(ctx: &dyn Context, root: &str) -> Vec<ArtifactSignal> {
     ctx.get(ContextKey::Signals)
         .iter()
         .filter(|fact| fact.id().starts_with(&format!("{SIGNAL_PREFIX}{root}:")))
-        .filter_map(|fact| serde_json::from_str::<ArtifactSignal>(fact.content()).ok())
+        .filter_map(|fact| fact.payload::<ArtifactSignal>().cloned())
         .collect()
 }
 
@@ -574,7 +610,7 @@ fn request_order(ctx: &dyn Context, root: &str) -> Vec<String> {
     ctx.get(ContextKey::Strategies)
         .iter()
         .filter(|fact| fact.id().starts_with(&format!("{REQUEST_PREFIX}{root}:")))
-        .filter_map(|fact| serde_json::from_str::<SurveyRequest>(fact.content()).ok())
+        .filter_map(|fact| fact.payload::<SurveyRequest>().cloned())
         .map(|request| request.target)
         .collect()
 }
@@ -583,7 +619,7 @@ fn parse_summary(ctx: &dyn Context, root: &str) -> Option<FixedPointSummary> {
     ctx.get(ContextKey::Diagnostic)
         .iter()
         .find(|fact| fact.id().as_str() == summary_id(root))
-        .and_then(|fact| serde_json::from_str(fact.content()).ok())
+        .and_then(|fact| fact.payload::<FixedPointSummary>().cloned())
 }
 
 fn print_section(title: &str, facts: &[ContextFact]) {
@@ -594,14 +630,33 @@ fn print_section(title: &str, facts: &[ContextFact]) {
     }
 
     for fact in facts {
-        let preview = if fact.content().len() > 120 {
-            format!("{}...", &fact.content()[..120])
-        } else {
-            fact.content().to_string()
-        };
+        let preview = fact_preview(fact);
         println!("  {} ({preview})", fact.id());
     }
     println!();
+}
+
+fn fact_preview(fact: &ContextFact) -> String {
+    if let Some(text) = fact.payload::<TextPayload>() {
+        return text.as_str().to_owned();
+    }
+    if let Some(payload) = fact.payload::<SurveyRequest>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<ArtifactSignal>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<FrontierChoice>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<FixedPointSummary>() {
+        return format!("{payload:?}");
+    }
+    format!(
+        "<typed payload {} v{}>",
+        fact.payload_family(),
+        fact.payload_version()
+    )
 }
 
 fn root_id(root: &str) -> String {

@@ -24,10 +24,10 @@ impl Invariant for AuthorityRequired {
             ContextKey::Hypotheses,
         ] {
             for fact in ctx.get(key) {
-                if fact.content().contains("access:granted") {
+                if crate::payload_contains(fact, "access:granted") {
                     let has_authority = ctx.get(ContextKey::Signals).iter().any(|f| {
-                        f.content().contains("authority:approved")
-                            && f.content().contains(fact.id().as_str())
+                        crate::payload_contains(f, "authority:approved")
+                            && crate::payload_contains(f, fact.id().as_str())
                     });
 
                     if !has_authority {
@@ -66,7 +66,9 @@ impl Invariant for AuditTrailRequired {
 
         for key in [ContextKey::Strategies, ContextKey::Evaluations] {
             for fact in ctx.get(key) {
-                if !fact.content().contains("provenance:") && !fact.content().contains("by:") {
+                if !crate::payload_contains(fact, "provenance:")
+                    && !crate::payload_contains(fact, "by:")
+                {
                     return InvariantResult::Violated(Violation::with_facts(
                         format!(
                             "ContextFact {} is missing required provenance metadata",

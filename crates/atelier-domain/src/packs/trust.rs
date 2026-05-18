@@ -71,6 +71,10 @@ impl Suggestor for SessionValidatorAgent {
         "session_validator"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Seeds]
     }
@@ -78,7 +82,7 @@ impl Suggestor for SessionValidatorAgent {
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
         ctx.get(ContextKey::Seeds)
             .iter()
-            .any(|s| s.content().contains("session.token"))
+            .any(|s| crate::payload_contains(s, "session.token"))
     }
 
     async fn execute(&self, ctx: &dyn converge_core::Context) -> AgentEffect {
@@ -86,8 +90,8 @@ impl Suggestor for SessionValidatorAgent {
         let mut facts = Vec::new();
 
         for trigger in triggers {
-            if trigger.content().contains("session.token") {
-                facts.push(crate::proposal(
+            if crate::payload_contains(trigger, "session.token") {
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Signals,
                     format!("{}{}", SESSION_PREFIX, trigger.id()),
@@ -99,8 +103,7 @@ impl Suggestor for SessionValidatorAgent {
                         "claims": [],
                         "expires_at": "2026-01-12T23:59:59Z",
                         "validated_at": "2026-01-12T12:00:00Z"
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -121,13 +124,18 @@ impl Suggestor for RbacEnforcerAgent {
         "rbac_enforcer"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Signals]
     }
 
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
         let has_valid_session = ctx.get(ContextKey::Signals).iter().any(|s| {
-            s.id().as_str().starts_with(SESSION_PREFIX) && s.content().contains("\"valid\":true")
+            s.id().as_str().starts_with(SESSION_PREFIX)
+                && crate::payload_contains(s, "\"valid\":true")
         });
         let has_decisions = ctx
             .get(ContextKey::Proposals)
@@ -142,9 +150,9 @@ impl Suggestor for RbacEnforcerAgent {
 
         for session in signals {
             if session.id().starts_with(SESSION_PREFIX)
-                && session.content().contains("\"valid\":true")
+                && crate::payload_contains(session, "\"valid\":true")
             {
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", ACCESS_DECISION_PREFIX, session.id()),
@@ -155,8 +163,7 @@ impl Suggestor for RbacEnforcerAgent {
                         "matched_roles": [],
                         "matched_permissions": [],
                         "evaluated_at": "2026-01-12T12:00:00Z"
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -177,6 +184,10 @@ impl Suggestor for AuditWriterAgent {
         "audit_writer"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Proposals]
     }
@@ -193,7 +204,7 @@ impl Suggestor for AuditWriterAgent {
 
         for decision in proposals {
             if decision.id().starts_with(ACCESS_DECISION_PREFIX) {
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", AUDIT_PREFIX, decision.id()),
@@ -206,8 +217,7 @@ impl Suggestor for AuditWriterAgent {
                         "outcome": "from_decision",
                         "timestamp": "2026-01-12T12:00:00Z",
                         "immutable": true
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -224,6 +234,10 @@ pub struct ProvenanceTrackerAgent;
 impl Suggestor for ProvenanceTrackerAgent {
     fn name(&self) -> &'static str {
         "provenance_tracker"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -248,7 +262,7 @@ impl Suggestor for ProvenanceTrackerAgent {
 
         for entry in proposals {
             if entry.id().starts_with(AUDIT_PREFIX) {
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", PROVENANCE_PREFIX, entry.id()),
@@ -259,8 +273,7 @@ impl Suggestor for ProvenanceTrackerAgent {
                         "root_source": "system",
                         "transformations": [],
                         "verified": true
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -279,6 +292,10 @@ pub struct ComplianceScannerAgent;
 impl Suggestor for ComplianceScannerAgent {
     fn name(&self) -> &'static str {
         "compliance_scanner"
+    }
+
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -306,7 +323,7 @@ impl Suggestor for ComplianceScannerAgent {
 
         let violations_found = false; // Simplified
 
-        AgentEffect::with_proposal(crate::proposal(
+        AgentEffect::with_proposal(crate::json_record(
             self.name(),
             ContextKey::Evaluations,
             format!("{}scan:latest", COMPLIANCE_PREFIX),
@@ -317,8 +334,7 @@ impl Suggestor for ComplianceScannerAgent {
                 "violations_found": violations_found,
                 "frameworks_checked": ["SOC2", "GDPR", "HIPAA"],
                 "scanned_at": "2026-01-12T12:00:00Z"
-            })
-            .to_string(),
+            }),
         ))
     }
 }
@@ -333,13 +349,17 @@ impl Suggestor for ViolationRemediatorAgent {
         "violation_remediator"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Signals]
     }
 
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
         ctx.get(ContextKey::Signals).iter().any(|v| {
-            v.id().starts_with(VIOLATION_PREFIX) && v.content().contains("\"state\":\"open\"")
+            v.id().starts_with(VIOLATION_PREFIX) && crate::payload_contains(v, "\"state\":\"open\"")
         })
     }
 
@@ -349,9 +369,9 @@ impl Suggestor for ViolationRemediatorAgent {
 
         for violation in signals {
             if violation.id().starts_with(VIOLATION_PREFIX)
-                && violation.content().contains("\"state\":\"open\"")
+                && crate::payload_contains(violation, "\"state\":\"open\"")
             {
-                facts.push(crate::proposal(
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", REMEDIATION_PREFIX, violation.id()),
@@ -362,8 +382,7 @@ impl Suggestor for ViolationRemediatorAgent {
                         "auto_remediate": false,
                         "requires_approval": true,
                         "proposed_at": "2026-01-12T12:00:00Z"
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -403,6 +422,10 @@ impl Suggestor for ContractExecutionAgent {
         "contract_execution"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Proposals]
     }
@@ -410,9 +433,7 @@ impl Suggestor for ContractExecutionAgent {
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
         ctx.get(ContextKey::Proposals).iter().any(|contract| {
             contract.id().starts_with(LEGAL_CONTRACT_PREFIX)
-                && contract
-                    .content()
-                    .contains("\"state\":\"ready_to_execute\"")
+                && crate::payload_contains(contract, "\"state\":\"ready_to_execute\"")
                 && !contract_execution_final_output_exists(ctx, contract.id())
         })
     }
@@ -423,16 +444,13 @@ impl Suggestor for ContractExecutionAgent {
 
         for contract in proposals {
             if !contract.id().starts_with(LEGAL_CONTRACT_PREFIX)
-                || !contract
-                    .content()
-                    .contains("\"state\":\"ready_to_execute\"")
+                || !crate::payload_contains(contract, "\"state\":\"ready_to_execute\"")
                 || contract_execution_final_output_exists(ctx, contract.id())
             {
                 continue;
             }
 
-            let Ok(contract_json) = serde_json::from_str::<serde_json::Value>(contract.content())
-            else {
+            let Some(contract_json) = crate::json_value(contract) else {
                 continue;
             };
 
@@ -479,7 +497,7 @@ impl Suggestor for ContractExecutionAgent {
 
             match decision.outcome {
                 FlowGateOutcome::Promote => {
-                    facts.push(crate::proposal(
+                    facts.push(crate::json_record(
                         self.name(),
                         ContextKey::Proposals,
                         format!("contract:executed:{}", contract.id()),
@@ -490,10 +508,9 @@ impl Suggestor for ContractExecutionAgent {
                             "immutable": true,
                             "human_approval_present": human_approval_present,
                             "policy_reason": decision.reason
-                        })
-                        .to_string(),
+                        }),
                     ));
-                    facts.push(crate::proposal(
+                    facts.push(crate::json_record(
                         self.name(),
                         ContextKey::Proposals,
                         format!("{AUDIT_PREFIX}{}", contract.id()),
@@ -502,13 +519,12 @@ impl Suggestor for ContractExecutionAgent {
                             "action": "contract_executed",
                             "contract_id": format!("contract:executed:{}", contract.id()),
                             "immutable": true
-                        })
-                        .to_string(),
+                        }),
                     ));
                 }
                 FlowGateOutcome::Escalate => {
                     if !contract_execution_request_exists(ctx, contract.id()) {
-                        facts.push(crate::proposal(
+                        facts.push(crate::json_record(
                             self.name(),
                             ContextKey::Proposals,
                             format!("contract:execution_request:{}", contract.id()),
@@ -520,12 +536,11 @@ impl Suggestor for ContractExecutionAgent {
                                 "pending_approval": true,
                                 "policy_outcome": decision.outcome,
                                 "policy_reason": decision.reason
-                            })
-                            .to_string(),
+                            }),
                         ));
                     }
                 }
-                FlowGateOutcome::Reject => facts.push(crate::proposal(
+                FlowGateOutcome::Reject => facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("contract:execution_rejected:{}", contract.id()),
@@ -534,8 +549,7 @@ impl Suggestor for ContractExecutionAgent {
                         "contract_id": contract.id(),
                         "policy_outcome": decision.outcome,
                         "policy_reason": decision.reason
-                    })
-                    .to_string(),
+                    }),
                 )),
             }
         }
@@ -554,6 +568,10 @@ impl Suggestor for PiiRedactorAgent {
         "pii_redactor"
     }
 
+    fn provenance(&self) -> &'static str {
+        crate::ATELIER_DOMAIN_PROVENANCE
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Seeds]
     }
@@ -561,7 +579,7 @@ impl Suggestor for PiiRedactorAgent {
     fn accepts(&self, ctx: &dyn converge_core::Context) -> bool {
         ctx.get(ContextKey::Seeds)
             .iter()
-            .any(|s| s.content().contains("redaction.required"))
+            .any(|s| crate::payload_contains(s, "redaction.required"))
     }
 
     async fn execute(&self, ctx: &dyn converge_core::Context) -> AgentEffect {
@@ -569,8 +587,8 @@ impl Suggestor for PiiRedactorAgent {
         let mut facts = Vec::new();
 
         for trigger in triggers {
-            if trigger.content().contains("redaction.required") {
-                facts.push(crate::proposal(
+            if crate::payload_contains(trigger, "redaction.required") {
+                facts.push(crate::json_record(
                     self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", REDACTED_PREFIX, trigger.id()),
@@ -580,8 +598,7 @@ impl Suggestor for PiiRedactorAgent {
                         "redacted_fields": ["email", "phone", "ssn", "address"],
                         "redaction_method": "mask",
                         "redacted_at": "2026-01-12T12:00:00Z"
-                    })
-                    .to_string(),
+                    }),
                 ));
             }
         }
@@ -612,7 +629,8 @@ impl Invariant for AllActionsAuditedInvariant {
         for decision in proposals {
             if decision.id().starts_with(ACCESS_DECISION_PREFIX) {
                 let has_audit = proposals.iter().any(|a| {
-                    a.id().starts_with(AUDIT_PREFIX) && a.content().contains(decision.id().as_str())
+                    a.id().starts_with(AUDIT_PREFIX)
+                        && crate::payload_contains(a, decision.id().as_str())
                 });
                 if !has_audit {
                     return InvariantResult::Violated(Violation::with_facts(
@@ -642,7 +660,7 @@ impl Invariant for AuditImmutabilityInvariant {
     fn check(&self, ctx: &dyn converge_core::Context) -> InvariantResult {
         for entry in ctx.get(ContextKey::Proposals) {
             if entry.id().starts_with(AUDIT_PREFIX)
-                && !entry.content().contains("\"immutable\":true")
+                && !crate::payload_contains(entry, "\"immutable\":true")
             {
                 return InvariantResult::Violated(Violation::with_facts(
                     format!("Audit entry {} is not marked immutable", entry.id()),
@@ -671,11 +689,11 @@ impl Invariant for ViolationsHaveRemediationInvariant {
         let proposals = ctx.get(ContextKey::Proposals);
         for violation in ctx.get(ContextKey::Signals) {
             if violation.id().starts_with(VIOLATION_PREFIX)
-                && violation.content().contains("\"state\":\"open\"")
+                && crate::payload_contains(violation, "\"state\":\"open\"")
             {
                 let has_remediation = proposals.iter().any(|r| {
                     r.id().starts_with(REMEDIATION_PREFIX)
-                        && r.content().contains(violation.id().as_str())
+                        && crate::payload_contains(r, violation.id().as_str())
                 });
                 if !has_remediation {
                     return InvariantResult::Violated(Violation::with_facts(
@@ -721,13 +739,13 @@ impl Invariant for LegalActionsAuditedInvariant {
         // Check executed contracts have audit entries
         for contract in proposals {
             if contract.id().starts_with(LEGAL_CONTRACT_PREFIX)
-                && contract.content().contains("\"state\":\"executed\"")
+                && crate::payload_contains(contract, "\"state\":\"executed\"")
             {
                 let has_audit = proposals.iter().any(|a| {
                     a.id().starts_with(AUDIT_PREFIX)
-                        && (a.content().contains(contract.id().as_str())
-                            || a.content().contains("contract_executed")
-                            || a.content().contains("legal_action"))
+                        && (crate::payload_contains(a, contract.id().as_str())
+                            || crate::payload_contains(a, "contract_executed")
+                            || crate::payload_contains(a, "legal_action"))
                 });
 
                 if !has_audit {
@@ -745,13 +763,13 @@ impl Invariant for LegalActionsAuditedInvariant {
         // Check equity grants have audit entries
         for grant in proposals {
             if grant.id().starts_with(LEGAL_EQUITY_PREFIX)
-                && grant.content().contains("\"state\":\"granted\"")
+                && crate::payload_contains(grant, "\"state\":\"granted\"")
             {
                 let has_audit = proposals.iter().any(|a| {
                     a.id().starts_with(AUDIT_PREFIX)
-                        && (a.content().contains(grant.id().as_str())
-                            || a.content().contains("equity_granted")
-                            || a.content().contains("legal_action"))
+                        && (crate::payload_contains(a, grant.id().as_str())
+                            || crate::payload_contains(a, "equity_granted")
+                            || crate::payload_contains(a, "legal_action"))
                 });
 
                 if !has_audit {
@@ -766,13 +784,13 @@ impl Invariant for LegalActionsAuditedInvariant {
         // Check IP assignments have audit entries
         for ip in proposals {
             if ip.id().starts_with(LEGAL_IP_ASSIGNMENT_PREFIX)
-                && ip.content().contains("\"state\":\"signed\"")
+                && crate::payload_contains(ip, "\"state\":\"signed\"")
             {
                 let has_audit = proposals.iter().any(|a| {
                     a.id().starts_with(AUDIT_PREFIX)
-                        && (a.content().contains(ip.id().as_str())
-                            || a.content().contains("ip_assigned")
-                            || a.content().contains("legal_action"))
+                        && (crate::payload_contains(a, ip.id().as_str())
+                            || crate::payload_contains(a, "ip_assigned")
+                            || crate::payload_contains(a, "legal_action"))
                 });
 
                 if !has_audit {
@@ -949,9 +967,7 @@ mod tests {
                 .iter()
                 .any(|fact| {
                     fact.id() == "contract:execution_request:contract:msa:deal-123"
-                        && fact
-                            .content()
-                            .contains("\"required_role\":\"legal_counsel\"")
+                        && crate::payload_contains(fact, "\"required_role\":\"legal_counsel\"")
                 })
         );
     }
@@ -982,7 +998,7 @@ mod tests {
                 .iter()
                 .any(|fact| {
                     fact.id() == "contract:executed:contract:msa:deal-123"
-                        && fact.content().contains("\"state\":\"executed\"")
+                        && crate::payload_contains(fact, "\"state\":\"executed\"")
                 })
         );
         assert!(
@@ -992,9 +1008,7 @@ mod tests {
                 .iter()
                 .any(|fact| {
                     fact.id() == "audit:contract:msa:deal-123"
-                        && fact
-                            .content()
-                            .contains("contract:executed:contract:msa:deal-123")
+                        && crate::payload_contains(fact, "contract:executed:contract:msa:deal-123")
                 })
         );
     }

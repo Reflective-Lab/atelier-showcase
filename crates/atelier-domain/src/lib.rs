@@ -22,7 +22,7 @@
 //! - [`drafting`]: Content drafting (kernel utility)
 //! - [`form_filler`]: Form filling agents (kernel utility)
 
-use converge_core::{ContextKey, ProposalId, ProposedFact};
+use converge_core::{ContextKey, FactPayload, ProposalId, ProposedFact};
 
 pub mod ask_converge;
 pub mod domain_invariants;
@@ -34,6 +34,7 @@ mod flow_governance;
 pub mod form_filler;
 pub mod meeting_scheduler;
 pub mod packs;
+pub mod protocol;
 pub mod resource_routing;
 
 pub mod llm_utils;
@@ -78,6 +79,10 @@ pub use resource_routing::{
 };
 
 pub use domain_invariants::{AuditTrailRequired, AuthorityRequired};
+pub use protocol::{
+    ATELIER_DOMAIN_PROVENANCE, DomainRecordPayload, DomainTextPayload, admitted_text, domain_text,
+    json_value, payload_any, payload_contains, record_data, record_payload,
+};
 
 // Pack-specific evals
 pub use evals::{
@@ -99,10 +104,55 @@ pub use evals::{
 };
 
 pub(crate) fn proposal(
+    _provenance: impl Into<String>,
+    key: ContextKey,
+    id: impl Into<String>,
+    payload: impl FactPayload + PartialEq,
+) -> ProposedFact {
+    ProposedFact::new(
+        key,
+        ProposalId::new(id.into()),
+        payload,
+        ATELIER_DOMAIN_PROVENANCE,
+    )
+}
+
+pub(crate) fn record(
     provenance: impl Into<String>,
     key: ContextKey,
     id: impl Into<String>,
-    content: impl Into<String>,
+    record_type: impl Into<String>,
+    data: serde_json::Value,
 ) -> ProposedFact {
-    ProposedFact::new(key, ProposalId::new(id.into()), content, provenance)
+    proposal(
+        provenance,
+        key,
+        id,
+        DomainRecordPayload::new(record_type, data),
+    )
+}
+
+pub(crate) fn json_record(
+    provenance: impl Into<String>,
+    key: ContextKey,
+    id: impl Into<String>,
+    data: serde_json::Value,
+) -> ProposedFact {
+    let id = id.into();
+    proposal(
+        provenance,
+        key,
+        id.clone(),
+        DomainRecordPayload::new(id, data),
+    )
+}
+
+pub(crate) fn text(
+    provenance: impl Into<String>,
+    key: ContextKey,
+    id: impl Into<String>,
+    text_type: impl Into<String>,
+    text: impl Into<String>,
+) -> ProposedFact {
+    proposal(provenance, key, id, DomainTextPayload::new(text_type, text))
 }

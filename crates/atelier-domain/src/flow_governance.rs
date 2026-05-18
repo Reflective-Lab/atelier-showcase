@@ -23,8 +23,8 @@ pub(crate) fn has_approval(
     ctx.get(ContextKey::Proposals).iter().any(|fact| {
         fact.id().as_str() == expected_id
             || (fact.id().as_str().starts_with("approval:")
-                && fact.content().contains(target_id)
-                && fact.content().contains(required_role))
+                && crate::payload_contains(fact, target_id)
+                && crate::payload_contains(fact, required_role))
     })
 }
 
