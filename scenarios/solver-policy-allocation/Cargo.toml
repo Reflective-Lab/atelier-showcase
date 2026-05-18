@@ -12,7 +12,7 @@ publish = false
 converge-kernel.workspace = true
 converge-pack.workspace = true
 arbiter.workspace = true
-prism = { package = "converge-prism-analytics", version = "1.0.0" }
+prism = { package = "converge-prism-analytics", version = "2.0.0" }
 atelier-domain.workspace = true
 async-trait.workspace = true
 tokio.workspace = true

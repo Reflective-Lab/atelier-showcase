@@ -9,20 +9,25 @@
 //! This is a Converge kernel fixture, not the canonical expense workflow.
 //! Reusable spend-approval semantics live downstream in Organism domain packs.
 
-use arbiter::PolicyEngine;
+use arbiter::{EXPENSE_APPROVAL_POLICY, PolicyEngine};
+use atelier_domain::{DomainRecordPayload, json_value};
 use converge_kernel::{
-    AgentEffect, AuthorityLevel, Context, ContextKey, ContextState, Engine, EngineHitlPolicy,
-    FlowAction, FlowGateAuthorizer, FlowGateContext, FlowGateInput, FlowGateOutcome,
-    FlowGatePrincipal, FlowGateResource, FlowPhase, GateDecision, ProposedFact, RunResult,
-    Suggestor, TimeoutAction, TimeoutPolicy,
+    AgentEffect, AuthorityLevel, Context, ContextFact, ContextKey, ContextState, Engine,
+    EngineHitlPolicy, FlowAction, FlowGateAuthorizer, FlowGateContext, FlowGateInput,
+    FlowGateOutcome, FlowGatePrincipal, FlowGateResource, FlowPhase, GateDecision, ProposedFact,
+    RunResult, Suggestor, TimeoutAction, TimeoutPolicy,
 };
-use std::path::PathBuf;
+use converge_pack::TextPayload;
 use std::sync::Arc;
 
 struct ExpenseParsingAgent;
 
-fn parse_expense(value: &str) -> serde_json::Value {
-    serde_json::from_str(value).unwrap_or_default()
+fn record(record_type: &str, data: serde_json::Value) -> DomainRecordPayload {
+    DomainRecordPayload::new(record_type, data)
+}
+
+fn fact_json(fact: &ContextFact) -> serde_json::Value {
+    json_value(fact).unwrap_or_default()
 }
 
 fn receipt_attached(expense: &serde_json::Value) -> bool {
@@ -32,11 +37,27 @@ fn receipt_attached(expense: &serde_json::Value) -> bool {
         .unwrap_or(true)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct WholeDollars(i64);
+
+impl WholeDollars {
+    fn from_field(json: &serde_json::Value, field: &str) -> Option<Self> {
+        json.get(field)
+            .and_then(|value| {
+                value
+                    .as_i64()
+                    .or_else(|| value.as_u64().and_then(|n| i64::try_from(n).ok()))
+            })
+            .map(Self)
+    }
+
+    fn as_i64(self) -> i64 {
+        self.0
+    }
+}
+
 fn expense_amount(expense: &serde_json::Value) -> i64 {
-    expense
-        .get("amount")
-        .and_then(|value| value.as_f64())
-        .unwrap_or(0.0) as i64
+    WholeDollars::from_field(expense, "amount").map_or(0, WholeDollars::as_i64)
 }
 
 fn has_human_approval(ctx: &dyn Context) -> bool {
@@ -82,17 +103,20 @@ fn expense_policy_input(
 }
 
 fn load_expense_policy_engine() -> Arc<dyn FlowGateAuthorizer> {
-    let policy_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../crates/policy/policies/expense_approval.cedar");
-    let policy = std::fs::read_to_string(policy_path)
-        .expect("expense approval Cedar policy should exist in arbiter");
-    Arc::new(PolicyEngine::from_policy_str(&policy).expect("expense approval policy should parse"))
+    Arc::new(
+        PolicyEngine::from_policy_str(EXPENSE_APPROVAL_POLICY)
+            .expect("expense approval policy should parse"),
+    )
 }
 
 #[async_trait::async_trait]
 impl Suggestor for ExpenseParsingAgent {
     fn name(&self) -> &str {
         "ExpenseParsingAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.expense-approval"
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -108,17 +132,22 @@ impl Suggestor for ExpenseParsingAgent {
         let seed = seeds.first();
 
         let parsed = if let Some(s) = seed {
-            let json: serde_json::Value = serde_json::from_str(s.content()).unwrap_or_default();
+            let json = fact_json(s);
             ProposedFact::new(
                 ContextKey::Strategies,
                 "parsed-expense",
-                serde_json::to_string(&json).unwrap_or_default(),
-                self.name(),
+                record("expense", json),
+                self.name().to_owned(),
             )
             .with_confidence(1.0)
         } else {
-            ProposedFact::new(ContextKey::Strategies, "parsed-expense", "{}", self.name())
-                .with_confidence(1.0)
+            ProposedFact::new(
+                ContextKey::Strategies,
+                "parsed-expense",
+                record("expense", serde_json::json!({})),
+                self.name().to_owned(),
+            )
+            .with_confidence(1.0)
         };
 
         AgentEffect::with_proposals(vec![parsed])
@@ -133,6 +162,10 @@ struct PolicyValidationAgent {
 impl Suggestor for PolicyValidationAgent {
     fn name(&self) -> &str {
         "PolicyValidationAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.expense-approval"
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -152,7 +185,7 @@ impl Suggestor for PolicyValidationAgent {
         let strategy = strategies.first();
 
         let result = strategy
-            .map(|fact| parse_expense(fact.content()))
+            .map(fact_json)
             .map(|expense| {
                 let decision = self
                     .policy
@@ -179,8 +212,8 @@ impl Suggestor for PolicyValidationAgent {
             ProposedFact::new(
                 ContextKey::Evaluations,
                 "expense-validate-policy",
-                result.to_string(),
-                self.name(),
+                record("expense_policy_validation", result),
+                self.name().to_owned(),
             )
             .with_confidence(1.0),
         )
@@ -197,6 +230,10 @@ const ROUTING_DEPS: [ContextKey; 2] = [ContextKey::Strategies, ContextKey::Evalu
 impl Suggestor for ApprovalRoutingAgent {
     fn name(&self) -> &str {
         "ApprovalRoutingAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.expense-approval"
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -220,8 +257,8 @@ impl Suggestor for ApprovalRoutingAgent {
         let strategies = ctx.get(ContextKey::Strategies);
 
         if let (Some(e), Some(s)) = (evaluations.first(), strategies.first()) {
-            let eval: serde_json::Value = serde_json::from_str(e.content()).unwrap_or_default();
-            let expense = parse_expense(s.content());
+            let eval = fact_json(e);
+            let expense = fact_json(s);
             let validate_outcome = eval
                 .get("outcome")
                 .and_then(|value| value.as_str())
@@ -254,8 +291,8 @@ impl Suggestor for ApprovalRoutingAgent {
                 ProposedFact::new(
                     ContextKey::Constraints,
                     "expense-approval-routing",
-                    routing.to_string(),
-                    self.name(),
+                    record("expense_approval_routing", routing),
+                    self.name().to_owned(),
                 )
                 .with_confidence(1.0),
             );
@@ -281,6 +318,10 @@ impl Suggestor for CommitDecisionAgent {
         "CommitDecisionAgent"
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.expense-approval"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &COMMIT_DEPS
     }
@@ -302,7 +343,7 @@ impl Suggestor for CommitDecisionAgent {
             return AgentEffect::default();
         };
 
-        let expense = parse_expense(strategy.content());
+        let expense = fact_json(strategy);
         let human_approval_present = has_human_approval(ctx);
         let constraint = ctx
             .get(ContextKey::Constraints)
@@ -311,7 +352,7 @@ impl Suggestor for CommitDecisionAgent {
 
         if !human_approval_present {
             let pending = constraint
-                .and_then(|fact| serde_json::from_str::<serde_json::Value>(fact.content()).ok())
+                .map(fact_json)
                 .and_then(|json| json.get("pending").and_then(|value| value.as_u64()))
                 .unwrap_or(0);
             if pending > 0 {
@@ -339,8 +380,8 @@ impl Suggestor for CommitDecisionAgent {
             ProposedFact::new(
                 ContextKey::Evaluations,
                 "expense-commit-policy",
-                result.to_string(),
-                self.name(),
+                record("expense_commit_policy", result),
+                self.name().to_owned(),
             )
             .with_confidence(1.0),
         )
@@ -353,6 +394,10 @@ struct ApprovalSimulationAgent;
 impl Suggestor for ApprovalSimulationAgent {
     fn name(&self) -> &str {
         "ApprovalSimulationAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.expense-approval"
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -372,7 +417,7 @@ impl Suggestor for ApprovalSimulationAgent {
             .iter()
             .find(|fact| fact.id() == "expense-approval-routing")
         {
-            let routing: serde_json::Value = serde_json::from_str(c.content()).unwrap_or_default();
+            let routing = fact_json(c);
             let pending = routing
                 .get("pending")
                 .and_then(|value| value.as_u64())
@@ -389,7 +434,7 @@ impl Suggestor for ApprovalSimulationAgent {
             let proposal = ProposedFact::new(
                 ContextKey::Proposals,
                 format!("{current}-approval"),
-                format!("Approved by {current}"),
+                TextPayload::new(format!("Approved by {current}")),
                 format!("{current} approval agent"),
             )
             .with_confidence(0.95);
@@ -430,7 +475,7 @@ async fn main() {
 
     let expense = serde_json::json!({
         "employee": "john.doe@example.com",
-        "amount": 4200.00,
+        "amount": 4200,
         "category": "entertainment",
         "description": "Client dinner",
         "date": "2026-04-15",
@@ -438,7 +483,12 @@ async fn main() {
     });
 
     let mut ctx = ContextState::new();
-    let _ = ctx.add_input(ContextKey::Seeds, "expense-1", expense.to_string());
+    let _ = ctx.add_proposal(ProposedFact::new(
+        ContextKey::Seeds,
+        "expense-1",
+        record("expense", expense.clone()),
+        "example-expense-approval",
+    ));
 
     println!(
         "Expense submitted: ${} {} - {}\n",
@@ -465,7 +515,7 @@ async fn main() {
                 RunResult::Complete(Ok(result)) => {
                     println!("✅ Expense flow completed.\n");
                     for fact in result.context.get(ContextKey::Evaluations) {
-                        println!("  [{}] {}", fact.id(), fact.content());
+                        println!("  [{}] {}", fact.id(), fact_preview(fact));
                     }
                 }
                 RunResult::HitlPause(_) => println!("❌ Unexpected extra approval stage"),
@@ -475,7 +525,7 @@ async fn main() {
         RunResult::Complete(Ok(result)) => {
             println!("✅ Expense flow completed without HITL.\n");
             for fact in result.context.get(ContextKey::Evaluations) {
-                println!("  [{}] {}", fact.id(), fact.content());
+                println!("  [{}] {}", fact.id(), fact_preview(fact));
             }
         }
         RunResult::Complete(Err(e)) => {
@@ -484,4 +534,18 @@ async fn main() {
     }
 
     println!("\n=== Done ===");
+}
+
+fn fact_preview(fact: &ContextFact) -> String {
+    if let Some(text) = fact.payload::<TextPayload>() {
+        return text.as_str().to_owned();
+    }
+    if let Some(value) = json_value(fact) {
+        return format!("{value}");
+    }
+    format!(
+        "<typed payload {} v{}>",
+        fact.payload_family(),
+        fact.payload_version()
+    )
 }

@@ -1,0 +1,31 @@
+[package]
+name = "scenario-round-driven-formation-design"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Direct version pins — this scenario targets the current Converge 3.9
+# and Organism 1.9 releases. The rest of the atelier-showcase
+# workspace is still on the 3.8 line pending the Converge 3.9 API
+# drift sweep (see kb/Planning/Converge 3.9 API Drift.md); this crate
+# is independent of `atelier-domain` so it builds and runs in
+# isolation: `cargo run -p scenario-round-driven-formation-design`.
+
+[dependencies]
+# Converge 3.9 — published on crates.io.
+converge-kernel = "3.9.1"
+converge-pack = "3.9.1"
+converge-provider = "3.9.1"
+
+# Organism 1.9 — `organism-adversarial` is on crates.io; `catalog`
+# and `dynamics` are not yet published, so this scenario picks them
+# up from the local stack. Same path-dep pattern atelier-showcase
+# already uses for `../mosaic-extensions/...`.
+organism-adversarial = "1.9.0"
+organism-runtime = "1.9.0"
+organism-catalog = { path = "../../../bedrock-platform/organism/crates/catalog", version = "1.9.0" }
+organism-dynamics = { path = "../../../bedrock-platform/organism/crates/dynamics", version = "1.9.0" }
+
+async-trait = "0.1"
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+uuid = "1"

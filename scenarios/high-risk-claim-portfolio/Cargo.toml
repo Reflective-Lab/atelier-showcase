@@ -1,0 +1,9 @@
+[package]
+name = "scenario-high-risk-claim-portfolio"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Demo: show the high-risk Arbiter claim portfolio and evidence ladder"
+
+[dependencies]
+arbiter = { workspace = true, features = ["analysis"] }

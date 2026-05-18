@@ -10,7 +10,7 @@ use std::sync::Arc;
 use atelier_domain::{
     AvailabilityRetrievalAgent, ConflictDetectionAgent, RequireParticipantAvailability,
     RequirePositiveDuration, RequireValidSlot, SlotOptimizationAgent, TimeZoneNormalizationAgent,
-    WorkingHoursConstraintAgent,
+    WorkingHoursConstraintAgent, domain_text,
 };
 use converge_experience::{InMemoryExperienceStore, StoreObserver, summarize_events};
 use converge_kernel::{
@@ -93,7 +93,10 @@ async fn main() {
             println!("Stop:      {:?}\n", result.stop_reason);
 
             for fact in result.context.get(ContextKey::Hypotheses) {
-                println!("Proposed slot: {}", fact.content());
+                println!(
+                    "Proposed slot: {}",
+                    domain_text(fact).unwrap_or("<non-text slot>")
+                );
             }
         }
         Err(e) => {

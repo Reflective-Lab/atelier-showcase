@@ -22,13 +22,16 @@ use converge_kernel::{
     ConvergeResult, Engine, FlowAction, FlowPhase, ProposedFact, Suggestor,
 };
 use converge_model::formation::{
-    FormationRequest, ProfileSnapshot, SuggestorCapability, SuggestorRole,
+    FormationPlan, FormationRequest, ProfileSnapshot, SuggestorCapability, SuggestorRole,
 };
 use converge_optimization::suggestors::{
-    AssignmentSuggestor, FlowOptimizationSuggestor, FormationAssemblySuggestor,
+    AssignmentPlan, AssignmentRequest, AssignmentSuggestor, FlowOptimizationSuggestor, FlowPlan,
+    FlowRequest, FormationAssemblySuggestor,
 };
+use converge_pack::{FactPayload, TextPayload};
 use converge_provider::{CostClass, LatencyClass};
 use ferrox::catalog::{CommonUseCase, SolverCandidate, recommend_for_use_case, solver_catalog};
+use serde::de::DeserializeOwned;
 
 const PROVENANCE: &str = "example:arbiter-ferrox-solver-gallery";
 const POLICY_SIGNAL_ID: &str = "policy-request:solver-spend";
@@ -141,19 +144,27 @@ fn register_native_suggestors(_engine: &mut Engine) {}
 fn seed_context() -> ContextState {
     let mut ctx = ContextState::new();
 
-    seed_json(
+    seed_typed_json::<ferrox::scheduling::SchedulingRequest>(
         &mut ctx,
         "scheduling-request:field-ops",
         scheduling_request(),
     );
-    seed_json(&mut ctx, "jspbench-request:factory", job_shop_request());
-    seed_json(&mut ctx, "vrptw-request:delivery", vrptw_request());
-    seed_json(
+    seed_typed_json::<ferrox::jobshop::JobShopRequest>(
+        &mut ctx,
+        "jspbench-request:factory",
+        job_shop_request(),
+    );
+    seed_typed_json::<ferrox::vrptw::VrptwRequest>(
+        &mut ctx,
+        "vrptw-request:delivery",
+        vrptw_request(),
+    );
+    seed_typed_json::<AssignmentRequest>(
         &mut ctx,
         "assignment-request:approvers",
         assignment_request(),
     );
-    seed_json(&mut ctx, "flow-request:capacity", flow_request());
+    seed_typed_json::<FlowRequest>(&mut ctx, "flow-request:capacity", flow_request());
     seed_formation(&mut ctx, "formation-request:assurance", "assurance");
 
     seed_native_requests(&mut ctx);
@@ -163,23 +174,39 @@ fn seed_context() -> ContextState {
 
 #[cfg(feature = "native-solvers")]
 fn seed_native_requests(ctx: &mut ContextState) {
-    seed_json(ctx, "glop-request:capacity-lp", lp_request());
-    seed_json(
+    seed_typed_json::<ferrox::lp::LpRequest>(ctx, "glop-request:capacity-lp", lp_request());
+    seed_typed_json::<ferrox::network_flow::MinCostFlowRequest>(
         ctx,
         "network-flow-request:allocation",
         native_flow_request(),
     );
-    seed_json(ctx, "cpsat-request:gate-model", cp_sat_request());
-    seed_json(ctx, "mip-request:approval-mip", mip_request());
+    seed_typed_json::<ferrox::cp::CpSatRequest>(ctx, "cpsat-request:gate-model", cp_sat_request());
+    seed_typed_json::<ferrox::mip::MipRequest>(ctx, "mip-request:approval-mip", mip_request());
     seed_formation(ctx, "cpsat-formation-request:assurance-cp", "assurance-cp");
 }
 
 #[cfg(not(feature = "native-solvers"))]
 fn seed_native_requests(_ctx: &mut ContextState) {}
 
-fn seed_json(ctx: &mut ContextState, id: &'static str, value: serde_json::Value) {
-    ctx.add_input_with_provenance(ContextKey::Seeds, id, value.to_string(), PROVENANCE)
-        .expect("seed should be accepted");
+fn seed_typed_json<T>(ctx: &mut ContextState, id: &'static str, value: serde_json::Value)
+where
+    T: DeserializeOwned + FactPayload + PartialEq,
+{
+    let payload = serde_json::from_value::<T>(value).expect("typed seed literal should parse");
+    seed_payload(ctx, id, payload);
+}
+
+fn seed_payload<T>(ctx: &mut ContextState, id: &'static str, payload: T)
+where
+    T: FactPayload + PartialEq,
+{
+    ctx.add_proposal(ProposedFact::new(
+        ContextKey::Seeds,
+        id,
+        payload,
+        PROVENANCE,
+    ))
+    .expect("seed should be accepted");
 }
 
 fn seed_formation(ctx: &mut ContextState, fact_id: &'static str, request_id: &str) {
@@ -192,13 +219,7 @@ fn seed_formation(ctx: &mut ContextState, fact_id: &'static str, request_id: &st
         ],
         required_capabilities: vec![],
     };
-    ctx.add_input_with_provenance(
-        ContextKey::Seeds,
-        fact_id,
-        serde_json::to_string(&request).expect("formation request should serialize"),
-        PROVENANCE,
-    )
-    .expect("formation seed should be accepted");
+    seed_payload(ctx, fact_id, request);
 }
 
 struct PolicyRequestFromCorePlans;
@@ -207,6 +228,10 @@ struct PolicyRequestFromCorePlans;
 impl Suggestor for PolicyRequestFromCorePlans {
     fn name(&self) -> &str {
         "PolicyRequestFromCorePlans"
+    }
+
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.arbiter-ferrox-solver-gallery"
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -232,8 +257,8 @@ impl Suggestor for PolicyRequestFromCorePlans {
             ProposedFact::new(
                 ContextKey::Signals,
                 POLICY_SIGNAL_ID,
-                serde_json::to_string(&request).unwrap_or_default(),
-                self.name(),
+                request,
+                self.name().to_owned(),
             )
             .with_confidence(0.95),
         )
@@ -284,12 +309,12 @@ async fn run_policy_gate_case(request: DecideRequest) -> Result<PolicyDecision, 
     engine.register_suggestor(PolicyGateSuggestor::new(policy));
 
     let mut ctx = ContextState::new();
-    ctx.add_input_with_provenance(
+    ctx.add_proposal(ProposedFact::new(
         ContextKey::Seeds,
         "policy-request:single",
-        serde_json::to_string(&request).expect("policy request should serialize"),
+        request,
         PROVENANCE,
-    )
+    ))
     .expect("policy seed should be accepted");
 
     let result = engine.run(ctx).await.map_err(|err| err.to_string())?;
@@ -310,7 +335,7 @@ fn policy_decision(ctx: &dyn Context) -> Option<PolicyDecision> {
     ctx.get(ContextKey::Constraints)
         .iter()
         .find(|fact| fact.id().as_str() == "policy-decision")
-        .and_then(|fact| fact.parse_json_content().ok())
+        .and_then(|fact| fact.payload::<PolicyDecision>().cloned())
 }
 
 fn fact_exists(ctx: &dyn Context, key: ContextKey, id: &str) -> bool {
@@ -652,14 +677,63 @@ fn print_section(title: &str, facts: &[ContextFact]) {
     }
 
     for fact in facts {
-        let preview = if fact.content().len() > 120 {
-            format!("{}...", &fact.content()[..120])
-        } else {
-            fact.content().to_string()
-        };
+        let preview = fact_preview(fact);
         println!("  {} ({preview})", fact.id());
     }
     println!();
+}
+
+fn fact_preview(fact: &ContextFact) -> String {
+    if let Some(payload) = fact.payload::<TextPayload>() {
+        return payload.as_str().to_owned();
+    }
+    if let Some(payload) = fact.payload::<FormationRequest>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<DecideRequest>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<PolicyDecision>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<AssignmentPlan>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<FlowPlan>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<FormationPlan>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<ferrox::scheduling::SchedulingPlan>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<ferrox::jobshop::JobShopPlan>() {
+        return format!("{payload:?}");
+    }
+    if let Some(payload) = fact.payload::<ferrox::vrptw::VrptwPlan>() {
+        return format!("{payload:?}");
+    }
+    #[cfg(feature = "native-solvers")]
+    {
+        if let Some(payload) = fact.payload::<ferrox::lp::LpPlan>() {
+            return format!("{payload:?}");
+        }
+        if let Some(payload) = fact.payload::<ferrox::network_flow::MinCostFlowPlan>() {
+            return format!("{payload:?}");
+        }
+        if let Some(payload) = fact.payload::<ferrox::cp::CpSatPlan>() {
+            return format!("{payload:?}");
+        }
+        if let Some(payload) = fact.payload::<ferrox::mip::MipPlan>() {
+            return format!("{payload:?}");
+        }
+    }
+    format!(
+        "<typed payload {} v{}>",
+        fact.payload_family(),
+        fact.payload_version()
+    )
 }
 
 #[cfg(test)]

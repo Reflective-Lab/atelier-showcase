@@ -19,9 +19,13 @@ use atelier_domain::resource_routing::{
     ConstraintValidationAgent, FeasibilityAgent, ResourceRetrievalAgent, SolverAgent,
     TaskRetrievalAgent,
 };
+use atelier_domain::{admitted_text, domain_text, record_payload};
 use converge_kernel::{ContextKey, ContextState, Engine};
+use converge_pack::ContextFact;
 use prism::FeatureAgent;
 
+#[cfg(feature = "with-solver")]
+use converge_pack::{ProposedFact, Provenance};
 #[cfg(feature = "with-solver")]
 use ferrox::cp::{ConstraintKind, CpSatRequest, CpSatSuggestor, CpVariable};
 
@@ -66,12 +70,13 @@ async fn main() {
     #[cfg(feature = "with-solver")]
     {
         let cp_request = two_task_two_worker_assignment();
-        let payload = serde_json::to_string(&cp_request).expect("CpSatRequest serializes");
-        let _ = ctx.add_input(
+        let request_id = cp_request.id.clone();
+        let _ = ctx.add_proposal(ProposedFact::new(
             ContextKey::Seeds,
-            format!("cpsat-request:{}", cp_request.id),
-            payload,
-        );
+            format!("cpsat-request:{request_id}"),
+            cp_request,
+            Provenance::new("example-solver-policy-allocation"),
+        ));
     }
 
     println!("Seeds: 2 tasks, 2 resources.\n");
@@ -88,7 +93,7 @@ async fn main() {
                 ContextKey::Evaluations,
             ] {
                 for fact in result.context.get(key) {
-                    println!("  [{:?}/{}] {}", key, fact.id(), fact.content());
+                    println!("  [{:?}/{}] {}", key, fact.id(), fact_preview(fact));
                 }
             }
         }
@@ -96,6 +101,22 @@ async fn main() {
     }
 
     println!("\n=== Done ===");
+}
+
+fn fact_preview(fact: &ContextFact) -> String {
+    if let Some(text) = domain_text(fact).or_else(|| admitted_text(fact)) {
+        return text.to_owned();
+    }
+
+    if let Some(record) = record_payload(fact) {
+        return format!("{} {}", record.record_type(), record.data());
+    }
+
+    format!(
+        "<typed payload {} v{}>",
+        fact.payload_family(),
+        fact.payload_version()
+    )
 }
 
 /// Two tasks, two workers, each task assigned to a distinct worker.

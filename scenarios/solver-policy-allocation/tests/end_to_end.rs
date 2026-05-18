@@ -21,7 +21,8 @@ use atelier_domain::resource_routing::{
     TaskRetrievalAgent,
 };
 use converge_kernel::{ContextKey, ContextState, Engine};
-use ferrox::cp::{ConstraintKind, CpSatRequest, CpSatSuggestor, CpTerm, CpVariable};
+use converge_pack::{ProposedFact, Provenance};
+use ferrox::cp::{ConstraintKind, CpSatPlan, CpSatRequest, CpSatSuggestor, CpTerm, CpVariable};
 use prism::FeatureAgent;
 
 fn two_task_two_worker_assignment() -> CpSatRequest {
@@ -90,12 +91,12 @@ async fn full_triple_converges_with_solver() {
 
     let cp_request = two_task_two_worker_assignment();
     let request_id = cp_request.id.clone();
-    let payload = serde_json::to_string(&cp_request).expect("CpSatRequest serializes");
-    ctx.add_input(
+    ctx.add_proposal(ProposedFact::new(
         ContextKey::Seeds,
         format!("cpsat-request:{request_id}"),
-        payload,
-    )
+        cp_request,
+        Provenance::new("example-solver-policy-allocation"),
+    ))
     .expect("seed cpsat-request");
 
     let result = engine.run(ctx).await.expect("engine run succeeds");
@@ -109,16 +110,18 @@ async fn full_triple_converges_with_solver() {
         .find(|f| f.id() == plan_id.as_str())
         .expect("CpSatSuggestor should emit a cpsat-plan fact");
 
-    let plan: serde_json::Value =
-        serde_json::from_str(cp_plan.content()).expect("plan parses as JSON");
-    let status = plan["status"].as_str().unwrap_or("");
+    let plan = cp_plan
+        .require_payload::<CpSatPlan>()
+        .expect("cpsat-plan carries CpSatPlan payload");
+    let status = plan.status.as_str();
     assert!(
         matches!(status, "optimal" | "feasible"),
         "solver status should be optimal or feasible, got {status}"
     );
 
-    let assignments = plan["assignments"]
-        .as_array()
-        .expect("plan has assignments array");
-    assert_eq!(assignments.len(), 2, "two assignments for two variables");
+    assert_eq!(
+        plan.assignments.len(),
+        2,
+        "two assignments for two variables"
+    );
 }

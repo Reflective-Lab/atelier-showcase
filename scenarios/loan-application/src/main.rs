@@ -9,10 +9,19 @@
 //! lending workflow semantics belong downstream in an Organism or app-domain
 //! pack.
 
+use atelier_domain::{DomainRecordPayload, json_value};
 use converge_kernel::{
-    AgentEffect, Context, ContextKey, ContextState, Engine, EngineHitlPolicy, GateDecision,
-    ProposedFact, RunResult, Suggestor, TimeoutAction, TimeoutPolicy,
+    AgentEffect, Context, ContextFact, ContextKey, ContextState, Engine, EngineHitlPolicy,
+    GateDecision, ProposedFact, RunResult, Suggestor, TimeoutAction, TimeoutPolicy,
 };
+
+fn record(record_type: &str, data: serde_json::Value) -> DomainRecordPayload {
+    DomainRecordPayload::new(record_type, data)
+}
+
+fn fact_json(fact: &ContextFact) -> serde_json::Value {
+    json_value(fact).unwrap_or_default()
+}
 
 struct ApplicationIngestionAgent;
 
@@ -20,6 +29,10 @@ struct ApplicationIngestionAgent;
 impl Suggestor for ApplicationIngestionAgent {
     fn name(&self) -> &str {
         "ApplicationIngestionAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.loan-application"
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -34,15 +47,14 @@ impl Suggestor for ApplicationIngestionAgent {
         let seeds = ctx.get(ContextKey::Seeds);
         let seed = seeds.first();
 
-        if let Some(s) = seed
-            && let Ok(app) = serde_json::from_str::<serde_json::Value>(s.content())
-        {
+        if let Some(s) = seed {
+            let app = fact_json(s);
             return AgentEffect::with_proposal(
                 ProposedFact::new(
                     ContextKey::Signals,
                     "application",
-                    app.to_string(),
-                    self.name(),
+                    record("loan_application", app),
+                    self.name().to_owned(),
                 )
                 .with_confidence(1.0),
             );
@@ -60,6 +72,10 @@ impl Suggestor for DocumentVerificationAgent {
         "DocumentVerificationAgent"
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.loan-application"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Signals]
     }
@@ -72,9 +88,8 @@ impl Suggestor for DocumentVerificationAgent {
         let signals = ctx.get(ContextKey::Signals);
         let signal = signals.first();
 
-        if let Some(s) = signal
-            && let Ok(app) = serde_json::from_str::<serde_json::Value>(s.content())
-        {
+        if let Some(s) = signal {
+            let app = fact_json(s);
             let docs_complete = app
                 .get("documents")
                 .and_then(|d| d.as_bool())
@@ -84,12 +99,12 @@ impl Suggestor for DocumentVerificationAgent {
                 ProposedFact::new(
                     ContextKey::Evaluations,
                     "documents",
-                    serde_json::json!({
+                    record("loan_evaluation", serde_json::json!({
                         "criterion": "documents",
                         "score": if docs_complete { 1.0 } else { 0.0 },
                         "details": if docs_complete { "All required documents provided" } else { "Missing documents" }
-                    }).to_string(),
-                    self.name(),
+                    })),
+                    self.name().to_owned(),
                 )
                 .with_confidence(1.0),
             );
@@ -107,6 +122,10 @@ impl Suggestor for CreditCheckAgent {
         "CreditCheckAgent"
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.loan-application"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Signals]
     }
@@ -119,9 +138,8 @@ impl Suggestor for CreditCheckAgent {
         let signals = ctx.get(ContextKey::Signals);
         let signal = signals.first();
 
-        if let Some(s) = signal
-            && let Ok(app) = serde_json::from_str::<serde_json::Value>(s.content())
-        {
+        if let Some(s) = signal {
+            let app = fact_json(s);
             let credit_score: u32 = app
                 .get("credit_score")
                 .and_then(|v| v.as_u64())
@@ -161,16 +179,18 @@ impl Suggestor for CreditCheckAgent {
                 ProposedFact::new(
                     ContextKey::Evaluations,
                     "credit",
-                    serde_json::json!({
-                        "criterion": "credit",
-                        "score": combined,
-                        "details": {
-                            "credit_score": credit_score,
-                            "dti_ratio": dti
-                        }
-                    })
-                    .to_string(),
-                    self.name(),
+                    record(
+                        "loan_evaluation",
+                        serde_json::json!({
+                            "criterion": "credit",
+                            "score": combined,
+                            "details": {
+                                "credit_score": credit_score,
+                                "dti_ratio": dti
+                            }
+                        }),
+                    ),
+                    self.name().to_owned(),
                 )
                 .with_confidence(1.0),
             );
@@ -188,6 +208,10 @@ impl Suggestor for ComplianceAgent {
         "ComplianceAgent"
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.loan-application"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Signals]
     }
@@ -200,9 +224,8 @@ impl Suggestor for ComplianceAgent {
         let signals = ctx.get(ContextKey::Signals);
         let signal = signals.first();
 
-        if let Some(s) = signal
-            && let Ok(app) = serde_json::from_str::<serde_json::Value>(s.content())
-        {
+        if let Some(s) = signal {
+            let app = fact_json(s);
             let us_citizen = app
                 .get("us_citizen")
                 .and_then(|v| v.as_bool())
@@ -230,15 +253,17 @@ impl Suggestor for ComplianceAgent {
                 ProposedFact::new(
                     ContextKey::Evaluations,
                     "compliance",
-                    serde_json::json!({
-                        "criterion": "compliance",
-                        "score": if compliant { 1.0 } else { 0.0 },
-                        "details": {
-                            "violations": violations
-                        }
-                    })
-                    .to_string(),
-                    self.name(),
+                    record(
+                        "loan_evaluation",
+                        serde_json::json!({
+                            "criterion": "compliance",
+                            "score": if compliant { 1.0 } else { 0.0 },
+                            "details": {
+                                "violations": violations
+                            }
+                        }),
+                    ),
+                    self.name().to_owned(),
                 )
                 .with_confidence(1.0),
             );
@@ -256,6 +281,10 @@ impl Suggestor for RiskAssessmentAgent {
         "RiskAssessmentAgent"
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.loan-application"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Signals]
     }
@@ -268,9 +297,8 @@ impl Suggestor for RiskAssessmentAgent {
         let signals = ctx.get(ContextKey::Signals);
         let signal = signals.first();
 
-        if let Some(s) = signal
-            && let Ok(app) = serde_json::from_str::<serde_json::Value>(s.content())
-        {
+        if let Some(s) = signal {
+            let app = fact_json(s);
             let employment_years: u32 = app
                 .get("employment_years")
                 .and_then(|v| v.as_u64())
@@ -300,15 +328,17 @@ impl Suggestor for RiskAssessmentAgent {
                 ProposedFact::new(
                     ContextKey::Evaluations,
                     "risk",
-                    serde_json::json!({
-                        "criterion": "risk",
-                        "score": risk_score,
-                        "details": {
-                            "risk_factors": risk_factors
-                        }
-                    })
-                    .to_string(),
-                    self.name(),
+                    record(
+                        "loan_evaluation",
+                        serde_json::json!({
+                            "criterion": "risk",
+                            "score": risk_score,
+                            "details": {
+                                "risk_factors": risk_factors
+                            }
+                        }),
+                    ),
+                    self.name().to_owned(),
                 )
                 .with_confidence(1.0),
             );
@@ -326,6 +356,10 @@ impl Suggestor for LoanDecisionAgent {
         "LoanDecisionAgent"
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.loan-application"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Evaluations]
     }
@@ -341,9 +375,8 @@ impl Suggestor for LoanDecisionAgent {
         let mut count = 0;
 
         for eval in evaluations {
-            if let Ok(e) = serde_json::from_str::<serde_json::Value>(eval.content())
-                && let Some(score) = e.get("score").and_then(|v| v.as_f64())
-            {
+            let e = fact_json(eval);
+            if let Some(score) = e.get("score").and_then(|v| v.as_f64()) {
                 total_score += score;
                 count += 1;
             }
@@ -366,12 +399,14 @@ impl Suggestor for LoanDecisionAgent {
         let proposal = ProposedFact::new(
             ContextKey::Proposals,
             "loan-decision",
-            serde_json::json!({
-                "decision": decision,
-                "score": avg_score,
-                "confidence": confidence
-            })
-            .to_string(),
+            record(
+                "loan_decision",
+                serde_json::json!({
+                    "decision": decision,
+                    "score": avg_score,
+                    "confidence": confidence
+                }),
+            ),
             "loan-decision-agent",
         )
         .with_confidence(confidence);
@@ -416,7 +451,12 @@ async fn main() {
     });
 
     let mut ctx = ContextState::new();
-    let _ = ctx.add_input(ContextKey::Seeds, "application-1", application.to_string());
+    let _ = ctx.add_proposal(ProposedFact::new(
+        ContextKey::Seeds,
+        "application-1",
+        record("loan_application", application.clone()),
+        "example-loan-application",
+    ));
 
     println!(
         "Processing loan application for ${}, credit score: {}\n",
@@ -450,12 +490,10 @@ async fn main() {
             match engine.resume(*pause, decision).await {
                 RunResult::Complete(Ok(result)) => {
                     for fact in result.context.get(ContextKey::Proposals) {
-                        if let Ok(p) = serde_json::from_str::<serde_json::Value>(fact.content()) {
-                            let decision =
-                                p.get("decision").and_then(|v| v.as_str()).unwrap_or("?");
-                            let score = p.get("score").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                            println!("✅ Loan {}! (score: {:.2})", decision, score);
-                        }
+                        let p = fact_json(fact);
+                        let decision = p.get("decision").and_then(|v| v.as_str()).unwrap_or("?");
+                        let score = p.get("score").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                        println!("✅ Loan {}! (score: {:.2})", decision, score);
                     }
                 }
                 _ => println!("❌ Decision failed"),
@@ -463,26 +501,25 @@ async fn main() {
         }
         RunResult::Complete(Ok(result)) => {
             for fact in result.context.get(ContextKey::Proposals) {
-                if let Ok(p) = serde_json::from_str::<serde_json::Value>(fact.content()) {
-                    let decision = p.get("decision").and_then(|v| v.as_str()).unwrap_or("?");
-                    let score = p.get("score").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                    let confidence = p.get("confidence").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let p = fact_json(fact);
+                let decision = p.get("decision").and_then(|v| v.as_str()).unwrap_or("?");
+                let score = p.get("score").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let confidence = p.get("confidence").and_then(|v| v.as_f64()).unwrap_or(0.0);
 
-                    if confidence >= 0.75 {
-                        println!(
-                            "✅ Loan {}! (score: {:.2}, confidence: {:.0}%)",
-                            decision,
-                            score,
-                            confidence * 100.0
-                        );
-                    } else {
-                        println!(
-                            "⏸️  Loan {} - requires review (score: {:.2}, confidence: {:.0}%)",
-                            decision,
-                            score,
-                            confidence * 100.0
-                        );
-                    }
+                if confidence >= 0.75 {
+                    println!(
+                        "✅ Loan {}! (score: {:.2}, confidence: {:.0}%)",
+                        decision,
+                        score,
+                        confidence * 100.0
+                    );
+                } else {
+                    println!(
+                        "⏸️  Loan {} - requires review (score: {:.2}, confidence: {:.0}%)",
+                        decision,
+                        score,
+                        confidence * 100.0
+                    );
                 }
             }
         }

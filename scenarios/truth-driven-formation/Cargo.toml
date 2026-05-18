@@ -12,3 +12,10 @@ organism-runtime.workspace = true
 converge-kernel.workspace = true
 chrono.workspace = true
 anyhow.workspace = true
+
+[dev-dependencies]
+arena-intent-cases = { path = "../../../arena-tests/crates/intent-cases" }
+organism-catalog = { path = "../../../bedrock-platform/organism/crates/catalog" }
+organism-catalog-seed = { path = "../../../bedrock-platform/organism/crates/catalog-seed" }
+serde_json.workspace = true
+uuid.workspace = true

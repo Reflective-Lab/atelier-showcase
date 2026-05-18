@@ -10,6 +10,8 @@ members = [
     "scenarios/loan-application",
     "scenarios/meeting-scheduler",
     "scenarios/solver-policy-allocation",
+    "scenarios/high-risk-claim-portfolio",
+    "scenarios/round-driven-formation-design",
     "scenarios/truth-driven-formation",
     "scenarios/vendor-selection",
 
@@ -47,24 +49,24 @@ repository = "https://github.com/Reflective-Lab/atelier-showcase"
 atelier-domain = { package = "converge-atelier-domain", path = "crates/atelier-domain" }
 
 # Converge platform
-converge-pack = "3.8.1"
-converge-core = "3.8.1"
-converge-kernel = "3.8.1"
-converge-model = "3.8.1"
-arbiter = { package = "converge-arbiter-policy", path = "../mosaic-extensions/arbiter-policy/crates/arbiter", version = "1.0.0" }
-ferrox = { package = "converge-ferrox-solver", path = "../mosaic-extensions/ferrox-solvers/crates/ferrox", version = "0.5.0" }
-converge-provider = "3.8.1"
-converge-optimization = "3.8.1"
-converge-runtime = "3.8.1"
-converge-experience = "3.8.1"
-converge-protocol = "3.8.1"
-converge-client = "3.8.1"
-converge-storage = { version = "3.8.1", default-features = false }
+converge-pack = "3.9.1"
+converge-core = "3.9.1"
+converge-kernel = "3.9.1"
+converge-model = "3.9.1"
+arbiter = { package = "converge-arbiter-policy", path = "../mosaic-extensions/arbiter-policy/crates/arbiter", version = "2.0.1" }
+ferrox = { package = "converge-ferrox-solver", path = "../mosaic-extensions/ferrox-solvers/crates/ferrox", version = "0.7.1" }
+converge-provider = "3.9.1"
+converge-optimization = "3.9.1"
+converge-runtime = "3.9.1"
+converge-experience = "3.9.1"
+converge-protocol = "3.9.1"
+converge-client = "3.9.1"
+converge-storage = { version = "3.9.1", default-features = false }
 
 # Organism platform (also patched while unreleased)
-organism-pack = "1.8.0"
-organism-runtime = "1.8.0"
-organism-intent = "1.8.0"
+organism-pack = "1.9.0"
+organism-runtime = "1.9.0"
+organism-intent = "1.9.0"
 organism-domain = { path = "crates/organism-domain" }
 
 # Axiom — Truth source parsing and IntentPacket compilation (patched to local).

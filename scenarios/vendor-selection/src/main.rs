@@ -10,18 +10,46 @@
 //! workflow. Reusable vendor decision semantics live downstream in Organism
 //! domain packs.
 
-use arbiter::PolicyEngine;
+use arbiter::{PolicyEngine, VENDOR_SELECTION_POLICY};
+use atelier_domain::{DomainRecordPayload, json_value};
 use converge_kernel::{
-    AgentEffect, AuthorityLevel, Context, ContextKey, ContextState, Engine, EngineHitlPolicy,
-    FlowAction, FlowGateAuthorizer, FlowGateContext, FlowGateInput, FlowGateOutcome,
-    FlowGatePrincipal, FlowGateResource, FlowPhase, GateDecision, ProposedFact, RunResult,
-    Suggestor, TimeoutAction, TimeoutPolicy,
+    AgentEffect, AuthorityLevel, Context, ContextFact, ContextKey, ContextState, Engine,
+    EngineHitlPolicy, FlowAction, FlowGateAuthorizer, FlowGateContext, FlowGateInput,
+    FlowGateOutcome, FlowGatePrincipal, FlowGateResource, FlowPhase, GateDecision, ProposedFact,
+    RunResult, Suggestor, TimeoutAction, TimeoutPolicy,
 };
-use std::path::PathBuf;
+use converge_pack::TextPayload;
 use std::sync::Arc;
 
-fn parse_vendor(value: &str) -> serde_json::Value {
-    serde_json::from_str(value).unwrap_or_default()
+fn record(record_type: &str, data: serde_json::Value) -> DomainRecordPayload {
+    DomainRecordPayload::new(record_type, data)
+}
+
+fn fact_json(fact: &ContextFact) -> serde_json::Value {
+    json_value(fact).unwrap_or_default()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct WholeDollars(i64);
+
+impl WholeDollars {
+    fn from_field(json: &serde_json::Value, field: &str) -> Option<Self> {
+        json.get(field)
+            .and_then(|value| {
+                value
+                    .as_i64()
+                    .or_else(|| value.as_u64().and_then(|n| i64::try_from(n).ok()))
+            })
+            .map(Self)
+    }
+
+    fn as_i64(self) -> i64 {
+        self.0
+    }
+}
+
+fn vendor_price_dollars(vendor: &serde_json::Value) -> i64 {
+    WholeDollars::from_field(vendor, "price").map_or(0, WholeDollars::as_i64)
 }
 
 fn vendor_selection_input(
@@ -65,12 +93,7 @@ fn vendor_selection_input(
         action,
         context: FlowGateContext {
             commitment_type: Some("spend".into()),
-            amount: Some(
-                vendor
-                    .get("price")
-                    .and_then(|value| value.as_f64())
-                    .unwrap_or(0.0) as i64,
-            ),
+            amount: Some(vendor_price_dollars(vendor)),
             human_approval_present: Some(human_approval_present),
             required_gates_met: Some(compliant && years >= 5),
         },
@@ -82,12 +105,11 @@ fn top_vendor(ctx: &dyn Context) -> Option<serde_json::Value> {
         .get(ContextKey::Strategies)
         .iter()
         .find(|fact| fact.id() == "recommendation-1")?;
-    let recommendation_json: serde_json::Value =
-        serde_json::from_str(recommendation.content()).ok()?;
+    let recommendation_json = fact_json(recommendation);
     let vendor_id = recommendation_json.get("vendor_id")?.as_str()?;
 
     ctx.get(ContextKey::Signals).iter().find_map(|fact| {
-        let vendor = parse_vendor(fact.content());
+        let vendor = fact_json(fact);
         let id = vendor.get("id").and_then(|value| value.as_str())?;
         if id == vendor_id { Some(vendor) } else { None }
     })
@@ -100,11 +122,10 @@ fn has_procurement_approval(ctx: &dyn Context) -> bool {
 }
 
 fn load_vendor_policy_engine() -> Arc<dyn FlowGateAuthorizer> {
-    let policy_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../crates/policy/policies/vendor_selection.cedar");
-    let policy = std::fs::read_to_string(policy_path)
-        .expect("vendor selection Cedar policy should exist in arbiter");
-    Arc::new(PolicyEngine::from_policy_str(&policy).expect("vendor selection policy should parse"))
+    Arc::new(
+        PolicyEngine::from_policy_str(VENDOR_SELECTION_POLICY)
+            .expect("vendor selection policy should parse"),
+    )
 }
 
 struct VendorDataAgent;
@@ -113,6 +134,10 @@ struct VendorDataAgent;
 impl Suggestor for VendorDataAgent {
     fn name(&self) -> &str {
         "VendorDataAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.vendor-selection"
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -128,7 +153,7 @@ impl Suggestor for VendorDataAgent {
         let seed = seeds.first();
 
         let vendors = if let Some(s) = seed {
-            let json: serde_json::Value = serde_json::from_str(s.content()).unwrap_or_default();
+            let json = fact_json(s);
             json.get("vendors").cloned().unwrap_or_default()
         } else {
             serde_json::json!([])
@@ -146,8 +171,8 @@ impl Suggestor for VendorDataAgent {
                         "vendor-{}",
                         vendor.get("id").and_then(|v| v.as_str()).unwrap_or("?")
                     ),
-                    vendor.to_string(),
-                    self.name(),
+                    record("vendor", vendor.clone()),
+                    self.name().to_owned(),
                 )
                 .with_confidence(1.0),
             );
@@ -165,6 +190,10 @@ impl Suggestor for PriceEvaluatorAgent {
         "PriceEvaluatorAgent"
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.vendor-selection"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Signals]
     }
@@ -178,39 +207,37 @@ impl Suggestor for PriceEvaluatorAgent {
 
         let mut evaluations = Vec::new();
         for signal in signals {
-            if let Ok(vendor) = serde_json::from_str::<serde_json::Value>(signal.content()) {
-                let id = vendor.get("id").and_then(|v| v.as_str()).unwrap_or("?");
-                let price: f64 = vendor
-                    .get("price")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(999999.0);
+            let vendor = fact_json(signal);
+            let id = vendor.get("id").and_then(|v| v.as_str()).unwrap_or("?");
+            let price = vendor_price_dollars(&vendor);
 
-                let score = if price < 10000.0 {
-                    1.0
-                } else if price < 25000.0 {
-                    0.7
-                } else if price < 50000.0 {
-                    0.4
-                } else {
-                    0.1
-                };
+            let score = if price < 10_000 {
+                1.0
+            } else if price < 25_000 {
+                0.7
+            } else if price < 50_000 {
+                0.4
+            } else {
+                0.1
+            };
 
-                evaluations.push(
-                    ProposedFact::new(
-                        ContextKey::Evaluations,
-                        format!("price:{}", id),
+            evaluations.push(
+                ProposedFact::new(
+                    ContextKey::Evaluations,
+                    format!("price:{}", id),
+                    record(
+                        "vendor_evaluation",
                         serde_json::json!({
                             "vendor_id": id,
                             "criterion": "price",
                             "score": score,
                             "raw_value": price
-                        })
-                        .to_string(),
-                        self.name(),
-                    )
-                    .with_confidence(1.0),
-                );
-            }
+                        }),
+                    ),
+                    self.name().to_owned(),
+                )
+                .with_confidence(1.0),
+            );
         }
 
         AgentEffect::with_proposals(evaluations)
@@ -225,6 +252,10 @@ impl Suggestor for ComplianceEvaluatorAgent {
         "ComplianceEvaluatorAgent"
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.vendor-selection"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Signals]
     }
@@ -238,31 +269,32 @@ impl Suggestor for ComplianceEvaluatorAgent {
 
         let mut evaluations = Vec::new();
         for signal in signals {
-            if let Ok(vendor) = serde_json::from_str::<serde_json::Value>(signal.content()) {
-                let id = vendor.get("id").and_then(|v| v.as_str()).unwrap_or("?");
-                let compliant: bool = vendor
-                    .get("compliant")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(true);
+            let vendor = fact_json(signal);
+            let id = vendor.get("id").and_then(|v| v.as_str()).unwrap_or("?");
+            let compliant: bool = vendor
+                .get("compliant")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
 
-                let score = if compliant { 1.0 } else { 0.0 };
+            let score = if compliant { 1.0 } else { 0.0 };
 
-                evaluations.push(
-                    ProposedFact::new(
-                        ContextKey::Evaluations,
-                        format!("compliance:{}", id),
+            evaluations.push(
+                ProposedFact::new(
+                    ContextKey::Evaluations,
+                    format!("compliance:{}", id),
+                    record(
+                        "vendor_evaluation",
                         serde_json::json!({
                             "vendor_id": id,
                             "criterion": "compliance",
                             "score": score,
                             "raw_value": compliant
-                        })
-                        .to_string(),
-                        self.name(),
-                    )
-                    .with_confidence(1.0),
-                );
-            }
+                        }),
+                    ),
+                    self.name().to_owned(),
+                )
+                .with_confidence(1.0),
+            );
         }
 
         AgentEffect::with_proposals(evaluations)
@@ -277,6 +309,10 @@ impl Suggestor for RiskEvaluatorAgent {
         "RiskEvaluatorAgent"
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.vendor-selection"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Signals]
     }
@@ -290,39 +326,40 @@ impl Suggestor for RiskEvaluatorAgent {
 
         let mut evaluations = Vec::new();
         for signal in signals {
-            if let Ok(vendor) = serde_json::from_str::<serde_json::Value>(signal.content()) {
-                let id = vendor.get("id").and_then(|v| v.as_str()).unwrap_or("?");
-                let years: u32 = vendor
-                    .get("years_in_business")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0) as u32;
+            let vendor = fact_json(signal);
+            let id = vendor.get("id").and_then(|v| v.as_str()).unwrap_or("?");
+            let years: u32 = vendor
+                .get("years_in_business")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0) as u32;
 
-                let score = if years > 10 {
-                    1.0
-                } else if years > 5 {
-                    0.7
-                } else if years > 2 {
-                    0.4
-                } else {
-                    0.1
-                };
+            let score = if years > 10 {
+                1.0
+            } else if years > 5 {
+                0.7
+            } else if years > 2 {
+                0.4
+            } else {
+                0.1
+            };
 
-                evaluations.push(
-                    ProposedFact::new(
-                        ContextKey::Evaluations,
-                        format!("risk:{}", id),
+            evaluations.push(
+                ProposedFact::new(
+                    ContextKey::Evaluations,
+                    format!("risk:{}", id),
+                    record(
+                        "vendor_evaluation",
                         serde_json::json!({
                             "vendor_id": id,
                             "criterion": "risk",
                             "score": score,
                             "raw_value": years
-                        })
-                        .to_string(),
-                        self.name(),
-                    )
-                    .with_confidence(1.0),
-                );
-            }
+                        }),
+                    ),
+                    self.name().to_owned(),
+                )
+                .with_confidence(1.0),
+            );
         }
 
         AgentEffect::with_proposals(evaluations)
@@ -337,6 +374,10 @@ impl Suggestor for TimelineEvaluatorAgent {
         "TimelineEvaluatorAgent"
     }
 
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.vendor-selection"
+    }
+
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Signals]
     }
@@ -350,39 +391,40 @@ impl Suggestor for TimelineEvaluatorAgent {
 
         let mut evaluations = Vec::new();
         for signal in signals {
-            if let Ok(vendor) = serde_json::from_str::<serde_json::Value>(signal.content()) {
-                let id = vendor.get("id").and_then(|v| v.as_str()).unwrap_or("?");
-                let weeks: u32 = vendor
-                    .get("delivery_weeks")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(52) as u32;
+            let vendor = fact_json(signal);
+            let id = vendor.get("id").and_then(|v| v.as_str()).unwrap_or("?");
+            let weeks: u32 = vendor
+                .get("delivery_weeks")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(52) as u32;
 
-                let score = if weeks <= 4 {
-                    1.0
-                } else if weeks <= 8 {
-                    0.8
-                } else if weeks <= 12 {
-                    0.5
-                } else {
-                    0.2
-                };
+            let score = if weeks <= 4 {
+                1.0
+            } else if weeks <= 8 {
+                0.8
+            } else if weeks <= 12 {
+                0.5
+            } else {
+                0.2
+            };
 
-                evaluations.push(
-                    ProposedFact::new(
-                        ContextKey::Evaluations,
-                        format!("timeline:{}", id),
+            evaluations.push(
+                ProposedFact::new(
+                    ContextKey::Evaluations,
+                    format!("timeline:{}", id),
+                    record(
+                        "vendor_evaluation",
                         serde_json::json!({
                             "vendor_id": id,
                             "criterion": "timeline",
                             "score": score,
                             "raw_value": weeks
-                        })
-                        .to_string(),
-                        self.name(),
-                    )
-                    .with_confidence(1.0),
-                );
-            }
+                        }),
+                    ),
+                    self.name().to_owned(),
+                )
+                .with_confidence(1.0),
+            );
         }
 
         AgentEffect::with_proposals(evaluations)
@@ -395,6 +437,10 @@ struct ConsensusAgent;
 impl Suggestor for ConsensusAgent {
     fn name(&self) -> &str {
         "ConsensusAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.vendor-selection"
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -412,22 +458,21 @@ impl Suggestor for ConsensusAgent {
             std::collections::HashMap::new();
 
         for eval in evaluations {
-            if let Ok(eval_json) = serde_json::from_str::<serde_json::Value>(eval.content()) {
-                let vendor_id = eval_json
-                    .get("vendor_id")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("?");
-                let score: f64 = eval_json
-                    .get("score")
-                    .and_then(|v| v.as_f64())
-                    .unwrap_or(0.0);
+            let eval_json = fact_json(eval);
+            let vendor_id = eval_json
+                .get("vendor_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("?");
+            let score: f64 = eval_json
+                .get("score")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
 
-                let entry = vendor_scores
-                    .entry(vendor_id.to_string())
-                    .or_insert((0.0, 0));
-                entry.0 += score;
-                entry.1 += 1;
-            }
+            let entry = vendor_scores
+                .entry(vendor_id.to_string())
+                .or_insert((0.0, 0));
+            entry.0 += score;
+            entry.1 += 1;
         }
 
         let _weights = serde_json::json!({
@@ -444,7 +489,7 @@ impl Suggestor for ConsensusAgent {
             weighted_scores.push((vendor_id, avg_score));
         }
 
-        weighted_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        weighted_scores.sort_by(|a, b| b.1.total_cmp(&a.1));
 
         let proposals: Vec<ProposedFact> = weighted_scores
             .iter()
@@ -453,13 +498,15 @@ impl Suggestor for ConsensusAgent {
                 ProposedFact::new(
                     ContextKey::Strategies,
                     format!("recommendation-{}", i + 1),
-                    serde_json::json!({
-                        "vendor_id": vendor_id,
-                        "rank": i + 1,
-                        "score": score,
-                        "recommendation": if i == 0 { "recommended" } else { "alternative" }
-                    })
-                    .to_string(),
+                    record(
+                        "vendor_recommendation",
+                        serde_json::json!({
+                            "vendor_id": vendor_id,
+                            "rank": i + 1,
+                            "score": score,
+                            "recommendation": if i == 0 { "recommended" } else { "alternative" }
+                        }),
+                    ),
                     "consensus-agent",
                 )
                 .with_confidence(if i == 0 { 0.85 } else { 0.6 })
@@ -480,6 +527,10 @@ const PROCUREMENT_ROUTING_DEPS: [ContextKey; 2] = [ContextKey::Signals, ContextK
 impl Suggestor for ProcurementRoutingAgent {
     fn name(&self) -> &str {
         "ProcurementRoutingAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.vendor-selection"
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -526,8 +577,8 @@ impl Suggestor for ProcurementRoutingAgent {
             ProposedFact::new(
                 ContextKey::Constraints,
                 "vendor-procurement-routing",
-                routing.to_string(),
-                self.name(),
+                record("vendor_procurement_routing", routing),
+                self.name().to_owned(),
             )
             .with_confidence(1.0),
         )
@@ -540,6 +591,10 @@ struct ProcurementApprovalSimulationAgent;
 impl Suggestor for ProcurementApprovalSimulationAgent {
     fn name(&self) -> &str {
         "ProcurementApprovalSimulationAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.vendor-selection"
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -562,8 +617,7 @@ impl Suggestor for ProcurementApprovalSimulationAgent {
             return AgentEffect::default();
         };
 
-        let routing: serde_json::Value =
-            serde_json::from_str(constraint.content()).unwrap_or_default();
+        let routing = fact_json(constraint);
         let pending = routing
             .get("pending")
             .and_then(|value| value.as_u64())
@@ -576,7 +630,7 @@ impl Suggestor for ProcurementApprovalSimulationAgent {
             ProposedFact::new(
                 ContextKey::Proposals,
                 "procurement-approval",
-                "Approved by procurement",
+                TextPayload::new("Approved by procurement"),
                 "procurement approval agent",
             )
             .with_confidence(0.95),
@@ -598,6 +652,10 @@ const VENDOR_COMMIT_DEPS: [ContextKey; 3] = [
 impl Suggestor for VendorCommitDecisionAgent {
     fn name(&self) -> &str {
         "VendorCommitDecisionAgent"
+    }
+
+    fn provenance(&self) -> &'static str {
+        "atelier-showcase.vendor-selection"
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -629,7 +687,7 @@ impl Suggestor for VendorCommitDecisionAgent {
 
         if !human_approval_present {
             let pending = constraint
-                .and_then(|fact| serde_json::from_str::<serde_json::Value>(fact.content()).ok())
+                .map(fact_json)
                 .and_then(|json| json.get("pending").and_then(|value| value.as_u64()))
                 .unwrap_or(0);
             if pending > 0 {
@@ -657,8 +715,8 @@ impl Suggestor for VendorCommitDecisionAgent {
             ProposedFact::new(
                 ContextKey::Evaluations,
                 "vendor-commit-policy",
-                result.to_string(),
-                self.name(),
+                record("vendor_commit_policy", result),
+                self.name().to_owned(),
             )
             .with_confidence(1.0),
         )
@@ -724,7 +782,12 @@ async fn main() {
     });
 
     let mut ctx = ContextState::new();
-    let _ = ctx.add_input(ContextKey::Seeds, "rfp-1", rfp.to_string());
+    let _ = ctx.add_proposal(ProposedFact::new(
+        ContextKey::Seeds,
+        "rfp-1",
+        record("vendor_rfp", rfp),
+        "example-vendor-selection",
+    ));
 
     println!("Evaluating 3 vendors with swarm of 5 agents...\n");
 
@@ -748,20 +811,19 @@ async fn main() {
                 RunResult::Complete(Ok(result)) => {
                     println!("✅ Vendor Selected!\n");
                     for fact in result.context.get(ContextKey::Strategies) {
-                        if let Ok(p) = serde_json::from_str::<serde_json::Value>(fact.content()) {
-                            let rank = p.get("rank").and_then(|v| v.as_u64()).unwrap_or(0);
-                            let vendor = p.get("vendor_id").and_then(|v| v.as_str()).unwrap_or("?");
-                            let score = p.get("score").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                            let rec = p
-                                .get("recommendation")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or("?");
-                            println!("  #{}. {} (score: {:.2}) - {}", rank, vendor, score, rec);
-                        }
+                        let p = fact_json(fact);
+                        let rank = p.get("rank").and_then(|v| v.as_u64()).unwrap_or(0);
+                        let vendor = p.get("vendor_id").and_then(|v| v.as_str()).unwrap_or("?");
+                        let score = p.get("score").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                        let rec = p
+                            .get("recommendation")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("?");
+                        println!("  #{}. {} (score: {:.2}) - {}", rank, vendor, score, rec);
                     }
                     for fact in result.context.get(ContextKey::Evaluations) {
                         if fact.id() == "vendor-commit-policy" {
-                            println!("  [commit] {}", fact.content());
+                            println!("  [commit] {}", fact_preview(fact));
                         }
                     }
                 }
@@ -771,20 +833,19 @@ async fn main() {
         RunResult::Complete(Ok(result)) => {
             println!("✅ Vendor Selected!\n");
             for fact in result.context.get(ContextKey::Strategies) {
-                if let Ok(p) = serde_json::from_str::<serde_json::Value>(fact.content()) {
-                    let rank = p.get("rank").and_then(|v| v.as_u64()).unwrap_or(0);
-                    let vendor = p.get("vendor_id").and_then(|v| v.as_str()).unwrap_or("?");
-                    let score = p.get("score").and_then(|v| v.as_f64()).unwrap_or(0.0);
-                    let rec = p
-                        .get("recommendation")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or("?");
-                    println!("  #{}. {} (score: {:.2}) - {}", rank, vendor, score, rec);
-                }
+                let p = fact_json(fact);
+                let rank = p.get("rank").and_then(|v| v.as_u64()).unwrap_or(0);
+                let vendor = p.get("vendor_id").and_then(|v| v.as_str()).unwrap_or("?");
+                let score = p.get("score").and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let rec = p
+                    .get("recommendation")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("?");
+                println!("  #{}. {} (score: {:.2}) - {}", rank, vendor, score, rec);
             }
             for fact in result.context.get(ContextKey::Evaluations) {
                 if fact.id() == "vendor-commit-policy" {
-                    println!("  [commit] {}", fact.content());
+                    println!("  [commit] {}", fact_preview(fact));
                 }
             }
         }
@@ -794,4 +855,18 @@ async fn main() {
     }
 
     println!("\n=== Done ===");
+}
+
+fn fact_preview(fact: &ContextFact) -> String {
+    if let Some(text) = fact.payload::<TextPayload>() {
+        return text.as_str().to_owned();
+    }
+    if let Some(value) = json_value(fact) {
+        return format!("{value}");
+    }
+    format!(
+        "<typed payload {} v{}>",
+        fact.payload_family(),
+        fact.payload_version()
+    )
 }
