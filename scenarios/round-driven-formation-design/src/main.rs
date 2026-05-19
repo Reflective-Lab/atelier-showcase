@@ -12,6 +12,7 @@
 //!          → AssumptionBreakerAgent
 //!          → EvidenceWeightedScorer[combines all evidence]
 //!          → ShortlistNoteEmitter → RoundSynthesizer
+//!          → ConvergenceJudge[LLM, halts on CONVERGED]
 //!          → RoundAdvancer)
 //!     → two rounds, two batches, per-batch sentinels
 //!     → round N+1's proposer reads round N's blocked drafts and
@@ -140,7 +141,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //       Manifold-backed — the producer wraps the selected
     //       chat backend and turns per-round notes into a synthesis
     //       fact.
-    let round_starter = RoundStarter::new(2).with_conventions(conventions);
+    let round_starter = RoundStarter::new(3).with_conventions(conventions);
     let proposer = EvolvingCatalogProposer::new(
         catalog.clone(),
         templates.clone(),
@@ -170,6 +171,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let synthesizer = RoundSynthesizer::new(1, LlmSynthesisProducer::new(selected.backend.clone()))
         .with_conventions(conventions);
 
+    let convergence_judge = ConvergenceJudge::new(selected.backend.clone());
+
     let huddle = Formation::new("round-driven-design-huddle")
         .agent_boxed(Box::new(round_starter))
         .agent_boxed(Box::new(proposer))
@@ -179,6 +182,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .agent_boxed(Box::new(scorer))
         .agent_boxed(Box::new(ShortlistNoteEmitter))
         .agent_boxed(Box::new(synthesizer))
+        .agent_boxed(Box::new(convergence_judge))
         .agent_boxed(Box::new(RoundAdvancer))
         .seed(
             ContextKey::Seeds,
@@ -200,6 +204,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // ── 4. Print what the design huddle produced.
     print_rounds(ctx);
     print_adversarial(ctx);
+    print_convergence(ctx);
 
     // ── 5. Compile handoff: pick latest_completed_batch, validate
     //       its shortlist against the real catalog, then instantiate
@@ -375,6 +380,17 @@ fn print_rounds(ctx: &dyn Context) {
         let header = format!("Round {round_n}  (batch: {batch_id})");
         print_section(&header);
 
+        let drafts_present = drafts.iter().any(|d| d.draft_batch_id == *batch_id);
+        if !drafts_present {
+            if convergence_reached(ctx) {
+                println!("  (halted by convergence judge — no drafts proposed)");
+            } else {
+                println!("  (no drafts produced)");
+            }
+            println!();
+            continue;
+        }
+
         let exclusions_id = format!("evolving-proposer-exclusions-{batch_id}");
         if let Some(fact) = ctx
             .get(ContextKey::Diagnostic)
@@ -477,6 +493,18 @@ fn print_rounds(ctx: &dyn Context) {
             tick(has_diagnostic(ctx, &scorer_marker))
         );
 
+        let conv_id = format!("design-convergence:{round_n}");
+        if let Some(fact) = ctx
+            .get(ContextKey::Hypotheses)
+            .iter()
+            .find(|f| f.id().as_str() == conv_id)
+        {
+            println!(
+                "  Convergence judge: {}",
+                fact.text().unwrap_or("(no text)")
+            );
+        }
+
         // Synthesis facts land under the synthesis_key in
         // RoundConventions (Hypotheses here) with id
         // `design-synthesis:{N}`. Show the LLM's actual text so the
@@ -509,6 +537,23 @@ fn print_adversarial(ctx: &dyn Context) {
             println!("  • {}", f.summary);
             println!("    target fact: {}", f.target_draft_id);
         }
+    }
+    println!();
+}
+
+fn print_convergence(ctx: &dyn Context) {
+    print_section("Convergence outcome");
+    if let Some(fact) = ctx
+        .get(ContextKey::Diagnostic)
+        .iter()
+        .find(|f| f.id().as_str() == CONVERGENCE_STOP_MARKER)
+    {
+        println!(
+            "  ✓ deliberation halted early: {}",
+            fact.text().unwrap_or("(no text)")
+        );
+    } else {
+        println!("  ran to max rounds — no early-stop signal emitted");
     }
     println!();
 }
@@ -752,6 +797,9 @@ impl Suggestor for EvolvingCatalogProposer {
     }
     fn accepts(&self, ctx: &dyn Context) -> bool {
         if !ctx.has(ContextKey::Seeds) {
+            return false;
+        }
+        if convergence_reached(ctx) {
             return false;
         }
         !self.open_batches(ctx).is_empty()
@@ -1113,6 +1161,252 @@ impl Suggestor for EvidenceWeightedScorer {
                     "{EVIDENCE_SCORER_NAME}: scoring complete for batch {batch_id}"
                 )),
             ));
+        }
+        effect.build()
+    }
+}
+
+const CONVERGENCE_STOP_MARKER: &str = "design-convergence-reached";
+
+fn convergence_reached(ctx: &dyn Context) -> bool {
+    ctx.get(ContextKey::Diagnostic)
+        .iter()
+        .any(|f| f.id().as_str() == CONVERGENCE_STOP_MARKER)
+}
+
+/// `ConvergenceJudge` — LLM-driven cross-round convergence detector.
+///
+/// After a round completes scoring, the judge compares its shortlist
+/// (descriptor sets) to the prior round's. Even when the descriptor
+/// sets differ, the LLM is asked to decide whether the deliberation
+/// has *materially* converged: same coverage profile, same capability
+/// trade-offs, or a stable preferred roster across rounds. The
+/// verdict + reason are emitted as one fact per round under
+/// `Hypotheses`, and a single `design-convergence-reached` marker
+/// under `Diagnostic` is emitted the first time the judge says
+/// CONVERGED. `EvolvingCatalogProposer.accepts()` checks that marker
+/// and halts, so subsequent unstarted rounds never produce drafts —
+/// the work formation handoff picks `latest_completed_batch` and
+/// proceeds.
+///
+/// Per-round idempotent: judgment fact id is `design-convergence:{N}`.
+/// On chat or parse failure: emits Diagnostic and abstains (no
+/// silent CONVERGED). Without a verdict, the proposer keeps firing
+/// for remaining rounds.
+struct ConvergenceJudge {
+    backend: Arc<dyn DynChatBackend>,
+}
+
+const CONVERGENCE_JUDGE_NAME: &str = "scenario-convergence-judge";
+
+impl ConvergenceJudge {
+    fn new(backend: Arc<dyn DynChatBackend>) -> Self {
+        Self { backend }
+    }
+
+    fn judgment_fact_id(round_n: u8) -> String {
+        format!("design-convergence:{round_n}")
+    }
+
+    /// Round numbers N >= 2 for which:
+    ///   - round N completed scoring (sentinel under Diagnostic)
+    ///   - round N-1 completed scoring
+    ///   - we have not yet emitted a judgment for round N
+    ///   - we have not yet emitted the stop marker (once we say
+    ///     CONVERGED we stop checking — subsequent rounds will not
+    ///     run anyway thanks to the proposer guard).
+    fn pending(ctx: &dyn Context) -> Vec<u8> {
+        if convergence_reached(ctx) {
+            return Vec::new();
+        }
+        let completed: std::collections::BTreeSet<u8> = completed_batches(ctx)
+            .into_iter()
+            .filter_map(|b| round_number_from_design_batch_id(&b))
+            .collect();
+        let judged: std::collections::BTreeSet<String> = ctx
+            .get(ContextKey::Hypotheses)
+            .iter()
+            .map(|f| f.id().as_str().to_string())
+            .collect();
+        let mut pending: Vec<u8> = completed
+            .iter()
+            .copied()
+            .filter(|n| {
+                *n >= 2
+                    && completed.contains(&(n - 1))
+                    && !judged.contains(&Self::judgment_fact_id(*n))
+            })
+            .collect();
+        pending.sort_unstable();
+        pending.dedup();
+        pending
+    }
+
+    fn shortlist_descriptors(ctx: &dyn Context, batch_id: &str) -> Vec<String> {
+        let mut descriptors: Vec<String> =
+            extract_drafts_for_batch(ctx, ContextKey::Proposals, batch_id)
+                .iter()
+                .flat_map(|d| d.descriptor_ids.iter().map(|id| id.as_str().to_string()))
+                .collect();
+        descriptors.sort();
+        descriptors.dedup();
+        descriptors
+    }
+
+    fn synthesis_text(ctx: &dyn Context, round_n: u8) -> String {
+        let id = format!("design-synthesis:{round_n}");
+        ctx.get(ContextKey::Hypotheses)
+            .iter()
+            .find(|f| f.id().as_str() == id)
+            .and_then(|f| f.text())
+            .unwrap_or("(no synthesis recorded for this round)")
+            .to_string()
+    }
+
+    fn compose_prompt(
+        prev_n: u8,
+        curr_n: u8,
+        prev_descriptors: &[String],
+        curr_descriptors: &[String],
+        prev_synth: &str,
+        curr_synth: &str,
+    ) -> String {
+        format!(
+            "Two consecutive rounds of a design huddle completed. \
+             Decide whether the deliberation has materially converged \
+             (same preferred roster, same coverage profile, same \
+             capability trade-offs — even if descriptor lists differ \
+             in incidental ways) or is still genuinely shifting.\n\
+             \n\
+             Round {prev_n} shortlist descriptors: [{prev_descs}]\n\
+             Round {prev_n} synthesis:\n{prev_synth}\n\
+             \n\
+             Round {curr_n} shortlist descriptors: [{curr_descs}]\n\
+             Round {curr_n} synthesis:\n{curr_synth}\n",
+            prev_descs = prev_descriptors.join(", "),
+            curr_descs = curr_descriptors.join(", "),
+        )
+    }
+
+    fn parse_response(text: &str) -> Result<(bool, String), String> {
+        let mut lines = text.lines().map(str::trim).filter(|l| !l.is_empty());
+        let first = lines.next().ok_or("empty response")?;
+        let converged = match first.to_ascii_uppercase().as_str() {
+            "CONVERGED" => true,
+            "DIVERGED" => false,
+            other => {
+                return Err(format!(
+                    "expected CONVERGED or DIVERGED on line 1, got: {other:?}"
+                ));
+            }
+        };
+        let reason = lines.next().ok_or("missing reason on line 2")?.to_string();
+        Ok((converged, reason))
+    }
+}
+
+#[async_trait]
+impl Suggestor for ConvergenceJudge {
+    fn name(&self) -> &'static str {
+        CONVERGENCE_JUDGE_NAME
+    }
+    fn dependencies(&self) -> &[ContextKey] {
+        &[
+            ContextKey::Diagnostic,
+            ContextKey::Proposals,
+            ContextKey::Hypotheses,
+        ]
+    }
+    fn provenance(&self) -> &'static str {
+        ScenarioProvenance.as_str()
+    }
+    fn accepts(&self, ctx: &dyn Context) -> bool {
+        !Self::pending(ctx).is_empty()
+    }
+
+    async fn execute(&self, ctx: &dyn Context) -> AgentEffect {
+        let mut effect = AgentEffect::builder();
+        for round_n in Self::pending(ctx) {
+            let prev_n = round_n - 1;
+            let curr_batch = format!("{ROUND_SIGNAL_PREFIX}{round_n}");
+            let prev_batch = format!("{ROUND_SIGNAL_PREFIX}{prev_n}");
+            let curr_desc = Self::shortlist_descriptors(ctx, &curr_batch);
+            let prev_desc = Self::shortlist_descriptors(ctx, &prev_batch);
+            let curr_synth = Self::synthesis_text(ctx, round_n);
+            let prev_synth = Self::synthesis_text(ctx, prev_n);
+            let prompt = Self::compose_prompt(
+                prev_n,
+                round_n,
+                &prev_desc,
+                &curr_desc,
+                &prev_synth,
+                &curr_synth,
+            );
+            let request = ChatRequest {
+                messages: vec![ChatMessage {
+                    role: ChatRole::User,
+                    content: prompt,
+                    tool_calls: Vec::new(),
+                    tool_call_id: None,
+                }],
+                system: Some(
+                    "You judge whether a deliberation has materially converged. \
+                     Reply with EXACTLY two non-empty lines:\n\
+                     Line 1: CONVERGED or DIVERGED (one word, uppercase, nothing else).\n\
+                     Line 2: One-sentence reason citing the specific evidence \
+                     (descriptor sets, coverage profile, synthesis themes). Be honest — \
+                     prefer DIVERGED if there is real shift; CONVERGED should mean the \
+                     deliberation has stabilized."
+                        .to_string(),
+                ),
+                tools: Vec::new(),
+                response_format: ResponseFormat::Text,
+                max_tokens: Some(150),
+                temperature: Some(0.0),
+                stop_sequences: Vec::new(),
+                model: None,
+            };
+            match self.backend.chat(request).await {
+                Ok(response) => match Self::parse_response(&response.content) {
+                    Ok((converged, reason)) => {
+                        let verdict_label = if converged { "CONVERGED" } else { "DIVERGED" };
+                        let body = format!("round {prev_n}→{round_n}: {verdict_label} — {reason}");
+                        effect = effect.proposal(ScenarioProvenance.proposed_fact(
+                            ContextKey::Hypotheses,
+                            Self::judgment_fact_id(round_n),
+                            TextPayload::new(body.clone()),
+                        ));
+                        if converged {
+                            effect = effect.proposal(ScenarioProvenance.proposed_fact(
+                                ContextKey::Diagnostic,
+                                CONVERGENCE_STOP_MARKER.to_string(),
+                                TextPayload::new(format!(
+                                    "{CONVERGENCE_JUDGE_NAME}: convergence reached at round {round_n}: {reason}"
+                                )),
+                            ));
+                        }
+                    }
+                    Err(parse_err) => {
+                        effect = effect.proposal(ScenarioProvenance.proposed_fact(
+                            ContextKey::Diagnostic,
+                            format!("convergence-judge-parse-error-{round_n}"),
+                            TextPayload::new(format!(
+                                "{CONVERGENCE_JUDGE_NAME}: unparseable response for round {round_n}: {parse_err}. raw: {raw}",
+                                raw = response.content,
+                            )),
+                        ));
+                    }
+                },
+                Err(chat_err) => {
+                    effect = effect.proposal(ScenarioProvenance.proposed_fact(
+                        ContextKey::Diagnostic,
+                        format!("convergence-judge-chat-error-{round_n}"),
+                        TextPayload::new(format!(
+                            "{CONVERGENCE_JUDGE_NAME}: chat backend error for round {round_n}: {chat_err}"
+                        )),
+                    ));
+                }
+            }
         }
         effect.build()
     }
