@@ -74,6 +74,14 @@ show-multi-plan:
 show-multi-plan-solver:
     cargo run -p scenario-multi-plan-allocation --features with-solver
 
+# Ferrox end-to-end verification: solve a hard 23-clue Sudoku
+# ('AI Escargot') and self-validate the result. Default build
+# is portable; --features with-solver actually solves.
+show-sudoku:
+    cargo run -p scenario-sudoku-cp-sat
+show-sudoku-solver:
+    cargo run -p scenario-sudoku-cp-sat --features with-solver
+
 # Run every showcase scenario in sequence. Halts on the first
 # non-zero exit. Note: scenario-round-driven-formation-design will
 # exit honestly without an LLM key set; that's intentional — drop

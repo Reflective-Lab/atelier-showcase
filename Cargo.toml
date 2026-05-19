@@ -13,6 +13,7 @@ members = [
     "scenarios/high-risk-claim-portfolio",
     "scenarios/multi-plan-allocation",
     "scenarios/round-driven-formation-design",
+    "scenarios/sudoku-cp-sat",
     "scenarios/truth-driven-formation",
     "scenarios/vendor-selection",
 

@@ -1,0 +1,21 @@
+[package]
+name = "scenario-sudoku-cp-sat"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Same shape as scenario-multi-plan-allocation: default build
+# stays portable (no FFI linkage); pass --features with-solver
+# to compile the OR-Tools shim and actually solve. libortools
+# is vendored at mosaic-extensions/ferrox-solvers/vendor/ortools/
+# and linked via ferrox-ortools-sys build.rs — no system install.
+[features]
+default = []
+with-solver = ["ferrox/ortools"]
+
+[dependencies]
+converge-kernel = "3.9.1"
+converge-pack = "3.9.1"
+ferrox = { package = "converge-ferrox-solver", path = "../../../mosaic-extensions/ferrox-solvers/crates/ferrox", version = "0.7.1", default-features = false }
+
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
