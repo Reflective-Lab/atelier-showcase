@@ -8,13 +8,15 @@
 //! plan back and prints the selection + objective value.
 //!
 //! Honest exit: if the `with-solver` feature is off, the scenario
-//! prints an install hint and returns — no heuristic fallback, no
-//! silent stub. Run with:
+//! prints catalog + constraints + a feature hint and returns — no
+//! heuristic fallback, no silent stub. Run with:
 //!
 //!     cargo run -p scenario-multi-plan-allocation --features with-solver
 //!
-//! Requires libortools on the host (Homebrew: `brew install
-//! google-or-tools`; or build from source).
+//! libortools is vendored under
+//! `mosaic-extensions/ferrox-solvers/vendor/ortools/build/lib/`
+//! and linked via `ferrox-ortools-sys` build.rs — no Homebrew or
+//! system install needed.
 
 #[cfg(feature = "with-solver")]
 use converge_kernel::{Budget, ContextState, ConvergeResult, Engine, ProposedFact};
@@ -138,10 +140,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     {
         println!("──────────────────────────────────────────────────────────");
         println!(
-            "Solver disabled. Build with `--features with-solver` to enable\n\
-             ferrox::cp::CpSatSuggestor (requires libortools on the host —\n\
-             try `brew install google-or-tools` or build from source).\n\
-             No heuristic fallback — honest exit."
+            "Solver disabled. Re-run with `--features with-solver` to\n\
+             enable ferrox::cp::CpSatSuggestor. libortools is vendored\n\
+             in mosaic-extensions/ferrox-solvers/vendor/ortools/build —\n\
+             no system install required. No heuristic fallback —\n\
+             honest exit."
         );
         println!("──────────────────────────────────────────────────────────");
         Ok(())
@@ -169,7 +172,8 @@ async fn run_solver() -> Result<(), Box<dyn std::error::Error>> {
         format!("cpsat-request:{REQUEST_ID}"),
         request.clone(),
         "atelier-multi-plan-allocation",
-    ));
+    ))
+    .map_err(|e| format!("seed proposal: {e:?}"))?;
 
     let result: ConvergeResult = engine.run(ctx).await?;
     print_solution(&result, &request);
@@ -335,7 +339,6 @@ fn print_request(req: &ferrox::cp::CpSatRequest) {
 
 #[cfg(feature = "with-solver")]
 fn print_solution(result: &ConvergeResult, request: &ferrox::cp::CpSatRequest) {
-    use converge_pack::ContextFact;
     println!("Solver outcome");
     println!("──────────────");
     println!(

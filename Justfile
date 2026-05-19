@@ -64,8 +64,11 @@ show-round-driven:
     cargo run -p scenario-round-driven-formation-design
 
 # Ferrox CP-SAT K-of-N plan-selection showcase. Default build
-# prints constraints + an install hint; pass `--features
-# with-solver` and install libortools to actually solve.
+# prints constraints + a feature hint and exits; pass
+# `--features with-solver` to actually solve via CP-SAT.
+# libortools is vendored under
+# mosaic-extensions/ferrox-solvers/vendor/ortools/ — no
+# system install required.
 show-multi-plan:
     cargo run -p scenario-multi-plan-allocation
 show-multi-plan-solver:

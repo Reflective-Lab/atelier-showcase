@@ -4,11 +4,13 @@ version = "0.0.0"
 edition = "2024"
 publish = false
 
-# Default build does NOT pull native libortools. Enable
-# `with-solver` (which turns on `ferrox/ortools`) and have
-# libortools installed on the host to actually solve. Without the
-# feature, the scenario exits honestly with an install hint — no
-# silent fallback to a heuristic.
+# Default build does NOT compile the OR-Tools FFI shim. Enable
+# `with-solver` (which turns on `ferrox/ortools`) to actually
+# solve. libortools is vendored at
+# mosaic-extensions/ferrox-solvers/vendor/ortools/build and
+# linked by `ferrox-ortools-sys` build.rs — no system install.
+# Without the feature, the scenario exits honestly with a hint —
+# no silent fallback to a heuristic.
 [features]
 default = []
 with-solver = ["ferrox/ortools"]
