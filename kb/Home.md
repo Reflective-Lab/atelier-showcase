@@ -19,6 +19,7 @@ Knowledge base for the `atelier` Converge extension.
 ## Architecture
 
 - [[Architecture/Surface]] — public crate surface and contract shape
+- [[Architecture/Algorithmic Backbone]] — SAT/UNSAT, SMT, LP, MIP, CP-SAT, network flow, predicate logic; what each scenario formally proves or optimizes, and why LLMs cannot substitute
 
 ## Building
 

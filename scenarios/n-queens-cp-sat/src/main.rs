@@ -1,5 +1,22 @@
 //! Atelier showcase: N-Queens via ferrox CP-SAT.
 //!
+//! ## Problem class
+//!
+//! **Constraint satisfaction problem** in the framework
+//! ⟨V, D, C⟩. N-Queens is NP-complete as a CSP (the decision
+//! problem of whether a partial assignment extends to a solution
+//! is equivalent to SAT). For N=50 the search space contains
+//! 50! ≈ 3 × 10⁶⁴ raw placements; brute force is intractable
+//! past N≈12, and naïve backtracking degrades on adversarial
+//! variable orderings. CP-SAT's `AllDifferent` global constraint
+//! propagation + CDCL conflict-driven learning resolves N=50 in
+//! milliseconds.
+//!
+//! See `kb/Architecture/Algorithmic Backbone.md` for the full
+//! complexity-class treatment.
+//!
+//! ## Encoding
+//!
 //! Place N queens on an N×N board so no two share a row, column,
 //! or diagonal. Trivial for small N; intractable for naive
 //! brute force past N≈12 (8! = 40k positions, but 50! is ~10^64).

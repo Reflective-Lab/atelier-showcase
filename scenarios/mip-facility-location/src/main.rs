@@ -1,10 +1,51 @@
 //! Atelier showcase: MIP facility location via ferrox HiGHS.
 //!
-//! Classic uncapacitated facility location problem (UFLP): given
-//! candidate warehouses with fixed opening costs and per-customer
-//! shipping costs, decide WHICH warehouses to open AND how much
-//! flow to ship from each open warehouse to each customer such
-//! that all customer demand is met at minimum total cost.
+//! ## Problem class
+//!
+//! **Mixed-integer linear programming (MIP)** — LP augmented with
+//! integrality constraints, formally:
+//!
+//! ```text
+//!     minimize    c^T x  +  d^T y
+//!     subject to  A x + B y  ≥  b
+//!                 x  ≥  0,   x ∈ R^n
+//!                 y  ∈  Z^m  (or {0,1}^m for 0-1 MIP)
+//! ```
+//!
+//! The integer variables y make the problem **NP-hard** (3-SAT
+//! reduces to 0-1 MIP via clause encoding). The canonical solution
+//! method is **branch-and-bound**: solve the LP relaxation
+//! (drop integrality), branch on a fractional integer variable,
+//! prune subtrees whose LP bound is worse than the incumbent,
+//! repeat. Modern solvers add cutting planes (Gomory, MIR,
+//! lift-and-project) that tighten the relaxation. The **MIP gap** —
+//! the relative distance between the best integer solution found
+//! and the best LP bound — measures progress; gap = 0 proves
+//! optimality.
+//!
+//! Why MIP and not LP: many real-world decisions are inherently
+//! discrete — open/close a warehouse, hire/don't-hire, assign one
+//! shift to one worker — and the LP relaxation produces fractional
+//! decisions that are operationally meaningless ("open 0.3 of
+//! warehouse A"). The MIP/LP split is the whole point.
+//!
+//! Why HiGHS, not the LP solver alone: HiGHS-MIP is a full
+//! branch-and-bound implementation with cutting planes and presolve.
+//! Solving an MIP through a generic LP solver requires the same
+//! algorithm to be implemented at the application layer; HiGHS
+//! ships it as a single primitive.
+//!
+//! See `kb/Architecture/Algorithmic Backbone.md` for the full
+//! complexity-class treatment.
+//!
+//! ## The classical UFLP instance
+//!
+//! The Uncapacitated (here: capacitated) Facility Location
+//! Problem: given candidate warehouses with fixed opening costs
+//! and per-customer shipping costs, decide WHICH warehouses to
+//! open AND how much flow to ship from each open warehouse to
+//! each customer such that all customer demand is met at minimum
+//! total cost.
 //!
 //! This is the canonical demonstration of MIP's value over pure
 //! LP: the "open or not" decision is binary, and that single

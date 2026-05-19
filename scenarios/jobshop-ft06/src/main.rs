@@ -1,5 +1,31 @@
 //! Atelier showcase: Fisher-Thompson 6×6 job-shop benchmark.
 //!
+//! ## Problem class
+//!
+//! **Job-shop scheduling** with makespan objective is one of the
+//! foundational **NP-hard** combinatorial optimization problems
+//! (Garey, Johnson & Sethi 1976). Formally: given m machines and
+//! n jobs each consisting of an ordered sequence of operations
+//! with fixed machine assignments and durations, find a schedule
+//! that respects (a) precedence within each job and (b) no two
+//! operations overlap on the same machine, while minimizing
+//! makespan max_o end(o). The decision form ("does a schedule of
+//! makespan ≤ k exist?") is NP-complete.
+//!
+//! The CP-SAT encoding uses **interval variables** — a CP-SAT
+//! primitive that represents a contiguous time block ⟨start, end,
+//! duration⟩ — and the **`NoOverlap` global constraint** — a
+//! polynomial-time propagator that enforces mutual exclusion on a
+//! resource. This pairing is exactly what makes CP-SAT the right
+//! tool: the scheduling primitives match the problem structure,
+//! and the underlying CDCL core handles the combinatorial branching
+//! with conflict-driven clause learning.
+//!
+//! See `kb/Architecture/Algorithmic Backbone.md` for the full
+//! complexity-class treatment.
+//!
+//! ## The benchmark
+//!
 //! The `ft06` instance, introduced by Fisher & Thompson (1963), is
 //! the smallest standard job-shop scheduling benchmark and the
 //! canonical NP-hard scheduling test. Six jobs, each a sequence of

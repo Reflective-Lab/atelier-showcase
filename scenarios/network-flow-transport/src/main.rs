@@ -1,5 +1,33 @@
 //! Atelier showcase: min-cost network flow transportation.
 //!
+//! ## Problem class
+//!
+//! **Min-cost network flow** — a special case of LP whose
+//! constraint matrix is **totally unimodular (TU)**, a structural
+//! property guaranteeing that the LP relaxation has integer
+//! optimal vertices. Formally: directed graph G = (V, E) with arc
+//! capacities u_e ∈ Z_≥0, unit costs c_e ∈ Z, and node supplies
+//! b_v ∈ Z (sources b_v > 0, sinks b_v < 0, transshipment b_v = 0,
+//! with Σ_v b_v = 0). Find flow f: E → Z_≥0 minimizing Σ_e c_e f_e
+//! subject to capacity f_e ≤ u_e and conservation at every node.
+//!
+//! The TU property collapses what would be NP-hard as a generic
+//! 0-1 MIP into a **strongly polynomial-time** problem. The
+//! **network simplex algorithm** (Dantzig 1951, modern variants
+//! by Orlin and others) runs in O(VE log V) or better and
+//! produces provably integer optima without branch-and-bound.
+//!
+//! This is the lesson the scenario makes concrete: **structural
+//! insight pays off**. Solving the same problem through a generic
+//! LP or MIP works but runs orders of magnitude slower. Knowing
+//! the constraint matrix is TU and dispatching to the specialized
+//! algorithm is what production OR practitioners do.
+//!
+//! See `kb/Architecture/Algorithmic Backbone.md` for the full
+//! complexity-class treatment.
+//!
+//! ## The instance
+//!
 //! 3-echelon supply chain: 3 plants → 4 distribution centers →
 //! 6 retailers. Each edge has a capacity and per-unit cost. Find
 //! the flow assignment that satisfies all retail demand at

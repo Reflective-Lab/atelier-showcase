@@ -1,8 +1,37 @@
 //! Atelier showcase: Sudoku via ferrox CP-SAT.
 //!
-//! A verification harness, not a feature pitch. The point is to
-//! prove ferrox is wired end-to-end and can solve a problem class
-//! that breaks LLMs and trivial backtracking:
+//! ## Problem class
+//!
+//! **Constraint satisfaction problem (CSP)** — a triple
+//! ⟨V, D, C⟩ where V is a set of variables, D is the product of
+//! their domains, and C is a set of constraints each restricting
+//! some subset of variables. Solving a Sudoku is **NP-complete** in
+//! its general (n²×n²) form (Yato & Seta 2003) — equivalent to
+//! deciding a SAT instance over the cell-assignment Boolean
+//! variables. The 9×9 case is finite but adversarially constructed
+//! instances (the "AI Escargot" puzzle below) are engineered to
+//! maximize backtracking depth, defeating naïve search.
+//!
+//! ## The encoding
+//!
+//! 81 integer variables, one per cell:
+//!   x_{r,c} ∈ {1, ..., 9},   r, c ∈ {0, ..., 8}
+//!
+//! Constraints:
+//!   - 9 rows × AllDifferent({x_{r,0}, ..., x_{r,8}})
+//!   - 9 cols × AllDifferent({x_{0,c}, ..., x_{8,c}})
+//!   - 9 boxes × AllDifferent({x_{r,c} : (r,c) ∈ box_b})
+//!   - ~17 fixed-clue equalities x_{r,c} = digit
+//!
+//! That's 27 `AllDifferent` global constraints (CP-SAT primitive,
+//! propagated via Régin's matching algorithm in O(n^{2.5})) plus
+//! ~17 linear equalities. The CP-SAT solver translates each
+//! `AllDifferent` to a network of binary not-equal clauses
+//! consumed by its internal CDCL core (lazy clause generation),
+//! and combines propagation with conflict-driven learning to prune
+//! the search space exponentially.
+//!
+//! ## Why this breaks LLMs and trivial backtracking
 //!
 //! - LLMs reliably hallucinate Sudoku cells. Even on 30+ clue
 //!   puzzles, frontier chat models produce grids that violate

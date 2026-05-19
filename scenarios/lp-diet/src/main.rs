@@ -1,8 +1,32 @@
 //! Atelier showcase: LP diet problem via ferrox GLOP.
 //!
-//! Classic introductory linear programming: 8 foods with per-serving
-//! cost and nutrient profile; 6 nutrient minimums; find the cheapest
-//! combination of fractional servings that meets every minimum.
+//! ## Problem class
+//!
+//! **Linear programming** — the canonical *polynomial-time* member
+//! of mathematical optimization. Formally:
+//!
+//! ```text
+//!     minimize    c^T x
+//!     subject to  A x  ≥  b
+//!                 x  ≥  0,   x ∈ R^n
+//! ```
+//!
+//! The feasible region {x : Ax ≥ b, x ≥ 0} is a convex polytope;
+//! the objective is linear; the optimum (when finite) is attained
+//! at a vertex of the polytope. LP is in **P** — Khachiyan's
+//! ellipsoid method (1979) gave the first polynomial-time bound,
+//! Karmarkar's interior-point algorithm (1984) made it practical
+//! at scale. Modern simplex implementations (GLOP, CLP, HiGHS-LP)
+//! exploit sparsity to handle 10⁶-variable LPs in seconds.
+//!
+//! Stigler's diet problem (1945) is the historical first LP, and
+//! the canonical introductory instance. 8 foods with per-serving
+//! cost and nutrient profile; 6 nutrient minimums; find the
+//! cheapest combination of fractional servings that meets every
+//! minimum.
+//!
+//! See `kb/Architecture/Algorithmic Backbone.md` for the full
+//! complexity-class treatment.
 //!
 //! Why this matters: LP is the foundation of operations research —
 //! fractional optimization at the boundary of feasibility. LLMs can
