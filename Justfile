@@ -142,6 +142,13 @@ show-arbiter-governance:
 show-arbiter-compliance:
     cargo run -p scenario-arbiter-compliance
 
+# Layered governance: three gates (RuleGate + ApprovalGate +
+# AnomalyGate) firing on the same document in a single Converge
+# run, each emitting its own typed Constraints payload family.
+# Reference for the warden-compliance layered-governance pattern.
+show-layered-governance:
+    cargo run -p scenario-layered-governance
+
 # Ferrox stress test: N=50 N-Queens via CP-SAT.
 # AllDifferent on queens + diagonals + anti-diagonals; ~150
 # variables, ~103 constraints. Solves in well under a second.
