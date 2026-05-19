@@ -116,11 +116,26 @@ opt-level = 3
 lto = true
 codegen-units = 1
 
-# Local Organism development override. The 1.9 line is still in flight —
-# organism-planning needed the MembershipDegree migration (commit 823bf17
-# on the bedrock-platform/organism `next` branch) and the crates.io copy
-# does not yet carry it. Patch the affected crates to local until 1.9.1
-# is published.
+# Remaining release-coupling debt — axiom-truth 0.7.0 on crates.io
+# imports `converge_provider::select_healthy_chat_backend`, which
+# now lives in `converge-manifold-adapters` (lib name `manifold`).
+# Local source is already migrated; remove this patch once
+# axiom-truth is republished against the 3.9 contract.
+#
+# The Organism path-patches stay alongside axiom: axiom-truth
+# transitively pulls local-source `organism-pack` / `-runtime` /
+# `-intent` via its own path-dep workspace, so atelier's
+# crates.io-resolved copies of the same crates would fork the graph
+# ("multiple different versions of crate `organism_intent` in the
+# dependency graph"). Patching to the same local source unifies
+# them. Drop these patches in the same move that drops the
+# axiom-truth patch.
+#
+# converge-prism-analytics — NOT patched. Local source has diverged
+# past published 2.0.1 (added a `UnitFraction` newtype that
+# organism-planning 1.9.1 does not yet consume); atelier resolves
+# through the same crates.io 2.0.1 organism does. Re-add the patch
+# when both ends move to the next prism line.
 [patch.crates-io]
 organism-pack = { path = "../bedrock-platform/organism/crates/pack" }
 organism-runtime = { path = "../bedrock-platform/organism/crates/runtime" }
@@ -131,8 +146,7 @@ organism-simulation = { path = "../bedrock-platform/organism/crates/simulation" 
 organism-learning = { path = "../bedrock-platform/organism/crates/learning" }
 organism-notes = { path = "../bedrock-platform/organism/crates/notes" }
 organism-intelligence = { path = "../bedrock-platform/organism/crates/intelligence" }
-converge-prism-analytics = { path = "../mosaic-extensions/prism-analytics/crates/prism" }
-# axiom-truth 0.7.0 on crates.io imports `converge_provider::select_healthy_chat_backend`,
-# which now lives in `converge-manifold-adapters` (lib name `manifold`). Local source is
-# already migrated; remove this patch once axiom-truth is republished against 3.8.1.
+organism-catalog = { path = "../bedrock-platform/organism/crates/catalog" }
+organism-catalog-seed = { path = "../bedrock-platform/organism/crates/catalog-seed" }
+organism-dynamics = { path = "../bedrock-platform/organism/crates/dynamics" }
 axiom-truth = { path = "../bedrock-platform/axiom" }
