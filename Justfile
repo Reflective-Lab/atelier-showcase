@@ -89,6 +89,13 @@ show-lp-diet:
 show-lp-diet-solver:
     cargo run -p scenario-lp-diet --features with-solver
 
+# Ferrox MIP: classic facility location. Binary "open" decisions
+# + continuous shipping plan. HiGHS branch-and-bound.
+show-mip-facility:
+    cargo run -p scenario-mip-facility-location
+show-mip-facility-solver:
+    cargo run -p scenario-mip-facility-location --features with-solver
+
 # Ferrox stress test: N=50 N-Queens via CP-SAT.
 # AllDifferent on queens + diagonals + anti-diagonals; ~150
 # variables, ~103 constraints. Solves in well under a second.

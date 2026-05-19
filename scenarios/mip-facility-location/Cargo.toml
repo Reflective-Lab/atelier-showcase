@@ -1,0 +1,21 @@
+[package]
+name = "scenario-mip-facility-location"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# HiGHS is enabled via the `highs` feature on ferrox (separate
+# from `ortools`). The vendored OR-Tools build does NOT include
+# HiGHS by default; this scenario uses ferrox/full to pick up
+# both backends. Default build stays portable; with-solver
+# turns on the FFI link.
+[features]
+default = []
+with-solver = ["ferrox/full"]
+
+[dependencies]
+converge-kernel = "3.9.1"
+converge-pack = "3.9.1"
+ferrox = { package = "converge-ferrox-solver", path = "../../../mosaic-extensions/ferrox-solvers/crates/ferrox", version = "0.7.1", default-features = false }
+
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
