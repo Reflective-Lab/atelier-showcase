@@ -64,8 +64,8 @@ use organism_catalog::{DiscoveryCatalog, ProviderDescriptorCatalog};
 use organism_catalog_seed as seed;
 use organism_dynamics::{
     BeautyContestSuggestor, CatalogProposerSuggestor, DraftValidation,
-    DraftValidatorCriticSuggestor, FormationDraft, compile_draft, completed_batches,
-    critic_pass_complete_marker, extract_draft_validations, extract_drafts,
+    DraftValidatorCriticSuggestor, DraftVerdict, FormationDraft, compile_draft,
+    completed_batches, critic_pass_complete_marker, extract_draft_validations, extract_drafts,
     extract_drafts_for_batch, latest_completed_batch, scorer_batch_complete_marker,
 };
 use organism_runtime::huddle::{
@@ -151,6 +151,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         request.clone(),
     );
     let adversarial = AssumptionBreakerAgent::new();
+    let llm_critic = LlmCriticSuggestor::new(
+        selected.backend.clone(),
+        catalog.clone(),
+        "audit a candidate plan for policy compliance and anomalies".to_string(),
+        vec![SuggestorRole::Constraint],
+        vec![
+            SuggestorCapability::PolicyEnforcement,
+            SuggestorCapability::Analytics,
+        ],
+    );
     let scorer = BeautyContestSuggestor::new_critic_gated(1);
     let synthesizer = RoundSynthesizer::new(1, LlmSynthesisProducer::new(selected.backend.clone()))
         .with_conventions(conventions);
@@ -160,6 +170,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .agent_boxed(Box::new(proposer))
         .agent_boxed(Box::new(critic))
         .agent_boxed(Box::new(adversarial))
+        .agent_boxed(Box::new(llm_critic))
         .agent_boxed(Box::new(scorer))
         .agent_boxed(Box::new(ShortlistNoteEmitter))
         .agent_boxed(Box::new(synthesizer))
@@ -376,14 +387,39 @@ fn print_rounds(ctx: &dyn Context) {
             );
         }
 
-        println!("  Draft critic:");
+        println!("  Draft critic  (mechanical, organism-dynamics):");
         for d in &drafts_in_batch {
-            if let Some(v) = find_validation(&passes, batch_id, &d.draft_id) {
+            if let Some(v) = find_validation_by_critic(
+                &passes,
+                batch_id,
+                &d.draft_id,
+                "organism-draft-validator-critic",
+            ) {
                 println!("    {:<14}  →  PASS  ({})", d.draft_id, v.reason);
-            } else if let Some(v) = find_validation(&blocks, batch_id, &d.draft_id) {
+            } else if let Some(v) = find_validation_by_critic(
+                &blocks,
+                batch_id,
+                &d.draft_id,
+                "organism-draft-validator-critic",
+            ) {
                 println!("    {:<14}  →  BLOCK ({})", d.draft_id, v.reason);
             } else {
                 println!("    {:<14}  →  (no verdict)", d.draft_id);
+            }
+        }
+
+        println!("  LLM critic    (semantic, Manifold-selected backend):");
+        for d in &drafts_in_batch {
+            if let Some(v) =
+                find_validation_by_critic(&passes, batch_id, &d.draft_id, LLM_CRITIC_NAME)
+            {
+                println!("    {:<14}  →  PASS  ({})", d.draft_id, v.reason);
+            } else if let Some(v) =
+                find_validation_by_critic(&blocks, batch_id, &d.draft_id, LLM_CRITIC_NAME)
+            {
+                println!("    {:<14}  →  BLOCK ({})", d.draft_id, v.reason);
+            } else {
+                println!("    {:<14}  →  (no verdict — late or failed)", d.draft_id);
             }
         }
 
@@ -723,6 +759,278 @@ impl SynthesisProducer for LlmSynthesisProducer {
     }
 }
 
+/// `LlmCriticSuggestor` — the LLM as a real design-huddle
+/// participant. Reads each unjudged FormationDraft, gathers the
+/// catalog metadata for every descriptor in the proposed roster,
+/// composes a strict two-line judgment prompt, calls the selected
+/// chat backend, parses the response, and emits a typed
+/// `DraftValidation` (`Pass` → Evaluations / `Block` → Constraints)
+/// just like the deterministic critic. The scorer's existing
+/// blocked-id filter already respects any `Block` regardless of
+/// which critic emitted it — no protocol change.
+///
+/// Per-fact idempotent: judgment fact ids are `llm-validation-
+/// {batch_id}-{draft_id}`. The same draft cannot be re-judged.
+/// Per-batch sentinel `llm-critic-pass-complete-{batch_id}` lands
+/// in Diagnostic so a host can wait for LLM verdicts before
+/// advancing — RoundAdvancer in this scenario does not, so late
+/// LLM blocks are recorded but may not influence the current
+/// round's shortlist. That's honest: the trace shows the
+/// disagreement when it happens.
+///
+/// On any failure path (chat error, unparseable response) the
+/// critic emits a Diagnostic fact and skips that draft. No
+/// silent Pass-by-default; no fallback verdict.
+struct LlmCriticSuggestor {
+    backend: Arc<dyn DynChatBackend>,
+    catalog: DiscoveryCatalog,
+    intent: String,
+    required_roles: Vec<SuggestorRole>,
+    required_capabilities: Vec<SuggestorCapability>,
+}
+
+impl LlmCriticSuggestor {
+    fn new(
+        backend: Arc<dyn DynChatBackend>,
+        catalog: DiscoveryCatalog,
+        intent: String,
+        required_roles: Vec<SuggestorRole>,
+        required_capabilities: Vec<SuggestorCapability>,
+    ) -> Self {
+        Self {
+            backend,
+            catalog,
+            intent,
+            required_roles,
+            required_capabilities,
+        }
+    }
+
+    fn judgment_fact_id(batch_id: &str, draft_id: &str) -> String {
+        format!("llm-validation-{batch_id}-{draft_id}")
+    }
+
+    fn batch_sentinel_id(batch_id: &str) -> String {
+        format!("llm-critic-pass-complete-{batch_id}")
+    }
+
+    fn already_judged(ctx: &dyn Context, draft: &FormationDraft) -> bool {
+        let id = Self::judgment_fact_id(&draft.draft_batch_id, &draft.draft_id);
+        ctx.get(ContextKey::Evaluations)
+            .iter()
+            .chain(ctx.get(ContextKey::Constraints).iter())
+            .any(|fact| fact.id().as_str() == id)
+    }
+
+    fn compose_prompt(&self, draft: &FormationDraft) -> String {
+        let roles = self
+            .required_roles
+            .iter()
+            .map(|r| format!("{r:?}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let caps = self
+            .required_capabilities
+            .iter()
+            .map(|c| format!("{c:?}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut roster_block = String::new();
+        for desc_id in &draft.descriptor_ids {
+            let line = match self.catalog.get(desc_id.as_str()) {
+                Some(entry) => {
+                    let profile = &entry.descriptor.profile;
+                    let cap_list = profile
+                        .capabilities
+                        .iter()
+                        .map(|c| format!("{c:?}"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    format!(
+                        "- {} (role: {:?}, capabilities: [{}])\n  summary: {}\n  use_when: {}\n",
+                        desc_id.as_str(),
+                        profile.role,
+                        cap_list,
+                        entry.discovery.summary,
+                        entry.discovery.use_when,
+                    )
+                }
+                None => format!("- {} (NOT IN CATALOG)\n", desc_id.as_str()),
+            };
+            roster_block.push_str(&line);
+        }
+        format!(
+            "Intent: {intent}\n\
+             Template required roles: [{roles}]\n\
+             Template required capabilities: [{caps}]\n\
+             \n\
+             Proposed roster:\n{roster_block}\n\
+             Does this roster fit the intent and satisfy the template requirements?",
+            intent = self.intent,
+        )
+    }
+
+    /// Two-line strict parse. Returns (verdict, reason) or an error
+    /// string suitable for Diagnostic.
+    fn parse_response(text: &str) -> Result<(DraftVerdict, String), String> {
+        let mut lines = text
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty());
+        let first = lines.next().ok_or("empty response")?;
+        let verdict = match first.to_ascii_uppercase().as_str() {
+            "PASS" => DraftVerdict::Pass,
+            "BLOCK" => DraftVerdict::Block,
+            other => return Err(format!("expected PASS or BLOCK on line 1, got: {other:?}")),
+        };
+        let reason = lines.next().ok_or("missing reason on line 2")?.to_string();
+        Ok((verdict, reason))
+    }
+}
+
+const LLM_CRITIC_NAME: &str = "scenario-llm-critic";
+
+#[async_trait]
+impl Suggestor for LlmCriticSuggestor {
+    fn name(&self) -> &'static str {
+        LLM_CRITIC_NAME
+    }
+    fn dependencies(&self) -> &[ContextKey] {
+        &[ContextKey::Strategies]
+    }
+    fn provenance(&self) -> &'static str {
+        ScenarioProvenance.as_str()
+    }
+    fn accepts(&self, ctx: &dyn Context) -> bool {
+        extract_drafts(ctx, ContextKey::Strategies)
+            .iter()
+            .any(|d| !Self::already_judged(ctx, d))
+    }
+
+    async fn execute(&self, ctx: &dyn Context) -> AgentEffect {
+        let drafts: Vec<FormationDraft> = extract_drafts(ctx, ContextKey::Strategies)
+            .into_iter()
+            .filter(|d| !Self::already_judged(ctx, d))
+            .collect();
+
+        let mut effect = AgentEffect::builder();
+        let mut batches_touched: std::collections::BTreeSet<String> =
+            std::collections::BTreeSet::new();
+
+        for draft in &drafts {
+            batches_touched.insert(draft.draft_batch_id.to_string());
+            let prompt = self.compose_prompt(draft);
+            let request = ChatRequest {
+                messages: vec![ChatMessage {
+                    role: ChatRole::User,
+                    content: prompt,
+                    tool_calls: Vec::new(),
+                    tool_call_id: None,
+                }],
+                system: Some(
+                    "You judge proposed Suggestor rosters for a deliberation Formation. \
+                     Reply with EXACTLY two non-empty lines:\n\
+                     Line 1: PASS or BLOCK (one word, uppercase, nothing else).\n\
+                     Line 2: One-sentence reason. Cite descriptor ids by name when relevant. \
+                     Do NOT invent capabilities, descriptors, or template requirements that the \
+                     input does not state. Do NOT add any other lines, prose, or markdown."
+                        .to_string(),
+                ),
+                tools: Vec::new(),
+                response_format: ResponseFormat::Text,
+                max_tokens: Some(120),
+                temperature: Some(0.0),
+                stop_sequences: Vec::new(),
+                model: None,
+            };
+
+            match self.backend.chat(request).await {
+                Ok(response) => match Self::parse_response(&response.content) {
+                    Ok((verdict, reason)) => {
+                        let target_key = match verdict {
+                            DraftVerdict::Pass => ContextKey::Evaluations,
+                            DraftVerdict::Block => ContextKey::Constraints,
+                        };
+                        let validation = DraftValidation::new(
+                            &draft.draft_id,
+                            &draft.draft_batch_id,
+                            verdict,
+                            reason,
+                            LLM_CRITIC_NAME,
+                        );
+                        let json = match serde_json::to_string(&validation) {
+                            Ok(s) => s,
+                            Err(e) => {
+                                effect = effect.proposal(ScenarioProvenance.proposed_fact(
+                                    ContextKey::Diagnostic,
+                                    format!(
+                                        "llm-critic-serialize-error-{}-{}",
+                                        draft.draft_batch_id, draft.draft_id
+                                    ),
+                                    TextPayload::new(format!(
+                                        "{LLM_CRITIC_NAME}: serialize error for {}/{}: {e}",
+                                        draft.draft_batch_id, draft.draft_id
+                                    )),
+                                ));
+                                continue;
+                            }
+                        };
+                        effect = effect.proposal(ScenarioProvenance.proposed_fact(
+                            target_key,
+                            LlmCriticSuggestor::judgment_fact_id(
+                                &draft.draft_batch_id,
+                                &draft.draft_id,
+                            ),
+                            TextPayload::new(json),
+                        ));
+                    }
+                    Err(parse_err) => {
+                        effect = effect.proposal(ScenarioProvenance.proposed_fact(
+                            ContextKey::Diagnostic,
+                            format!(
+                                "llm-critic-parse-error-{}-{}",
+                                draft.draft_batch_id, draft.draft_id
+                            ),
+                            TextPayload::new(format!(
+                                "{LLM_CRITIC_NAME}: unparseable response for {}/{}: {parse_err}. raw: {raw}",
+                                draft.draft_batch_id, draft.draft_id,
+                                raw = response.content,
+                            )),
+                        ));
+                    }
+                },
+                Err(chat_err) => {
+                    effect = effect.proposal(ScenarioProvenance.proposed_fact(
+                        ContextKey::Diagnostic,
+                        format!(
+                            "llm-critic-chat-error-{}-{}",
+                            draft.draft_batch_id, draft.draft_id
+                        ),
+                        TextPayload::new(format!(
+                            "{LLM_CRITIC_NAME}: chat backend error for {}/{}: {chat_err}",
+                            draft.draft_batch_id, draft.draft_id
+                        )),
+                    ));
+                }
+            }
+        }
+
+        // Per-batch sentinel for any batch this fire touched. Hosts
+        // that want to gate round advance on LLM completion can read
+        // this; RoundAdvancer in this scenario does not (the trace
+        // shows late verdicts if they arrive after the scorer).
+        for batch_id in batches_touched {
+            effect = effect.proposal(ScenarioProvenance.proposed_fact(
+                ContextKey::Diagnostic,
+                Self::batch_sentinel_id(&batch_id),
+                TextPayload::new(format!("{LLM_CRITIC_NAME}: pass complete for {batch_id}")),
+            ));
+        }
+
+        effect.build()
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Trace inspection helpers
 // ---------------------------------------------------------------------------
@@ -738,14 +1046,15 @@ fn round_signal_ids(ctx: &dyn Context) -> Vec<String> {
     ids
 }
 
-fn find_validation<'a>(
+fn find_validation_by_critic<'a>(
     verdicts: &'a [DraftValidation],
     batch_id: &str,
     draft_id: &str,
+    critic: &str,
 ) -> Option<&'a DraftValidation> {
     verdicts
         .iter()
-        .find(|v| v.draft_batch_id == batch_id && v.draft_id == draft_id)
+        .find(|v| v.draft_batch_id == batch_id && v.draft_id == draft_id && v.critic == critic)
 }
 
 struct AdversarialFact {
