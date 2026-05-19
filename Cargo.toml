@@ -144,9 +144,12 @@ organism-planning = { path = "../bedrock-platform/organism/crates/planning" }
 organism-adversarial = { path = "../bedrock-platform/organism/crates/adversarial" }
 organism-simulation = { path = "../bedrock-platform/organism/crates/simulation" }
 organism-learning = { path = "../bedrock-platform/organism/crates/learning" }
-organism-notes = { path = "../bedrock-platform/organism/crates/notes" }
-organism-intelligence = { path = "../bedrock-platform/organism/crates/intelligence" }
 organism-catalog = { path = "../bedrock-platform/organism/crates/catalog" }
 organism-catalog-seed = { path = "../bedrock-platform/organism/crates/catalog-seed" }
 organism-dynamics = { path = "../bedrock-platform/organism/crates/dynamics" }
+# Dropped 2026-05-19: organism-notes / organism-intelligence are not
+# actually reached through the atelier dep graph (axiom-truth pulls
+# pack/runtime/intent, scenarios use catalog/dynamics, etc.) and
+# patching them produces an "unused patch" warning on every build.
+# Re-add when something on the path actually depends on them.
 axiom-truth = { path = "../bedrock-platform/axiom" }

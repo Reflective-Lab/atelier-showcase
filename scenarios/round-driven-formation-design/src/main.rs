@@ -411,6 +411,25 @@ fn print_rounds(ctx: &dyn Context) {
             tick(has_diagnostic(ctx, &critic_marker)),
             tick(has_diagnostic(ctx, &scorer_marker))
         );
+
+        // Synthesis facts land under the synthesis_key in
+        // RoundConventions (Hypotheses here) with id
+        // `design-synthesis:{N}`. Show the LLM's actual text so the
+        // trace proves the chat backend was on the critical path,
+        // not just configured.
+        let synth_id = format!("design-synthesis:{round_n}");
+        if let Some(synth) = ctx
+            .get(ContextKey::Hypotheses)
+            .iter()
+            .find(|f| f.id().as_str() == synth_id)
+        {
+            println!("  RoundSynthesizer (LLM):");
+            for line in synth.text().unwrap_or("(no text)").lines() {
+                println!("    {line}");
+            }
+        } else {
+            println!("  RoundSynthesizer:  (no synthesis fact for this round)");
+        }
         println!();
     }
 }
