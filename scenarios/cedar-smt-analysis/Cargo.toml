@@ -1,0 +1,20 @@
+[package]
+name = "scenario-cedar-smt-analysis"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Cedar symbolic analysis goes through cedar-policy-symcc to
+# generate SMT-LIB assertions, then CVC5 (an SMT solver written
+# in C++) resolves them. cvc5 is vendored in
+# mosaic-extensions/soter-smt/vendor/cvc5/build/bin/cvc5 — the
+# scenario sets the CVC5 env var at the vendored path if not
+# already set, so no system install needed.
+[features]
+default = []
+with-cvc5 = ["arbiter/analysis"]
+
+[dependencies]
+arbiter = { package = "converge-arbiter-policy", path = "../../../mosaic-extensions/arbiter-policy/crates/arbiter", version = "2.0.1", default-features = false }
+
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

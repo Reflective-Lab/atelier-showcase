@@ -112,6 +112,14 @@ show-jobshop:
 show-jobshop-solver:
     cargo run -p scenario-jobshop-ft06 --features with-solver
 
+# Arbiter Cedar SMT analysis via CVC5: formally verifies safety
+# invariants across ALL request environments, not just one
+# concrete input. cvc5 is vendored under soter-smt — no install.
+show-cedar-smt:
+    cargo run -p scenario-cedar-smt-analysis
+show-cedar-smt-solver:
+    cargo run -p scenario-cedar-smt-analysis --features with-cvc5
+
 # Ferrox stress test: N=50 N-Queens via CP-SAT.
 # AllDifferent on queens + diagonals + anti-diagonals; ~150
 # variables, ~103 constraints. Solves in well under a second.
