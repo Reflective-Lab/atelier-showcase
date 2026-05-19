@@ -11,6 +11,7 @@ members = [
     "scenarios/meeting-scheduler",
     "scenarios/solver-policy-allocation",
     "scenarios/high-risk-claim-portfolio",
+    "scenarios/multi-plan-allocation",
     "scenarios/round-driven-formation-design",
     "scenarios/truth-driven-formation",
     "scenarios/vendor-selection",

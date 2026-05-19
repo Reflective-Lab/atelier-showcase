@@ -63,6 +63,14 @@ show name:
 show-round-driven:
     cargo run -p scenario-round-driven-formation-design
 
+# Ferrox CP-SAT K-of-N plan-selection showcase. Default build
+# prints constraints + an install hint; pass `--features
+# with-solver` and install libortools to actually solve.
+show-multi-plan:
+    cargo run -p scenario-multi-plan-allocation
+show-multi-plan-solver:
+    cargo run -p scenario-multi-plan-allocation --features with-solver
+
 # Run every showcase scenario in sequence. Halts on the first
 # non-zero exit. Note: scenario-round-driven-formation-design will
 # exit honestly without an LLM key set; that's intentional — drop
@@ -72,6 +80,7 @@ show-all:
     cargo run -p example-expense-approval
     cargo run -p scenario-high-risk-claim-portfolio
     cargo run -p example-loan-application
+    cargo run -p scenario-multi-plan-allocation
     cargo run -p example-meeting-scheduler
     cargo run -p scenario-round-driven-formation-design
     cargo run -p example-solver-policy-allocation
