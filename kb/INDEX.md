@@ -19,6 +19,10 @@ Major entities in the `atelier` knowledge base.
 - [Getting Started](Building/Getting%20Started.md)
 - [Release Commands](Building/Release%20Commands.md)
 
+## Standards
+
+- [Code Review](Standards/Code%20Review.md) — review drift through pinned platform versions and typed protocol boundaries
+
 ## Planning
 
 - [Milestones](Planning/MILESTONES.md)

@@ -73,7 +73,8 @@ For the full framing:
   hand off to the organism layer.
 - `scenarios/` — full end-to-end domain demos. Browse by interest:
   expense approval, loan application, vendor selection, meeting
-  scheduling, and Arbiter + Ferrox solver selection.
+  scheduling, Arbiter + Ferrox solver selection, and the high-risk
+  Arbiter claim portfolio.
 - `truths/` — reserved slot for the domain-expert track
   (axiom-truth / helms layer).
 

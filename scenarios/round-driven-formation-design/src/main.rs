@@ -1,27 +1,41 @@
-//! Atelier showcase: round-driven design Formation selection.
+//! Atelier showcase: round-driven design Formation selection,
+//! end-to-end with the real seeded catalog and the real default
+//! executable factories.
 //!
-//! Runs one real Converge Formation that composes the round-driven
-//! batch protocol with an existing adversarial Suggestor and the
-//! platform `RoundSynthesizer`. No LLMs, no Runtime orchestrator, no
-//! new traits — every participant is either a shipped Suggestor or a
-//! tiny in-scenario fixture closing test-side glue the platform
-//! deliberately does not own.
+//! The flow this scenario demonstrates:
 //!
-//! Pipeline:
+//!   intent
+//!     → design huddle Formation
+//!         (RoundStarter → CatalogProposerSuggestor[round-driven]
+//!          → DraftValidatorCriticSuggestor → AssumptionBreakerAgent
+//!          → BeautyContestSuggestor[critic-gated]
+//!          → RoundAdvancer)
+//!     → two rounds, two batches, per-batch sentinels
+//!     → host picks latest_completed_batch
+//!     → compile_draft against the real organism-catalog-seed
+//!     → ExecutableSuggestorCatalog::instantiate with real
+//!       organism-adversarial factories
+//!     → work Formation runs to convergence in Converge
 //!
-//!   RoundStarter
-//!     → CatalogProposerSuggestor::with_round_signals
-//!     → DraftValidatorCriticSuggestor
-//!     → AssumptionBreakerAgent      (existing adversarial)
-//!     → BeautyContestSuggestor::new_critic_gated
-//!     → ShortlistNoteEmitter        (scenario glue)
-//!     → RoundSynthesizer
-//!     → RoundAdvancer               (scenario glue)
+//! Nothing here is mocked. The catalog comes from
+//! `organism_catalog_seed::organism_only()`. The executable
+//! factories come from `organism_runtime::register_default_factories`
+//! (real `AssumptionBreakerAgent`, `ConstraintCheckerAgent`,
+//! `AnomalySkepticAgent`, etc. behind their catalog ids). If any
+//! piece of wiring is missing — descriptor not in the seed, factory
+//! not registered, template not covered — the scenario exits with
+//! an explicit error from `main()` rather than substituting a
+//! placeholder.
 //!
-//! The scenario prints the trace as it inspects the converged
-//! context, then performs the explicit compile handoff: pick
-//! `latest_completed_batch`, extract its shortlist, validate via
-//! `compile_draft`, and print the resulting roster.
+//! Two pieces are deliberately not in this scenario:
+//!   * `RoundSynthesizer` + a `SynthesisProducer` impl — the
+//!     platform does not ship a default LLM-backed producer, so
+//!     wiring it would require either a real Manifold-backed
+//!     `SynthesisProducer` (next slice) or a synthetic stand-in
+//!     (forbidden). The round loop runs without synthesis; the
+//!     critic + scorer drive batch completion.
+//!   * Per-round notes via a `ShortlistNoteEmitter` — only needed
+//!     to feed the (absent) synthesizer.
 //!
 //! Run with:
 //!
@@ -30,45 +44,53 @@
 use async_trait::async_trait;
 use converge_kernel::formation::{
     FormationCatalog, FormationTemplate, FormationTemplateMetadata, FormationTemplateQuery,
-    ProfileSnapshot, StaticFormationTemplate, SuggestorCapability, SuggestorRole,
+    StaticFormationTemplate, SuggestorCapability, SuggestorRole,
 };
-use converge_kernel::{AgentEffect, Context, ContextFact, ContextKey};
+use converge_kernel::{AgentEffect, Context, ContextKey};
 use converge_pack::{ProvenanceSource, Suggestor, TextPayload};
-use converge_provider::{CostClass, LatencyClass};
 use organism_adversarial::AssumptionBreakerAgent;
-use organism_catalog::{
-    CatalogSuggestorDescriptor, DiscoveryCatalog, DiscoveryMetadata, LoopContribution,
-    ProviderDescriptorCatalog, SuggestorDescriptor,
-};
+use organism_catalog::{DiscoveryCatalog, ProviderDescriptorCatalog};
+use organism_catalog_seed as seed;
 use organism_dynamics::{
     BeautyContestSuggestor, CatalogProposerSuggestor, DraftValidation,
     DraftValidatorCriticSuggestor, FormationDraft, compile_draft, completed_batches,
     critic_pass_complete_marker, extract_draft_validations, extract_drafts,
     extract_drafts_for_batch, latest_completed_batch, scorer_batch_complete_marker,
 };
-use organism_runtime::huddle::{
-    RoundConventions, RoundStarter, RoundSynthesizer, SynthesisProducer,
+use organism_runtime::huddle::{RoundConventions, RoundStarter};
+use organism_runtime::{
+    ExecutableSuggestorCatalog, Formation, FormationCompileRequest, FormationCompiler, Seed,
+    register_default_factories,
 };
-use organism_runtime::{Formation, FormationCompileRequest, FormationCompiler};
 use uuid::Uuid;
 
 const ROUND_SIGNAL_PREFIX: &str = "design-round-";
 const CONTINUE_PREFIX: &str = "design-round:continue:";
-const NOTE_PREFIX: &str = "note:huddle:";
-const SYNTHESIS_PREFIX: &str = "design-synthesis:";
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     print_banner();
 
-    let catalog = scenario_catalog();
+    // ── 1. Wire the real catalog and the real executable
+    //       factories — coherently. The proposer must only choose
+    //       descriptors for which a factory exists, otherwise the
+    //       compile handoff would pick a roster that can't be
+    //       instantiated. We start from the full organism seed,
+    //       wire all the default factories, then filter the
+    //       catalog down to descriptors covered by a factory.
+    //       Any drift between seed and factories surfaces here.
+    let full_catalog = seed::organism_only();
+    let mut executables = ExecutableSuggestorCatalog::new();
+    register_default_factories(&mut executables)?;
+    let catalog = catalog_covered_by_factories(&full_catalog, &executables);
     let templates = scenario_templates();
     let providers = ProviderDescriptorCatalog::new();
     let request = scenario_request();
     let conventions = design_huddle_conventions();
 
-    print_intent(&request);
+    print_intent(&request, &catalog, &executables);
 
+    // ── 2. Build the design huddle Formation.
     let round_starter = RoundStarter::new(2).with_conventions(conventions);
     let proposer = CatalogProposerSuggestor::new(
         catalog.clone(),
@@ -86,8 +108,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let adversarial = AssumptionBreakerAgent::new();
     let scorer = BeautyContestSuggestor::new_critic_gated(1);
-    let synthesizer =
-        RoundSynthesizer::new(1, HuddleSynthesisProducer).with_conventions(conventions);
 
     let huddle = Formation::new("round-driven-design-huddle")
         .agent_boxed(Box::new(round_starter))
@@ -95,13 +115,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .agent_boxed(Box::new(critic))
         .agent_boxed(Box::new(adversarial))
         .agent_boxed(Box::new(scorer))
-        .agent_boxed(Box::new(ShortlistNoteEmitter))
-        .agent_boxed(Box::new(synthesizer))
         .agent_boxed(Box::new(RoundAdvancer))
         .seed(
             ContextKey::Seeds,
             "design-seed",
-            "design the work formation",
+            "audit this plan for policy compliance and anomalies",
             "atelier-showcase",
         );
 
@@ -113,12 +131,124 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .into());
     }
-
     let ctx = &result.converge_result.context;
+
+    // ── 3. Print what the design huddle produced.
     print_rounds(ctx);
     print_adversarial(ctx);
-    print_compile_handoff(ctx, &catalog, &templates, &providers, &request)?;
+
+    // ── 4. Compile handoff: pick latest_completed_batch, validate
+    //       its shortlist against the real catalog, then instantiate
+    //       the work Formation against the real factory set.
+    let plan = compile_handoff(ctx, &catalog, &templates, &providers, &request)?;
+
+    // ── 5. Actually run the work Formation in Converge.
+    print_section("Work Formation execution");
+    // The work formation audits a candidate plan. The plan is fed
+    // in via Strategies — the gates read from there. The seed under
+    // ContextKey::Seeds is the human framing for downstream
+    // discovery; the actual auditable payload is the JSON under
+    // Strategies. Both are scenario input — not mocks of a real
+    // upstream proposer's output.
+    let candidate_plan = serde_json::json!({
+        "id": "ALPHA-1",
+        "description": "Roll out the new vendor onboarding workflow.",
+        "annotation": {
+            "actions": ["enable-vendor-onboarding", "notify-procurement"],
+            "tags": ["procurement", "rollout"],
+            "costs": [{"item": "engineering", "estimate": 7500.0}],
+            "approvals": ["procurement-lead"],
+        },
+    });
+    let seeds = vec![
+        Seed {
+            key: ContextKey::Seeds,
+            id: "work-seed".into(),
+            content: "audit candidate plan #ALPHA-1".to_string(),
+            provenance: "atelier-showcase".to_string(),
+        },
+        Seed {
+            key: ContextKey::Strategies,
+            id: "candidate-plan".into(),
+            content: serde_json::to_string(&candidate_plan)?,
+            provenance: "atelier-showcase".to_string(),
+        },
+    ];
+    let work = executables.instantiate(&plan, seeds)?;
+    let work_result = work.run().await?;
+    if !work_result.converge_result.converged {
+        return Err(format!(
+            "work Formation did not converge: {:?}",
+            work_result.converge_result.stop_reason
+        )
+        .into());
+    }
+    print_work_outcome(&work_result.converge_result.context);
+
+    println!();
+    println!("✓ Round-driven design Formation produced and ran a real work plan.");
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Template + request — picks a real-Suggestor-satisfiable template
+// ---------------------------------------------------------------------------
+
+/// Project the full catalog down to descriptors that actually have a
+/// registered factory. This is the boundary between "described" and
+/// "runnable" — keeping them aligned in the scenario means the
+/// proposer cannot produce a draft the host can't instantiate.
+fn catalog_covered_by_factories(
+    full: &DiscoveryCatalog,
+    executables: &ExecutableSuggestorCatalog,
+) -> DiscoveryCatalog {
+    let mut filtered = DiscoveryCatalog::new();
+    for entry in full {
+        if executables.contains(entry.id().as_str()) {
+            filtered.register(entry.clone());
+        }
+    }
+    filtered
+}
+
+fn scenario_templates() -> FormationCatalog {
+    // Two Constraint-role gates, one PolicyEnforcement + one Analytics.
+    // The organism-catalog-seed gives us multiple candidates for each
+    // capability (constraint-checker covers PolicyEnforcement;
+    // anomaly-skeptic and economic-skeptic both cover Analytics) —
+    // enough for the k-best proposer to produce at least two
+    // distinct rosters for tournament diversity.
+    let metadata = FormationTemplateMetadata::new(
+        "policy-and-anomaly-audit",
+        "Audit a candidate plan for policy compliance and anomalies.",
+        vec![SuggestorRole::Constraint],
+    )
+    .with_keyword("policy-and-anomaly-audit")
+    .with_required_capability(SuggestorCapability::PolicyEnforcement)
+    .with_required_capability(SuggestorCapability::Analytics);
+    FormationCatalog::new().with_template(FormationTemplate::static_template(
+        StaticFormationTemplate::new(metadata),
+    ))
+}
+
+fn scenario_request() -> FormationCompileRequest {
+    FormationCompileRequest::new(
+        Uuid::from_u128(0xA7E1_1E12_5C0C_A5E0),
+        Uuid::from_u128(0xA7E1_1E12_5C0C_A5E1),
+        FormationTemplateQuery::new().with_keyword("policy-and-anomaly-audit"),
+    )
+}
+
+fn design_huddle_conventions() -> RoundConventions {
+    RoundConventions {
+        round_signal_key: ContextKey::Signals,
+        round_signal_prefix: ROUND_SIGNAL_PREFIX,
+        continue_key: ContextKey::Constraints,
+        continue_prefix: CONTINUE_PREFIX,
+        note_key: ContextKey::Hypotheses,
+        synthesis_key: ContextKey::Hypotheses,
+        synthesis_prefix: "design-synthesis:",
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -128,17 +258,38 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 fn print_banner() {
     println!();
     println!("╔══════════════════════════════════════════════════════════════════════╗");
-    println!("║  Round-driven design Formation selection                             ║");
-    println!("║  atelier-showcase · organism-dynamics · converge 3.9                 ║");
+    println!("║  Round-driven design Formation — real catalog, real factories       ║");
+    println!("║  atelier-showcase · organism 1.9.1 · converge 3.9.1                  ║");
     println!("╚══════════════════════════════════════════════════════════════════════╝");
     println!();
 }
 
-fn print_intent(request: &FormationCompileRequest) {
-    println!("Intent");
-    println!("  template query: keyword \"work-template\"");
+fn print_section(title: &str) {
+    println!("{title}");
+    println!("{}", "─".repeat(title.len()));
+}
+
+fn print_intent(
+    request: &FormationCompileRequest,
+    catalog: &DiscoveryCatalog,
+    executables: &ExecutableSuggestorCatalog,
+) {
+    print_section("Intent + wiring");
+    println!("  template query: keyword \"policy-and-anomaly-audit\"");
     println!("  plan id:        {}", request.plan_id);
     println!("  correlation id: {}", request.correlation_id);
+    println!("  catalog:        organism-catalog-seed::organism_only()");
+    println!(
+        "                  {} descriptors total",
+        catalog.iter().count()
+    );
+    println!(
+        "  executables:    register_default_factories() → {} factories",
+        executables.suggestor_ids().len()
+    );
+    for id in executables.suggestor_ids() {
+        println!("                    · {id}");
+    }
     println!();
 }
 
@@ -148,13 +299,11 @@ fn print_rounds(ctx: &dyn Context) {
     let passes = extract_draft_validations(ctx, ContextKey::Evaluations);
     let blocks = extract_draft_validations(ctx, ContextKey::Constraints);
     let shortlist_all = extract_drafts(ctx, ContextKey::Proposals);
-    let synthesis = synthesis_by_round(ctx);
 
     for (round_idx, batch_id) in round_signals.iter().enumerate() {
         let round_n = round_idx as u8 + 1;
         let header = format!("Round {round_n}  (batch: {batch_id})");
-        println!("{header}");
-        println!("{}", "─".repeat(header.len()));
+        print_section(&header);
 
         let drafts_in_batch: Vec<&FormationDraft> = drafts
             .iter()
@@ -165,7 +314,11 @@ fn print_rounds(ctx: &dyn Context) {
             println!(
                 "    {:<14}  →  [{}]",
                 d.draft_id,
-                d.descriptor_ids.join(", ")
+                d.descriptor_ids
+                    .iter()
+                    .map(|id| id.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             );
         }
 
@@ -189,38 +342,28 @@ fn print_rounds(ctx: &dyn Context) {
             println!(
                 "    {:<14}  →  [{}]",
                 d.draft_id,
-                d.descriptor_ids.join(", ")
+                d.descriptor_ids
+                    .iter()
+                    .map(|id| id.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             );
         }
 
         let critic_marker = critic_pass_complete_marker(batch_id);
         let scorer_marker = scorer_batch_complete_marker(batch_id);
-        let has_critic = has_diagnostic(ctx, &critic_marker);
-        let has_scorer = has_diagnostic(ctx, &scorer_marker);
         println!(
             "  Sentinels:        critic={}  scorer={}",
-            tick(has_critic),
-            tick(has_scorer)
+            tick(has_diagnostic(ctx, &critic_marker)),
+            tick(has_diagnostic(ctx, &scorer_marker))
         );
-
-        if let Some(content) = synthesis.get(&round_n) {
-            println!("  RoundSynthesizer: {content}");
-        } else {
-            println!("  RoundSynthesizer: (no synthesis for this round)");
-        }
-
         println!();
     }
 }
 
-/// AssumptionBreaker is per-fact idempotent: it wakes on every
-/// strategy fact it has not yet judged and emits exactly one
-/// judgment per fact. With the round-driven batch protocol that
-/// means it scrutinizes drafts from every round, not just the first.
 fn print_adversarial(ctx: &dyn Context) {
     let facts = adversarial_facts(ctx);
-    println!("AssumptionBreaker  (per-fact adversarial, organism-adversarial)");
-    println!("───────────────────────────────────────────────────────────────");
+    print_section("AssumptionBreaker  (per-fact adversarial, organism-adversarial)");
     if facts.is_empty() {
         println!("  (no findings)");
     } else {
@@ -232,19 +375,18 @@ fn print_adversarial(ctx: &dyn Context) {
     println!();
 }
 
-fn print_compile_handoff(
+fn compile_handoff(
     ctx: &dyn Context,
     catalog: &DiscoveryCatalog,
     templates: &FormationCatalog,
     providers: &ProviderDescriptorCatalog,
     request: &FormationCompileRequest,
-) -> Result<(), Box<dyn std::error::Error>> {
-    println!("Compile handoff");
-    println!("───────────────");
+) -> Result<organism_runtime::CompiledFormationPlan, Box<dyn std::error::Error>> {
+    print_section("Compile handoff");
     let completed = completed_batches(ctx);
     println!("  completed batches (in order): {completed:?}");
-    let latest =
-        latest_completed_batch(ctx).ok_or("expected at least one batch to have completed")?;
+    let latest = latest_completed_batch(ctx)
+        .ok_or("no batch completed — design huddle produced nothing to compile")?;
     println!("  latest_completed_batch:        {latest}");
 
     let shortlist = extract_drafts_for_batch(ctx, ContextKey::Proposals, &latest);
@@ -261,120 +403,57 @@ fn print_compile_handoff(
     println!("  compiled template:             {}", plan.template_id);
     println!("  compiled roster:");
     for entry in &plan.roster {
-        // Show descriptor + role/capability for narrative value;
-        // both come from the catalog the proposer drew from.
         let role = catalog
             .get(entry.suggestor_id.as_str())
             .map(|d| format!("{:?}", d.descriptor.profile.role))
             .unwrap_or_else(|| "?".to_string());
-        println!("    - {:<16}  ({role})", entry.suggestor_id);
+        println!("    - {:<32}  ({role})", entry.suggestor_id.as_str());
     }
     println!();
-    println!("✓ Round-driven design Formation produced a validated work plan.");
-    Ok(())
+    Ok(plan)
 }
 
-// ---------------------------------------------------------------------------
-// Catalog / templates / request — same shape as the dynamics tests so
-// the showcase tracks the protocol it demonstrates.
-// ---------------------------------------------------------------------------
-
-fn synthetic_descriptor(
-    id: &'static str,
-    role: SuggestorRole,
-    capability: SuggestorCapability,
-    writes: ContextKey,
-    blurb: &'static str,
-) -> CatalogSuggestorDescriptor {
-    let descriptor = SuggestorDescriptor::new(
-        id,
-        ProfileSnapshot {
-            name: id.to_string(),
-            role,
-            output_keys: vec![writes],
-            cost_hint: CostClass::Low,
-            latency_hint: LatencyClass::Interactive,
-            capabilities: vec![capability],
-            confidence_min: 0.7,
-            confidence_max: 0.95,
-        },
+fn print_work_outcome(ctx: &dyn Context) {
+    let evaluations = ctx.get(ContextKey::Evaluations);
+    let constraints = ctx.get(ContextKey::Constraints);
+    let diagnostics = ctx.get(ContextKey::Diagnostic);
+    println!(
+        "  facts produced:    Evaluations={}  Constraints={}  Diagnostic={}",
+        evaluations.len(),
+        constraints.len(),
+        diagnostics.len(),
     );
-    let discovery = DiscoveryMetadata::new(blurb, "Showcase descriptor.")
-        .with_loop_contribution(LoopContribution::Synthesize);
-    CatalogSuggestorDescriptor::new(descriptor, discovery)
-}
-
-fn scenario_catalog() -> DiscoveryCatalog {
-    DiscoveryCatalog::new()
-        .with_entry(synthetic_descriptor(
-            "signal-a",
-            SuggestorRole::Signal,
-            SuggestorCapability::KnowledgeRetrieval,
-            ContextKey::Hypotheses,
-            "Signal source A.",
-        ))
-        .with_entry(synthetic_descriptor(
-            "signal-b",
-            SuggestorRole::Signal,
-            SuggestorCapability::KnowledgeRetrieval,
-            ContextKey::Hypotheses,
-            "Signal source B.",
-        ))
-        .with_entry(synthetic_descriptor(
-            "constraint-a",
-            SuggestorRole::Constraint,
-            SuggestorCapability::PolicyEnforcement,
-            ContextKey::Constraints,
-            "Policy constraint A.",
-        ))
-        .with_entry(synthetic_descriptor(
-            "constraint-b",
-            SuggestorRole::Constraint,
-            SuggestorCapability::PolicyEnforcement,
-            ContextKey::Constraints,
-            "Policy constraint B.",
-        ))
-}
-
-fn scenario_templates() -> FormationCatalog {
-    let metadata = FormationTemplateMetadata::new(
-        "work-template",
-        "Work formation: one signal + one constraint",
-        vec![SuggestorRole::Signal, SuggestorRole::Constraint],
-    )
-    .with_keyword("work-template")
-    .with_required_capability(SuggestorCapability::KnowledgeRetrieval)
-    .with_required_capability(SuggestorCapability::PolicyEnforcement);
-    FormationCatalog::new().with_template(FormationTemplate::static_template(
-        StaticFormationTemplate::new(metadata),
-    ))
-}
-
-fn scenario_request() -> FormationCompileRequest {
-    FormationCompileRequest::new(
-        Uuid::from_u128(0xA7E1_1E12_5C0C_A5E0),
-        Uuid::from_u128(0xA7E1_1E12_5C0C_A5E1),
-        FormationTemplateQuery::new().with_keyword("work-template"),
-    )
-}
-
-fn design_huddle_conventions() -> RoundConventions {
-    RoundConventions {
-        round_signal_key: ContextKey::Signals,
-        round_signal_prefix: ROUND_SIGNAL_PREFIX,
-        continue_key: ContextKey::Constraints,
-        continue_prefix: CONTINUE_PREFIX,
-        note_key: ContextKey::Hypotheses,
-        synthesis_key: ContextKey::Strategies,
-        synthesis_prefix: SYNTHESIS_PREFIX,
+    if !evaluations.is_empty() {
+        println!("  Evaluations:");
+        for fact in evaluations.iter().take(5) {
+            println!(
+                "    · {}: {}",
+                fact.id().as_str(),
+                fact.text().unwrap_or("(no text)")
+            );
+        }
+        if evaluations.len() > 5 {
+            println!("    · … {} more", evaluations.len() - 5);
+        }
     }
+    if !constraints.is_empty() {
+        println!("  Constraints:");
+        for fact in constraints.iter().take(5) {
+            println!(
+                "    · {}: {}",
+                fact.id().as_str(),
+                fact.text().unwrap_or("(no text)")
+            );
+        }
+        if constraints.len() > 5 {
+            println!("    · … {} more", constraints.len() - 5);
+        }
+    }
+    println!();
 }
 
 // ---------------------------------------------------------------------------
-// Scenario fixtures: scenario-local glue that the platform deliberately
-// does not own. RoundAdvancer turns a scorer completion sentinel into a
-// continue marker; ShortlistNoteEmitter turns a scorer completion into
-// a per-round note that RoundSynthesizer can synthesize.
+// Scenario-owned glue (NOT mocks — close the round loop)
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Clone, Copy)]
@@ -438,81 +517,6 @@ impl Suggestor for RoundAdvancer {
     }
 }
 
-struct ShortlistNoteEmitter;
-
-impl ShortlistNoteEmitter {
-    fn pending(ctx: &dyn Context) -> Vec<u8> {
-        let mut rounds: Vec<u8> = completed_batches(ctx)
-            .into_iter()
-            .filter_map(|b| round_number_from_design_batch_id(&b))
-            .filter(|round| {
-                let id = format!("{NOTE_PREFIX}{round}");
-                !ctx.get(ContextKey::Hypotheses)
-                    .iter()
-                    .any(|fact| fact.id().as_str() == id)
-            })
-            .collect();
-        rounds.sort_unstable();
-        rounds.dedup();
-        rounds
-    }
-}
-
-#[async_trait]
-impl Suggestor for ShortlistNoteEmitter {
-    fn name(&self) -> &'static str {
-        "scenario-shortlist-note-emitter"
-    }
-    fn dependencies(&self) -> &[ContextKey] {
-        &[ContextKey::Diagnostic, ContextKey::Proposals]
-    }
-    fn provenance(&self) -> &'static str {
-        ScenarioProvenance.as_str()
-    }
-    fn accepts(&self, ctx: &dyn Context) -> bool {
-        !Self::pending(ctx).is_empty()
-    }
-    async fn execute(&self, ctx: &dyn Context) -> AgentEffect {
-        let mut effect = AgentEffect::builder();
-        for round in Self::pending(ctx) {
-            let batch_id = format!("{ROUND_SIGNAL_PREFIX}{round}");
-            let shortlist = extract_drafts_for_batch(ctx, ContextKey::Proposals, &batch_id);
-            let descriptors: Vec<String> = shortlist
-                .first()
-                .map(|d| d.descriptor_ids.iter().map(ToString::to_string).collect())
-                .unwrap_or_default();
-            effect = effect.proposal(ScenarioProvenance.proposed_fact(
-                ContextKey::Hypotheses,
-                format!("{NOTE_PREFIX}{round}"),
-                TextPayload::new(format!(
-                    "round {round} shortlist: [{}]",
-                    descriptors.join(", ")
-                )),
-            ));
-        }
-        effect.build()
-    }
-}
-
-struct HuddleSynthesisProducer;
-
-#[async_trait]
-impl SynthesisProducer for HuddleSynthesisProducer {
-    async fn synthesize(
-        &self,
-        round: u8,
-        notes: &[ContextFact],
-        _ctx: &dyn Context,
-    ) -> Result<String, String> {
-        let summaries: Vec<&str> = notes.iter().filter_map(|f| f.text()).collect();
-        Ok(format!(
-            "round {round} synthesis ({} note(s)): {}",
-            notes.len(),
-            summaries.join(" | "),
-        ))
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Trace inspection helpers
 // ---------------------------------------------------------------------------
@@ -562,15 +566,10 @@ fn adversarial_facts(ctx: &dyn Context) -> Vec<AdversarialFact> {
 }
 
 fn compact_breaker_payload(raw: &str) -> String {
-    // The breaker writes a small JSON blob. Pull the human-readable
-    // findings/warnings out so the printout reads cleanly.
     serde_quick::extract_messages(raw).unwrap_or_else(|| raw.chars().take(80).collect())
 }
 
 mod serde_quick {
-    /// Minimal field grab — find the first `"findings"` or `"warnings"`
-    /// array and join its string elements with `; `. Avoids pulling
-    /// serde_json into the scenario.
     pub(crate) fn extract_messages(raw: &str) -> Option<String> {
         for key in ["findings", "warnings"] {
             let needle = format!("\"{key}\":[");
@@ -591,19 +590,6 @@ mod serde_quick {
         }
         None
     }
-}
-
-fn synthesis_by_round(ctx: &dyn Context) -> std::collections::BTreeMap<u8, String> {
-    ctx.get(ContextKey::Strategies)
-        .iter()
-        .filter_map(|fact| {
-            let id = fact.id().as_str();
-            let suffix = id.strip_prefix(SYNTHESIS_PREFIX)?;
-            let round: u8 = suffix.parse().ok()?;
-            let content = fact.text().unwrap_or_default().to_string();
-            Some((round, content))
-        })
-        .collect()
 }
 
 fn has_diagnostic(ctx: &dyn Context, id: &str) -> bool {

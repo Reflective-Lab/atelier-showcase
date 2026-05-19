@@ -25,6 +25,10 @@ Knowledge base for the `atelier` Converge extension.
 - [[Building/Getting Started]]
 - [[Building/Release Commands]] — `just security-audit`, `coverage`, `performance-profile`, `soak`
 
+## Standards
+
+- [[Standards/Code Review]] — review drift through pinned platform versions and typed protocol boundaries
+
 ## Planning
 
 - [[Planning/MILESTONES]]

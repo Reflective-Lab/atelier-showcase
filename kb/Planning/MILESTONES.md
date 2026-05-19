@@ -14,3 +14,4 @@ source: mixed
 - [x] Adopt Extension Release Checklist (security-audit, coverage, performance-profile, soak)
 - [x] First clean `just release-check` run (2026-05-13, coverage 83.3%)
 - [x] Tag v1.0.0 (2026-05-13)
+- [x] Add high-risk Arbiter claim portfolio Truth and showcase scenario.

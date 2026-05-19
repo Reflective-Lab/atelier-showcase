@@ -11,6 +11,13 @@ The directory is intentionally empty for now — the slot is held so
 that contributions land here rather than scattering across `tutorials/`
 or `scenarios/`.
 
+Current Truth artifacts:
+
+- [`The Reasoning Substrate.md`](The%20Reasoning%20Substrate.md) — why Mosaic
+  uses specialised reasoning Suggestors instead of a single model substrate.
+- [`High-Risk Claim Portfolio.md`](High-Risk%20Claim%20Portfolio.md) — Arbiter
+  claim portfolio and evidence ladder for domain review.
+
 ## Sibling tracks
 
 - [`tutorials/`](../tutorials) — numbered learning spine for Rust
