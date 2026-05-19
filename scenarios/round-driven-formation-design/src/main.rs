@@ -8,8 +8,9 @@
 //!     → design huddle Formation
 //!         (RoundStarter → EvolvingCatalogProposer[round-driven,
 //!          prior-round-aware] → DraftValidatorCriticSuggestor
-//!          → LlmCriticSuggestor → AssumptionBreakerAgent
-//!          → BeautyContestSuggestor[critic-gated]
+//!          → LlmCriticSuggestor[grades PASS/BLOCK + 0..=100 confidence]
+//!          → AssumptionBreakerAgent
+//!          → EvidenceWeightedScorer[combines all evidence]
 //!          → ShortlistNoteEmitter → RoundSynthesizer
 //!          → RoundAdvancer)
 //!     → two rounds, two batches, per-batch sentinels
@@ -68,10 +69,9 @@ use organism_adversarial::AssumptionBreakerAgent;
 use organism_catalog::{DiscoveryCatalog, ProviderDescriptorCatalog, SuggestorDescriptorId};
 use organism_catalog_seed as seed;
 use organism_dynamics::{
-    BeautyContestSuggestor, DraftValidation, DraftValidatorCriticSuggestor, DraftVerdict,
-    FormationDraft, compile_draft, completed_batches, critic_pass_complete_marker,
-    extract_draft_validations, extract_drafts, extract_drafts_for_batch, latest_completed_batch,
-    scorer_batch_complete_marker,
+    DraftValidation, DraftValidatorCriticSuggestor, DraftVerdict, FormationDraft, compile_draft,
+    completed_batches, critic_pass_complete_marker, extract_draft_validations, extract_drafts,
+    extract_drafts_for_batch, latest_completed_batch, scorer_batch_complete_marker,
 };
 use organism_runtime::huddle::{
     RoundConventions, RoundStarter, RoundSynthesizer, SynthesisProducer,
@@ -166,7 +166,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             SuggestorCapability::Analytics,
         ],
     );
-    let scorer = BeautyContestSuggestor::new_critic_gated(1);
+    let scorer = EvidenceWeightedScorer::new(1);
     let synthesizer = RoundSynthesizer::new(1, LlmSynthesisProducer::new(selected.backend.clone()))
         .with_conventions(conventions);
 
@@ -440,11 +440,23 @@ fn print_rounds(ctx: &dyn Context) {
             }
         }
 
+        let scorecard_id = format!("evidence-scorecard-{batch_id}");
+        if let Some(fact) = ctx
+            .get(ContextKey::Diagnostic)
+            .iter()
+            .find(|f| f.id().as_str() == scorecard_id)
+        {
+            println!(
+                "  Evidence scorecard: {}",
+                fact.text().unwrap_or("(no text)")
+            );
+        }
+
         let shortlist_for_batch: Vec<&FormationDraft> = shortlist_all
             .iter()
             .filter(|d| d.draft_batch_id == *batch_id)
             .collect();
-        println!("  BeautyContest shortlist:");
+        println!("  Shortlist (evidence-weighted):");
         for d in &shortlist_for_batch {
             println!(
                 "    {:<14}  →  [{}]",
@@ -825,6 +837,282 @@ impl Suggestor for EvolvingCatalogProposer {
                     TextPayload::new(json),
                 ));
             }
+        }
+        effect.build()
+    }
+}
+
+/// `EvidenceWeightedScorer` — replaces the platform's
+/// `BeautyContestSuggestor` in this scenario with a transparent
+/// evidence-weighted ranking. For each batch, once BOTH the
+/// mechanical critic sentinel and the LLM critic sentinel are
+/// present (so all verdicts are visible), it:
+///
+/// 1. Drops drafts blocked by ANY critic (mechanical or LLM).
+/// 2. For surviving drafts, computes a score:
+///    `100 * mechanical_pass + llm_confidence - 10 * adversarial_count`.
+/// 3. Emits the top-k as `FormationDraft`s under `ContextKey::Proposals`
+///    (same shape as `BeautyContestSuggestor`'s output, so the rest of
+///    the pipeline — `print_rounds`, `compile_handoff`,
+///    `completed_batches` — is unchanged).
+/// 4. Emits a per-batch scorecard fact under `Diagnostic` for trace
+///    visibility (id: `evidence-scorecard-{batch_id}`).
+/// 5. Emits the standard scorer-batch-complete sentinel via
+///    `scorer_batch_complete_marker(batch_id)` so `RoundAdvancer` and
+///    `latest_completed_batch` keep working.
+///
+/// Round-over-round impact: with the LLM critic's confidence
+/// available, two drafts that both pass on mechanical+LLM are no
+/// longer tied by descriptor-count alone — the model's own grade of
+/// how strongly it endorses each roster picks the winner.
+struct EvidenceWeightedScorer {
+    top_n: usize,
+}
+
+const EVIDENCE_SCORER_NAME: &str = "scenario-evidence-weighted-scorer";
+
+#[derive(Debug, Clone)]
+struct EvidenceScorecard {
+    draft_id: String,
+    mechanical_pass: bool,
+    llm_pass: bool,
+    llm_confidence: u8,
+    adversarial_findings: u8,
+    eligible: bool,
+    score: i32,
+}
+
+impl EvidenceScorecard {
+    fn format(&self) -> String {
+        format!(
+            "{draft_id}: mech={mech} llm={llm}(conf={conf}) adv={adv} eligible={elig} score={score}",
+            draft_id = self.draft_id,
+            mech = if self.mechanical_pass {
+                "PASS"
+            } else {
+                "BLOCK"
+            },
+            llm = if self.llm_pass { "PASS" } else { "BLOCK" },
+            conf = self.llm_confidence,
+            adv = self.adversarial_findings,
+            elig = self.eligible,
+            score = self.score,
+        )
+    }
+}
+
+impl EvidenceWeightedScorer {
+    fn new(top_n: usize) -> Self {
+        Self { top_n }
+    }
+
+    /// Batches with drafts that we haven't scored yet AND for which
+    /// both critic sentinels are present.
+    fn pending_batches(&self, ctx: &dyn Context) -> Vec<String> {
+        let drafts = extract_drafts(ctx, ContextKey::Strategies);
+        if drafts.is_empty() {
+            return Vec::new();
+        }
+        let already_completed: std::collections::BTreeSet<String> =
+            completed_batches(ctx).into_iter().collect();
+        let diagnostic_ids: std::collections::BTreeSet<String> = ctx
+            .get(ContextKey::Diagnostic)
+            .iter()
+            .map(|f| f.id().as_str().to_string())
+            .collect();
+        let mut by_batch: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        for d in &drafts {
+            let b = d.draft_batch_id.to_string();
+            if already_completed.contains(&b) {
+                continue;
+            }
+            let mech_sentinel = critic_pass_complete_marker(&b);
+            let llm_sentinel = format!("llm-critic-pass-complete-{b}");
+            if diagnostic_ids.contains(&mech_sentinel) && diagnostic_ids.contains(&llm_sentinel) {
+                by_batch.insert(b);
+            }
+        }
+        by_batch.into_iter().collect()
+    }
+
+    fn scorecard_for_batch(ctx: &dyn Context, batch_id: &str) -> Vec<EvidenceScorecard> {
+        let drafts: Vec<FormationDraft> = extract_drafts(ctx, ContextKey::Strategies)
+            .into_iter()
+            .filter(|d| d.draft_batch_id.as_str() == batch_id)
+            .collect();
+        let passes = extract_draft_validations(ctx, ContextKey::Evaluations);
+        let blocks = extract_draft_validations(ctx, ContextKey::Constraints);
+
+        drafts
+            .iter()
+            .map(|d| {
+                let draft_id = d.draft_id.to_string();
+                let mech_block = blocks.iter().any(|v| {
+                    v.draft_batch_id == batch_id
+                        && v.draft_id == draft_id
+                        && v.critic == "organism-draft-validator-critic"
+                });
+                let llm_block = blocks.iter().any(|v| {
+                    v.draft_batch_id == batch_id
+                        && v.draft_id == draft_id
+                        && v.critic == LLM_CRITIC_NAME
+                });
+                let mech_pass = passes.iter().any(|v| {
+                    v.draft_batch_id == batch_id
+                        && v.draft_id == draft_id
+                        && v.critic == "organism-draft-validator-critic"
+                });
+                let llm_pass = passes.iter().any(|v| {
+                    v.draft_batch_id == batch_id
+                        && v.draft_id == draft_id
+                        && v.critic == LLM_CRITIC_NAME
+                });
+                let confidence_id = LlmCriticSuggestor::confidence_fact_id(batch_id, &draft_id);
+                let llm_confidence: u8 = ctx
+                    .get(ContextKey::Diagnostic)
+                    .iter()
+                    .find(|f| f.id().as_str() == confidence_id)
+                    .and_then(|f| f.text())
+                    .and_then(|t| t.parse().ok())
+                    .unwrap_or(0);
+                let suffix = format!("-{}", draft_id.trim_start_matches("candidate-"));
+                let adversarial_findings: u8 = ctx
+                    .get(ContextKey::Evaluations)
+                    .iter()
+                    .chain(ctx.get(ContextKey::Constraints).iter())
+                    .filter(|fact| {
+                        let fid = fact.id().as_str();
+                        fid.starts_with("assumption-") && fid.ends_with(&suffix)
+                    })
+                    .count()
+                    .min(255) as u8;
+                let eligible = !mech_block && !llm_block;
+                let score = if eligible {
+                    let m = if mech_pass { 100 } else { 0 };
+                    m + i32::from(llm_confidence) - 10 * i32::from(adversarial_findings)
+                } else {
+                    i32::MIN
+                };
+                EvidenceScorecard {
+                    draft_id,
+                    mechanical_pass: mech_pass,
+                    llm_pass,
+                    llm_confidence,
+                    adversarial_findings,
+                    eligible,
+                    score,
+                }
+            })
+            .collect()
+    }
+}
+
+#[async_trait]
+impl Suggestor for EvidenceWeightedScorer {
+    fn name(&self) -> &'static str {
+        EVIDENCE_SCORER_NAME
+    }
+    fn dependencies(&self) -> &[ContextKey] {
+        &[
+            ContextKey::Strategies,
+            ContextKey::Evaluations,
+            ContextKey::Constraints,
+            ContextKey::Diagnostic,
+        ]
+    }
+    fn provenance(&self) -> &'static str {
+        ScenarioProvenance.as_str()
+    }
+    fn accepts(&self, ctx: &dyn Context) -> bool {
+        !self.pending_batches(ctx).is_empty()
+    }
+
+    async fn execute(&self, ctx: &dyn Context) -> AgentEffect {
+        let mut effect = AgentEffect::builder();
+        for batch_id in self.pending_batches(ctx) {
+            let mut cards = Self::scorecard_for_batch(ctx, &batch_id);
+            cards.sort_by(|a, b| {
+                b.score
+                    .cmp(&a.score)
+                    .then_with(|| a.draft_id.cmp(&b.draft_id))
+            });
+
+            let drafts: Vec<FormationDraft> = extract_drafts(ctx, ContextKey::Strategies)
+                .into_iter()
+                .filter(|d| d.draft_batch_id.as_str() == batch_id)
+                .collect();
+
+            let scorecard_text = cards
+                .iter()
+                .map(EvidenceScorecard::format)
+                .collect::<Vec<_>>()
+                .join(" | ");
+            effect = effect.proposal(ScenarioProvenance.proposed_fact(
+                ContextKey::Diagnostic,
+                format!("evidence-scorecard-{batch_id}"),
+                TextPayload::new(format!(
+                    "{EVIDENCE_SCORER_NAME}: scorecard for {batch_id} → {scorecard_text}"
+                )),
+            ));
+
+            let mut shortlisted = 0usize;
+            for card in cards.iter().filter(|c| c.eligible).take(self.top_n) {
+                let Some(draft) = drafts.iter().find(|d| d.draft_id.as_str() == card.draft_id)
+                else {
+                    continue;
+                };
+                let shortlist = FormationDraft::new(
+                    draft.draft_id.clone(),
+                    draft.draft_batch_id.clone(),
+                    draft.descriptor_ids.clone(),
+                    format!(
+                        "Shortlisted #{shortlisted}/{n} by {EVIDENCE_SCORER_NAME} \
+                         (batch: {batch_id}, score={score}: mech={mech} llm={llm} \
+                         conf={conf} adv={adv}; source: {src}).",
+                        n = self.top_n,
+                        score = card.score,
+                        mech = if card.mechanical_pass {
+                            "PASS"
+                        } else {
+                            "BLOCK"
+                        },
+                        llm = if card.llm_pass { "PASS" } else { "BLOCK" },
+                        conf = card.llm_confidence,
+                        adv = card.adversarial_findings,
+                        src = draft.source,
+                    ),
+                    draft.source.clone(),
+                );
+                let json = match serde_json::to_string(&shortlist) {
+                    Ok(s) => s,
+                    Err(err) => {
+                        effect = effect.proposal(ScenarioProvenance.proposed_fact(
+                            ContextKey::Diagnostic,
+                            format!(
+                                "evidence-shortlist-serialize-error-{batch_id}-{shortlisted}"
+                            ),
+                            TextPayload::new(format!(
+                                "{EVIDENCE_SCORER_NAME}: failed to serialize shortlist {shortlisted} for batch {batch_id}: {err}"
+                            )),
+                        ));
+                        continue;
+                    }
+                };
+                effect = effect.proposal(ScenarioProvenance.proposed_fact(
+                    ContextKey::Proposals,
+                    format!("evidence-shortlist-{batch_id}-{shortlisted}"),
+                    TextPayload::new(json),
+                ));
+                shortlisted += 1;
+            }
+
+            effect = effect.proposal(ScenarioProvenance.proposed_fact(
+                ContextKey::Diagnostic,
+                scorer_batch_complete_marker(&batch_id),
+                TextPayload::new(format!(
+                    "{EVIDENCE_SCORER_NAME}: scoring complete for batch {batch_id}"
+                )),
+            ));
         }
         effect.build()
     }
@@ -1265,9 +1553,12 @@ impl LlmCriticSuggestor {
         )
     }
 
-    /// Two-line strict parse. Returns (verdict, reason) or an error
-    /// string suitable for Diagnostic.
-    fn parse_response(text: &str) -> Result<(DraftVerdict, String), String> {
+    /// Three-line strict parse. Returns (verdict, reason, confidence
+    /// 0..=100) or an error string suitable for Diagnostic. The
+    /// confidence is the model's own grade of how strongly its
+    /// verdict holds — used by the evidence-weighted scorer to break
+    /// ties between drafts that both passed.
+    fn parse_response(text: &str) -> Result<(DraftVerdict, String, u8), String> {
         let mut lines = text.lines().map(str::trim).filter(|l| !l.is_empty());
         let first = lines.next().ok_or("empty response")?;
         let verdict = match first.to_ascii_uppercase().as_str() {
@@ -1276,7 +1567,20 @@ impl LlmCriticSuggestor {
             other => return Err(format!("expected PASS or BLOCK on line 1, got: {other:?}")),
         };
         let reason = lines.next().ok_or("missing reason on line 2")?.to_string();
-        Ok((verdict, reason))
+        let conf_line = lines
+            .next()
+            .ok_or("missing confidence on line 3 (integer 0..=100)")?;
+        let confidence: u8 = conf_line
+            .parse()
+            .map_err(|e| format!("confidence on line 3 not a u8 0..=100: {conf_line:?}: {e}"))?;
+        if confidence > 100 {
+            return Err(format!("confidence on line 3 out of range: {confidence}"));
+        }
+        Ok((verdict, reason, confidence))
+    }
+
+    fn confidence_fact_id(batch_id: &str, draft_id: &str) -> String {
+        format!("llm-confidence-{batch_id}-{draft_id}")
     }
 }
 
@@ -1321,16 +1625,19 @@ impl Suggestor for LlmCriticSuggestor {
                 }],
                 system: Some(
                     "You judge proposed Suggestor rosters for a deliberation Formation. \
-                     Reply with EXACTLY two non-empty lines:\n\
+                     Reply with EXACTLY three non-empty lines:\n\
                      Line 1: PASS or BLOCK (one word, uppercase, nothing else).\n\
                      Line 2: One-sentence reason. Cite descriptor ids by name when relevant. \
                      Do NOT invent capabilities, descriptors, or template requirements that the \
-                     input does not state. Do NOT add any other lines, prose, or markdown."
+                     input does not state.\n\
+                     Line 3: Confidence integer 0..=100. How strongly your verdict holds: \
+                     100 = certain, 50 = leaning, 0 = guessing. Calibrate honestly — \
+                     downstream scoring uses this to break ties between drafts that all passed."
                         .to_string(),
                 ),
                 tools: Vec::new(),
                 response_format: ResponseFormat::Text,
-                max_tokens: Some(120),
+                max_tokens: Some(150),
                 temperature: Some(0.0),
                 stop_sequences: Vec::new(),
                 model: None,
@@ -1338,7 +1645,7 @@ impl Suggestor for LlmCriticSuggestor {
 
             match self.backend.chat(request).await {
                 Ok(response) => match Self::parse_response(&response.content) {
-                    Ok((verdict, reason)) => {
+                    Ok((verdict, reason, confidence)) => {
                         let target_key = match verdict {
                             DraftVerdict::Pass => ContextKey::Evaluations,
                             DraftVerdict::Block => ContextKey::Constraints,
@@ -1374,6 +1681,14 @@ impl Suggestor for LlmCriticSuggestor {
                                 &draft.draft_id,
                             ),
                             TextPayload::new(json),
+                        ));
+                        effect = effect.proposal(ScenarioProvenance.proposed_fact(
+                            ContextKey::Diagnostic,
+                            LlmCriticSuggestor::confidence_fact_id(
+                                &draft.draft_batch_id,
+                                &draft.draft_id,
+                            ),
+                            TextPayload::new(confidence.to_string()),
                         ));
                     }
                     Err(parse_err) => {
