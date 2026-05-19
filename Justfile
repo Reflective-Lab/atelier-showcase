@@ -104,6 +104,14 @@ show-network-flow:
 show-network-flow-solver:
     cargo run -p scenario-network-flow-transport --features with-solver
 
+# Ferrox CP-SAT job-shop: Fisher-Thompson ft06 — proven optimum
+# is 55. Six jobs × six operations on six machines with given
+# durations; minimize makespan. Interval vars + NoOverlap.
+show-jobshop:
+    cargo run -p scenario-jobshop-ft06
+show-jobshop-solver:
+    cargo run -p scenario-jobshop-ft06 --features with-solver
+
 # Ferrox stress test: N=50 N-Queens via CP-SAT.
 # AllDifferent on queens + diagonals + anti-diagonals; ~150
 # variables, ~103 constraints. Solves in well under a second.

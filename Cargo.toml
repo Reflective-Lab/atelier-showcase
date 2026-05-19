@@ -13,6 +13,7 @@ members = [
     "scenarios/mip-facility-location",
     "scenarios/solver-policy-allocation",
     "scenarios/high-risk-claim-portfolio",
+    "scenarios/jobshop-ft06",
     "scenarios/multi-plan-allocation",
     "scenarios/n-queens-cp-sat",
     "scenarios/network-flow-transport",
