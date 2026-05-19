@@ -651,6 +651,124 @@ impl ShortlistNoteEmitter {
     }
 }
 
+/// Assemble a structured note that captures the full deliberation
+/// for one round: every draft considered, every reviewer's verdict
+/// with the reason text, every adversarial finding, the final
+/// shortlist, and explicit divergence flags where two critics
+/// disagreed. The note is plain text with a stable shape so the
+/// synthesizer's prompt can reference the sections by name.
+fn build_round_note(ctx: &dyn Context, round: u8, batch_id: &str) -> String {
+    use std::fmt::Write as _;
+
+    let drafts: Vec<FormationDraft> = extract_drafts(ctx, ContextKey::Strategies)
+        .into_iter()
+        .filter(|d| d.draft_batch_id == batch_id)
+        .collect();
+    let passes = extract_draft_validations(ctx, ContextKey::Evaluations);
+    let blocks = extract_draft_validations(ctx, ContextKey::Constraints);
+    let shortlist = extract_drafts_for_batch(ctx, ContextKey::Proposals, batch_id);
+
+    let mut out = String::new();
+    writeln!(out, "Round {round} — deliberation trace (batch: {batch_id})").unwrap();
+    writeln!(out).unwrap();
+    writeln!(out, "Drafts considered:").unwrap();
+
+    for d in &drafts {
+        let descriptor_list = d
+            .descriptor_ids
+            .iter()
+            .map(|id| id.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        writeln!(
+            out,
+            "- {} → [{}]",
+            d.draft_id.as_str(),
+            descriptor_list,
+        )
+        .unwrap();
+        writeln!(out, "    rationale: {}", d.rationale).unwrap();
+
+        let mech_pass =
+            find_validation_by_critic(&passes, batch_id, d.draft_id.as_str(), "organism-draft-validator-critic");
+        let mech_block =
+            find_validation_by_critic(&blocks, batch_id, d.draft_id.as_str(), "organism-draft-validator-critic");
+        match (mech_pass, mech_block) {
+            (Some(v), _) => writeln!(out, "    mechanical critic: PASS — {}", v.reason).unwrap(),
+            (None, Some(v)) => writeln!(out, "    mechanical critic: BLOCK — {}", v.reason).unwrap(),
+            (None, None) => writeln!(out, "    mechanical critic: (no verdict)").unwrap(),
+        }
+
+        let llm_pass =
+            find_validation_by_critic(&passes, batch_id, d.draft_id.as_str(), LLM_CRITIC_NAME);
+        let llm_block =
+            find_validation_by_critic(&blocks, batch_id, d.draft_id.as_str(), LLM_CRITIC_NAME);
+        match (llm_pass, llm_block) {
+            (Some(v), _) => writeln!(out, "    LLM critic:        PASS — {}", v.reason).unwrap(),
+            (None, Some(v)) => writeln!(out, "    LLM critic:        BLOCK — {}", v.reason).unwrap(),
+            (None, None) => writeln!(out, "    LLM critic:        (no verdict — late or failed)").unwrap(),
+        }
+
+        // Adversarial findings — match by suffix on the strategy
+        // fact id. The proposer's wire id is
+        // `formation-draft-{encoded_batch}-{index}`; the breaker
+        // stamps `assumption-{verdict}-{strategy_fact_id}`.
+        let strategy_fact_id_suffix = format!(
+            "-{}",
+            d.draft_id.as_str().trim_start_matches("candidate-"),
+        );
+        let adversarial: Vec<String> = ctx
+            .get(ContextKey::Evaluations)
+            .iter()
+            .chain(ctx.get(ContextKey::Constraints).iter())
+            .filter_map(|fact| {
+                let fid = fact.id().as_str();
+                if !fid.starts_with("assumption-") || !fid.ends_with(&strategy_fact_id_suffix) {
+                    return None;
+                }
+                let raw = fact.text().unwrap_or("");
+                Some(compact_breaker_payload(raw))
+            })
+            .collect();
+        if adversarial.is_empty() {
+            writeln!(out, "    adversarial:       (no findings)").unwrap();
+        } else {
+            writeln!(out, "    adversarial:       {}", adversarial.join("; ")).unwrap();
+        }
+
+        // Divergence flag — explicit so the synthesizer can't miss it.
+        let mech_verdict = mech_pass.map(|_| "PASS").or(mech_block.map(|_| "BLOCK"));
+        let llm_verdict = llm_pass.map(|_| "PASS").or(llm_block.map(|_| "BLOCK"));
+        if let (Some(m), Some(l)) = (mech_verdict, llm_verdict)
+            && m != l
+        {
+            writeln!(
+                out,
+                "    ⚠ DIVERGENCE:      mechanical={m}, LLM={l}",
+            )
+            .unwrap();
+        }
+        writeln!(out).unwrap();
+    }
+
+    writeln!(out, "Shortlist (top {n}):", n = shortlist.len()).unwrap();
+    if shortlist.is_empty() {
+        writeln!(out, "- (none — every draft blocked)").unwrap();
+    } else {
+        for d in &shortlist {
+            let descriptors = d
+                .descriptor_ids
+                .iter()
+                .map(|id| id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            writeln!(out, "- {} → [{descriptors}]", d.draft_id.as_str()).unwrap();
+        }
+    }
+
+    out
+}
+
 #[async_trait]
 impl Suggestor for ShortlistNoteEmitter {
     fn name(&self) -> &'static str {
@@ -669,26 +787,14 @@ impl Suggestor for ShortlistNoteEmitter {
         let mut effect = AgentEffect::builder();
         for round in Self::pending(ctx) {
             let batch_id = format!("{ROUND_SIGNAL_PREFIX}{round}");
-            let shortlist = extract_drafts_for_batch(ctx, ContextKey::Proposals, &batch_id);
-            let descriptors: Vec<String> = shortlist
-                .first()
-                .map(|d| {
-                    d.descriptor_ids
-                        .iter()
-                        .map(|id| id.as_str().to_string())
-                        .collect()
-                })
-                .unwrap_or_default();
+            let note_body = build_round_note(ctx, round, &batch_id);
             // The platform's RoundSynthesizer filters notes by
             // suffix `:N` — keep the suffix shape even though the
             // prefix is scenario-specific.
             effect = effect.proposal(ScenarioProvenance.proposed_fact(
                 ContextKey::Hypotheses,
                 format!("{NOTE_PREFIX}{round}"),
-                TextPayload::new(format!(
-                    "round {round} shortlist: [{}]",
-                    descriptors.join(", ")
-                )),
+                TextPayload::new(note_body),
             ));
         }
         effect.build()
@@ -725,12 +831,24 @@ impl SynthesisProducer for LlmSynthesisProducer {
     ) -> Result<String, String> {
         let note_block = notes
             .iter()
-            .enumerate()
-            .map(|(i, fact)| format!("- [{}] {}", i + 1, fact.text().unwrap_or("(no text)")))
+            .filter_map(|fact| fact.text())
             .collect::<Vec<_>>()
             .join("\n");
         let user_prompt = format!(
-            "Round {round} of a design huddle just completed. Here are the per-participant notes:\n\n{note_block}\n\nSynthesize a one-paragraph summary (≤80 words) of what the round concluded and what is still open."
+            "Round {round} of a design huddle just completed. The deliberation trace below \
+             lists every draft considered, every reviewer's verdict with the verbatim reason, \
+             any adversarial findings, the final shortlist, and explicit DIVERGENCE flags \
+             where two critics disagreed.\n\n\
+             ---\n\
+             {note_block}\n\
+             ---\n\n\
+             Write a synthesis (≤80 words, plain prose, no headings) that:\n\
+             1. Names which draft was shortlisted and why (cite the reviewer text).\n\
+             2. Calls out any DIVERGENCE between the mechanical and LLM critics — \
+                explain which reviewer's reasoning prevailed and the consequence.\n\
+             3. Flags adversarial findings only if they materially affect the decision.\n\n\
+             Do NOT restate the shortlist as your whole answer. Do NOT invent details \
+             the trace does not state."
         );
         let request = ChatRequest {
             messages: vec![ChatMessage {
@@ -740,13 +858,18 @@ impl SynthesisProducer for LlmSynthesisProducer {
                 tool_call_id: None,
             }],
             system: Some(
-                "You synthesize round outcomes for a deliberation huddle. Be terse and factual; do not invent details that the notes do not state."
+                "You synthesize the outcome of a deliberation round. Your job is to extract \
+                 the load-bearing signal from a structured trace — what was decided, what \
+                 disagreement was resolved, what was rejected and why. Be terse. Cite specific \
+                 descriptor ids and reviewer reasons by name. Do not invent facts not in the \
+                 trace; if a section is empty, do not claim there is open work where the trace \
+                 does not say so."
                     .to_string(),
             ),
             tools: Vec::new(),
             response_format: ResponseFormat::Text,
-            max_tokens: Some(200),
-            temperature: Some(0.2),
+            max_tokens: Some(220),
+            temperature: Some(0.1),
             stop_sequences: Vec::new(),
             model: None,
         };
