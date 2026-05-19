@@ -21,6 +21,22 @@ organism-catalog = "1.9.1"
 organism-catalog-seed = "1.9.1"
 organism-dynamics = "1.9.1"
 
+# Manifold — provider-agnostic LLM selection. Enable the major
+# chat-backend features so a deployment can pick any one at runtime
+# via env vars; the code declares needs, Manifold selects.
+converge-manifold-adapters = { version = "1.1.1", default-features = false, features = [
+    "anthropic",
+    "gemini",
+    "openai",
+    "openrouter",
+    "mistral",
+] }
+
+# .env loading for local development. Cloud uses GCP Secret Manager,
+# CI uses GitHub Actions secrets — both expose API keys via env
+# vars without dotenv; this is purely a local-dev convenience.
+dotenvy = "0.15"
+
 async-trait = "0.1"
 serde_json = "1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

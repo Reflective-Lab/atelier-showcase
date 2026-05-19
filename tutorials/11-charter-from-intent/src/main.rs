@@ -115,11 +115,23 @@ fn print_derived(title: &str, derived: &organism_pack::DerivedCharter) {
 
     println!("  Complexity signals:");
     let c = &derived.intent_complexity;
-    println!("    constraint_pressure:  {:.2}", c.constraint_pressure.as_f64());
-    println!("    authority_breadth:    {:.2}", c.authority_breadth.as_f64());
-    println!("    forbidden_density:    {:.2}", c.forbidden_density.as_f64());
+    println!(
+        "    constraint_pressure:  {:.2}",
+        c.constraint_pressure.as_f64()
+    );
+    println!(
+        "    authority_breadth:    {:.2}",
+        c.authority_breadth.as_f64()
+    );
+    println!(
+        "    forbidden_density:    {:.2}",
+        c.forbidden_density.as_f64()
+    );
     println!("    time_pressure:        {:.2}", c.time_pressure.as_f64());
-    println!("    reversibility_weight: {:.2}", c.reversibility_weight.as_f64());
+    println!(
+        "    reversibility_weight: {:.2}",
+        c.reversibility_weight.as_f64()
+    );
     println!("    escalation_required:  {}", c.escalation_required);
     println!();
 

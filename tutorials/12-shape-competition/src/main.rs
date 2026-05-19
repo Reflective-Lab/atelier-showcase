@@ -122,7 +122,10 @@ fn main() {
         let cal = calibrate_shape(&problem_class, c.charter.topology, score, &calibrations);
         println!(
             "  {:?}: prior={:.3} → posterior={:.3} (obs={})",
-            cal.topology, cal.prior_score.as_f64(), cal.posterior_score.as_f64(), cal.observation_count
+            cal.topology,
+            cal.prior_score.as_f64(),
+            cal.posterior_score.as_f64(),
+            cal.observation_count
         );
         calibrations.push(cal);
     }
@@ -157,7 +160,9 @@ fn main() {
     for c in &new_candidates {
         println!(
             "    {:?} — prior_score={:.3}, rationale: {}",
-            c.charter.topology, c.prior_score.as_f64(), c.rationale
+            c.charter.topology,
+            c.prior_score.as_f64(),
+            c.rationale
         );
     }
     println!();

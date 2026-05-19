@@ -27,27 +27,38 @@
 //! an explicit error from `main()` rather than substituting a
 //! placeholder.
 //!
-//! Two pieces are deliberately not in this scenario:
-//!   * `RoundSynthesizer` + a `SynthesisProducer` impl — the
-//!     platform does not ship a default LLM-backed producer, so
-//!     wiring it would require either a real Manifold-backed
-//!     `SynthesisProducer` (next slice) or a synthetic stand-in
-//!     (forbidden). The round loop runs without synthesis; the
-//!     critic + scorer drive batch completion.
-//!   * Per-round notes via a `ShortlistNoteEmitter` — only needed
-//!     to feed the (absent) synthesizer.
+//! `RoundSynthesizer` is wired with a real Manifold-backed
+//! `SynthesisProducer` — provider-agnostic selection via
+//! `ChatBackendSelectionConfig::from_env()` + `select_healthy_chat_backend`.
+//! The deployment chooses the provider through env vars
+//! (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, etc.,
+//! plus optional `CONVERGE_LLM_PROFILE` / `CONVERGE_LLM_PROVIDER`).
+//! If no API key is configured, the scenario exits honestly — no
+//! deterministic stand-in.
+//!
+//! Per-round notes come from a small `ShortlistNoteEmitter` that
+//! turns each completed batch's shortlist into one note the
+//! synthesizer can read. That's scenario-owned glue, not a mock:
+//! it makes a real fact, just one the platform doesn't ship a
+//! default for.
 //!
 //! Run with:
 //!
 //!     cargo run -p scenario-round-driven-formation-design
+
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use converge_kernel::formation::{
     FormationCatalog, FormationTemplate, FormationTemplateMetadata, FormationTemplateQuery,
     StaticFormationTemplate, SuggestorCapability, SuggestorRole,
 };
-use converge_kernel::{AgentEffect, Context, ContextKey};
+use converge_kernel::{AgentEffect, Context, ContextFact, ContextKey};
 use converge_pack::{ProvenanceSource, Suggestor, TextPayload};
+use converge_provider::{
+    ChatBackendSelectionConfig, ChatMessage, ChatRequest, ChatRole, DynChatBackend, ResponseFormat,
+};
+use manifold::llm::select_healthy_chat_backend;
 use organism_adversarial::AssumptionBreakerAgent;
 use organism_catalog::{DiscoveryCatalog, ProviderDescriptorCatalog};
 use organism_catalog_seed as seed;
@@ -57,7 +68,9 @@ use organism_dynamics::{
     critic_pass_complete_marker, extract_draft_validations, extract_drafts,
     extract_drafts_for_batch, latest_completed_batch, scorer_batch_complete_marker,
 };
-use organism_runtime::huddle::{RoundConventions, RoundStarter};
+use organism_runtime::huddle::{
+    RoundConventions, RoundStarter, RoundSynthesizer, SynthesisProducer,
+};
 use organism_runtime::{
     ExecutableSuggestorCatalog, Formation, FormationCompileRequest, FormationCompiler, Seed,
     register_default_factories,
@@ -66,9 +79,15 @@ use uuid::Uuid;
 
 const ROUND_SIGNAL_PREFIX: &str = "design-round-";
 const CONTINUE_PREFIX: &str = "design-round:continue:";
+const NOTE_PREFIX: &str = "design-huddle-note:";
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // .env is for local dev only. Cloud (GCP Secret Manager) and CI
+    // (GitHub Actions secrets) populate env vars without dotenv.
+    // dotenvy is silent if .env is absent — that's the right shape.
+    let _ = dotenvy::dotenv();
+
     print_banner();
 
     // ── 1. Wire the real catalog and the real executable
@@ -88,9 +107,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let request = scenario_request();
     let conventions = design_huddle_conventions();
 
-    print_intent(&request, &catalog, &executables);
+    // ── 2. Provider-agnostic LLM selection. The code declares
+    //       needs via ChatBackendSelectionConfig (criteria pulled
+    //       from CONVERGE_LLM_PROFILE env, or defaulting to
+    //       interactive). Manifold's selection layer probes the
+    //       configured provider keys (ANTHROPIC_API_KEY /
+    //       OPENAI_API_KEY / GEMINI_API_KEY / …) and returns the
+    //       first healthy backend, or fails honestly with no
+    //       silent fallback.
+    let llm_config = ChatBackendSelectionConfig::from_env()?;
+    let selected = select_healthy_chat_backend(&llm_config).await.map_err(
+        |err| -> Box<dyn std::error::Error> {
+            format!(
+                "no healthy LLM backend available: {err}. \
+                 Set ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY (etc.) \
+                 in .env (local) / GitHub Actions secrets (CI) / GCP Secret \
+                 Manager (cloud). CONVERGE_LLM_PROFILE selects the criteria \
+                 (interactive / analysis / batch / high_volume)."
+            )
+            .into()
+        },
+    )?;
 
-    // ── 2. Build the design huddle Formation.
+    print_intent(&request, &catalog, &executables, &selected);
+
+    // ── 3. Build the design huddle Formation. Round synthesis is
+    //       Manifold-backed — the producer wraps the selected
+    //       chat backend and turns per-round notes into a synthesis
+    //       fact.
     let round_starter = RoundStarter::new(2).with_conventions(conventions);
     let proposer = CatalogProposerSuggestor::new(
         catalog.clone(),
@@ -108,6 +152,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
     let adversarial = AssumptionBreakerAgent::new();
     let scorer = BeautyContestSuggestor::new_critic_gated(1);
+    let synthesizer = RoundSynthesizer::new(1, LlmSynthesisProducer::new(selected.backend.clone()))
+        .with_conventions(conventions);
 
     let huddle = Formation::new("round-driven-design-huddle")
         .agent_boxed(Box::new(round_starter))
@@ -115,6 +161,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .agent_boxed(Box::new(critic))
         .agent_boxed(Box::new(adversarial))
         .agent_boxed(Box::new(scorer))
+        .agent_boxed(Box::new(ShortlistNoteEmitter))
+        .agent_boxed(Box::new(synthesizer))
         .agent_boxed(Box::new(RoundAdvancer))
         .seed(
             ContextKey::Seeds,
@@ -133,16 +181,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
     let ctx = &result.converge_result.context;
 
-    // ── 3. Print what the design huddle produced.
+    // ── 4. Print what the design huddle produced.
     print_rounds(ctx);
     print_adversarial(ctx);
 
-    // ── 4. Compile handoff: pick latest_completed_batch, validate
+    // ── 5. Compile handoff: pick latest_completed_batch, validate
     //       its shortlist against the real catalog, then instantiate
     //       the work Formation against the real factory set.
     let plan = compile_handoff(ctx, &catalog, &templates, &providers, &request)?;
 
-    // ── 5. Actually run the work Formation in Converge.
+    // ── 6. Actually run the work Formation in Converge.
     print_section("Work Formation execution");
     // The work formation audits a candidate plan. The plan is fed
     // in via Strategies — the gates read from there. The seed under
@@ -273,6 +321,7 @@ fn print_intent(
     request: &FormationCompileRequest,
     catalog: &DiscoveryCatalog,
     executables: &ExecutableSuggestorCatalog,
+    selected: &manifold::llm::SelectedChatBackend,
 ) {
     print_section("Intent + wiring");
     println!("  template query: keyword \"policy-and-anomaly-audit\"");
@@ -290,6 +339,11 @@ fn print_intent(
     for id in executables.suggestor_ids() {
         println!("                    · {id}");
     }
+    println!(
+        "  llm backend:    {} / {} (provider-agnostic selection via Manifold)",
+        selected.provider(),
+        selected.model()
+    );
     println!();
 }
 
@@ -514,6 +568,139 @@ impl Suggestor for RoundAdvancer {
             ));
         }
         effect.build()
+    }
+}
+
+/// `ShortlistNoteEmitter` turns each completed batch's shortlist
+/// into one note fact (under `ContextKey::Hypotheses`) that
+/// `RoundSynthesizer` can read. The platform's `RoundSynthesizer`
+/// expects notes ending with `:N` for round `N`; the conventions
+/// in this scenario use `Hypotheses` as the note key.
+struct ShortlistNoteEmitter;
+
+impl ShortlistNoteEmitter {
+    fn pending(ctx: &dyn Context) -> Vec<u8> {
+        let mut rounds: Vec<u8> = completed_batches(ctx)
+            .into_iter()
+            .filter_map(|b| round_number_from_design_batch_id(&b))
+            .filter(|round| {
+                let id = format!("{NOTE_PREFIX}{round}");
+                !ctx.get(ContextKey::Hypotheses)
+                    .iter()
+                    .any(|fact| fact.id().as_str() == id)
+            })
+            .collect();
+        rounds.sort_unstable();
+        rounds.dedup();
+        rounds
+    }
+}
+
+#[async_trait]
+impl Suggestor for ShortlistNoteEmitter {
+    fn name(&self) -> &'static str {
+        "scenario-shortlist-note-emitter"
+    }
+    fn dependencies(&self) -> &[ContextKey] {
+        &[ContextKey::Diagnostic, ContextKey::Proposals]
+    }
+    fn provenance(&self) -> &'static str {
+        ScenarioProvenance.as_str()
+    }
+    fn accepts(&self, ctx: &dyn Context) -> bool {
+        !Self::pending(ctx).is_empty()
+    }
+    async fn execute(&self, ctx: &dyn Context) -> AgentEffect {
+        let mut effect = AgentEffect::builder();
+        for round in Self::pending(ctx) {
+            let batch_id = format!("{ROUND_SIGNAL_PREFIX}{round}");
+            let shortlist = extract_drafts_for_batch(ctx, ContextKey::Proposals, &batch_id);
+            let descriptors: Vec<String> = shortlist
+                .first()
+                .map(|d| {
+                    d.descriptor_ids
+                        .iter()
+                        .map(|id| id.as_str().to_string())
+                        .collect()
+                })
+                .unwrap_or_default();
+            // The platform's RoundSynthesizer filters notes by
+            // suffix `:N` — keep the suffix shape even though the
+            // prefix is scenario-specific.
+            effect = effect.proposal(ScenarioProvenance.proposed_fact(
+                ContextKey::Hypotheses,
+                format!("{NOTE_PREFIX}{round}"),
+                TextPayload::new(format!(
+                    "round {round} shortlist: [{}]",
+                    descriptors.join(", ")
+                )),
+            ));
+        }
+        effect.build()
+    }
+}
+
+/// `LlmSynthesisProducer` — implements
+/// `organism_runtime::huddle::SynthesisProducer` by calling a
+/// Manifold-selected chat backend. The backend was picked at
+/// startup from env-driven needs spec; this producer just composes
+/// a prompt from the round's notes and routes through the trait.
+///
+/// On chat errors the producer returns the error string. The
+/// scenario's `RoundSynthesizer` routes producer errors to
+/// `ContextKey::Diagnostic` and skips that round — the work
+/// formation still runs, the audit trail captures the failure.
+struct LlmSynthesisProducer {
+    backend: Arc<dyn DynChatBackend>,
+}
+
+impl LlmSynthesisProducer {
+    fn new(backend: Arc<dyn DynChatBackend>) -> Self {
+        Self { backend }
+    }
+}
+
+#[async_trait]
+impl SynthesisProducer for LlmSynthesisProducer {
+    async fn synthesize(
+        &self,
+        round: u8,
+        notes: &[ContextFact],
+        _ctx: &dyn Context,
+    ) -> Result<String, String> {
+        let note_block = notes
+            .iter()
+            .enumerate()
+            .map(|(i, fact)| format!("- [{}] {}", i + 1, fact.text().unwrap_or("(no text)")))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let user_prompt = format!(
+            "Round {round} of a design huddle just completed. Here are the per-participant notes:\n\n{note_block}\n\nSynthesize a one-paragraph summary (≤80 words) of what the round concluded and what is still open."
+        );
+        let request = ChatRequest {
+            messages: vec![ChatMessage {
+                role: ChatRole::User,
+                content: user_prompt,
+                tool_calls: Vec::new(),
+                tool_call_id: None,
+            }],
+            system: Some(
+                "You synthesize round outcomes for a deliberation huddle. Be terse and factual; do not invent details that the notes do not state."
+                    .to_string(),
+            ),
+            tools: Vec::new(),
+            response_format: ResponseFormat::Text,
+            max_tokens: Some(200),
+            temperature: Some(0.2),
+            stop_sequences: Vec::new(),
+            model: None,
+        };
+        let response = self
+            .backend
+            .chat(request)
+            .await
+            .map_err(|e| format!("chat backend error: {e}"))?;
+        Ok(response.content)
     }
 }
 
