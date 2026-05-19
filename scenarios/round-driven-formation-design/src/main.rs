@@ -6,11 +6,16 @@
 //!
 //!   intent
 //!     → design huddle Formation
-//!         (RoundStarter → CatalogProposerSuggestor[round-driven]
-//!          → DraftValidatorCriticSuggestor → AssumptionBreakerAgent
+//!         (RoundStarter → EvolvingCatalogProposer[round-driven,
+//!          prior-round-aware] → DraftValidatorCriticSuggestor
+//!          → LlmCriticSuggestor → AssumptionBreakerAgent
 //!          → BeautyContestSuggestor[critic-gated]
+//!          → ShortlistNoteEmitter → RoundSynthesizer
 //!          → RoundAdvancer)
 //!     → two rounds, two batches, per-batch sentinels
+//!     → round N+1's proposer reads round N's blocked drafts and
+//!       excludes descriptors that appeared only in blocked rosters,
+//!       so the deliberation actually evolves
 //!     → host picks latest_completed_batch
 //!     → compile_draft against the real organism-catalog-seed
 //!     → ExecutableSuggestorCatalog::instantiate with real
@@ -60,13 +65,13 @@ use converge_provider::{
 };
 use manifold::llm::select_healthy_chat_backend;
 use organism_adversarial::AssumptionBreakerAgent;
-use organism_catalog::{DiscoveryCatalog, ProviderDescriptorCatalog};
+use organism_catalog::{DiscoveryCatalog, ProviderDescriptorCatalog, SuggestorDescriptorId};
 use organism_catalog_seed as seed;
 use organism_dynamics::{
-    BeautyContestSuggestor, CatalogProposerSuggestor, DraftValidation,
-    DraftValidatorCriticSuggestor, DraftVerdict, FormationDraft, compile_draft,
-    completed_batches, critic_pass_complete_marker, extract_draft_validations, extract_drafts,
-    extract_drafts_for_batch, latest_completed_batch, scorer_batch_complete_marker,
+    BeautyContestSuggestor, DraftValidation, DraftValidatorCriticSuggestor, DraftVerdict,
+    FormationDraft, compile_draft, completed_batches, critic_pass_complete_marker,
+    extract_draft_validations, extract_drafts, extract_drafts_for_batch, latest_completed_batch,
+    scorer_batch_complete_marker,
 };
 use organism_runtime::huddle::{
     RoundConventions, RoundStarter, RoundSynthesizer, SynthesisProducer,
@@ -136,14 +141,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //       chat backend and turns per-round notes into a synthesis
     //       fact.
     let round_starter = RoundStarter::new(2).with_conventions(conventions);
-    let proposer = CatalogProposerSuggestor::new(
+    let proposer = EvolvingCatalogProposer::new(
         catalog.clone(),
         templates.clone(),
         providers.clone(),
         request.clone(),
         2,
-    )
-    .with_round_signals(ROUND_SIGNAL_PREFIX);
+        ROUND_SIGNAL_PREFIX,
+    );
     let critic = DraftValidatorCriticSuggestor::new(
         catalog.clone(),
         templates.clone(),
@@ -370,6 +375,18 @@ fn print_rounds(ctx: &dyn Context) {
         let header = format!("Round {round_n}  (batch: {batch_id})");
         print_section(&header);
 
+        let exclusions_id = format!("evolving-proposer-exclusions-{batch_id}");
+        if let Some(fact) = ctx
+            .get(ContextKey::Diagnostic)
+            .iter()
+            .find(|f| f.id().as_str() == exclusions_id)
+        {
+            println!(
+                "  Proposer evolution: {}",
+                fact.text().unwrap_or("(no text)")
+            );
+        }
+
         let drafts_in_batch: Vec<&FormationDraft> = drafts
             .iter()
             .filter(|d| d.draft_batch_id == *batch_id)
@@ -579,6 +596,240 @@ fn round_number_from_design_batch_id(batch_id: &str) -> Option<u8> {
         .and_then(|n| n.parse::<u8>().ok())
 }
 
+/// `EvolvingCatalogProposer` — round-aware k-best catalog proposer.
+///
+/// Mirrors `CatalogProposerSuggestor`'s round-driven mode for round 1
+/// (no prior rounds, no exclusions, k candidates from the full
+/// catalog). For round 2+, it reads every prior batch's drafts and
+/// their critic verdicts, then derives a per-round exclusion set:
+/// any descriptor that appeared in a `Block`-verdict draft and never
+/// appeared in a non-blocked draft of that batch. The compiler then
+/// runs against the filtered catalog so round N+1's drafts differ
+/// from round N's in a way that reflects the deliberation outcome.
+///
+/// On compile failure (the exclusion set leaves the template
+/// unsatisfiable) the proposer emits a Diagnostic fact for the open
+/// batch and skips it — no silent fallback to the unfiltered catalog.
+///
+/// Per-round exclusion choice is also recorded under Diagnostic with
+/// id `evolving-proposer-exclusions-{batch_id}` so the trace shows
+/// what changed between rounds.
+struct EvolvingCatalogProposer {
+    catalog: DiscoveryCatalog,
+    templates: FormationCatalog,
+    providers: ProviderDescriptorCatalog,
+    request: FormationCompileRequest,
+    k: usize,
+    signal_prefix: &'static str,
+}
+
+impl EvolvingCatalogProposer {
+    fn new(
+        catalog: DiscoveryCatalog,
+        templates: FormationCatalog,
+        providers: ProviderDescriptorCatalog,
+        request: FormationCompileRequest,
+        k: usize,
+        signal_prefix: &'static str,
+    ) -> Self {
+        Self {
+            catalog,
+            templates,
+            providers,
+            request,
+            k,
+            signal_prefix,
+        }
+    }
+
+    fn open_batches(&self, ctx: &dyn Context) -> Vec<String> {
+        let existing: std::collections::BTreeSet<String> =
+            extract_drafts(ctx, ContextKey::Strategies)
+                .into_iter()
+                .map(|d| d.draft_batch_id.to_string())
+                .collect();
+        let mut open: Vec<String> = ctx
+            .get(ContextKey::Signals)
+            .iter()
+            .filter_map(|fact| {
+                let id = fact.id().as_str();
+                if id.starts_with(self.signal_prefix) && !existing.contains(id) {
+                    Some(id.to_string())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        open.sort();
+        open.dedup();
+        open
+    }
+
+    /// Descriptors that appeared in a blocked draft of any prior batch
+    /// and were NOT also present in any non-blocked draft of that same
+    /// batch. The pure-block intersection — "responsible for failure"
+    /// in a way no surviving roster vouches for. Keeping a descriptor
+    /// that was blocked in one roster but passed in another is
+    /// deliberate: the issue was the combination, not the descriptor.
+    fn prior_round_exclusions(
+        &self,
+        ctx: &dyn Context,
+        current_batch: &str,
+    ) -> Vec<SuggestorDescriptorId> {
+        let drafts = extract_drafts(ctx, ContextKey::Strategies);
+        let passes = extract_draft_validations(ctx, ContextKey::Evaluations);
+        let blocks = extract_draft_validations(ctx, ContextKey::Constraints);
+
+        let mut blocked: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        let mut passed_only: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+
+        for draft in &drafts {
+            if draft.draft_batch_id.as_str() == current_batch {
+                continue;
+            }
+            let was_blocked = blocks.iter().any(|v| {
+                v.draft_batch_id == draft.draft_batch_id.as_str()
+                    && v.draft_id == draft.draft_id.as_str()
+            });
+            let was_passed_by_any = passes.iter().any(|v| {
+                v.draft_batch_id == draft.draft_batch_id.as_str()
+                    && v.draft_id == draft.draft_id.as_str()
+            });
+            if was_blocked {
+                for id in &draft.descriptor_ids {
+                    blocked.insert(id.as_str().to_string());
+                }
+            } else if was_passed_by_any {
+                for id in &draft.descriptor_ids {
+                    passed_only.insert(id.as_str().to_string());
+                }
+            }
+        }
+
+        blocked
+            .into_iter()
+            .filter(|id| !passed_only.contains(id))
+            .map(SuggestorDescriptorId::from)
+            .collect()
+    }
+
+    fn filtered_catalog(&self, exclusions: &[SuggestorDescriptorId]) -> DiscoveryCatalog {
+        let mut filtered = DiscoveryCatalog::new();
+        for entry in &self.catalog {
+            let id_str = entry.id().as_str();
+            if !exclusions.iter().any(|e| e.as_str() == id_str) {
+                filtered.register(entry.clone());
+            }
+        }
+        filtered
+    }
+}
+
+const EVOLVING_PROPOSER_NAME: &str = "scenario-evolving-catalog-proposer";
+
+#[async_trait]
+impl Suggestor for EvolvingCatalogProposer {
+    fn name(&self) -> &'static str {
+        EVOLVING_PROPOSER_NAME
+    }
+    fn dependencies(&self) -> &[ContextKey] {
+        &[ContextKey::Seeds, ContextKey::Signals]
+    }
+    fn provenance(&self) -> &'static str {
+        ScenarioProvenance.as_str()
+    }
+    fn accepts(&self, ctx: &dyn Context) -> bool {
+        if !ctx.has(ContextKey::Seeds) {
+            return false;
+        }
+        !self.open_batches(ctx).is_empty()
+    }
+
+    async fn execute(&self, ctx: &dyn Context) -> AgentEffect {
+        let mut effect = AgentEffect::builder();
+        for batch_id in self.open_batches(ctx) {
+            let exclusions = self.prior_round_exclusions(ctx, &batch_id);
+            let exclusions_text = if exclusions.is_empty() {
+                "(no prior-round exclusions)".to_string()
+            } else {
+                exclusions
+                    .iter()
+                    .map(|id| id.as_str().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
+            effect = effect.proposal(ScenarioProvenance.proposed_fact(
+                ContextKey::Diagnostic,
+                format!("evolving-proposer-exclusions-{batch_id}"),
+                TextPayload::new(format!(
+                    "{EVOLVING_PROPOSER_NAME}: exclusions for {batch_id} = [{exclusions_text}]"
+                )),
+            ));
+
+            let catalog = self.filtered_catalog(&exclusions);
+            let candidates = match FormationCompiler::new().compile_k_candidates(
+                &self.request,
+                &self.templates,
+                &catalog,
+                &self.providers,
+                self.k,
+            ) {
+                Ok(c) => c,
+                Err(failure) => {
+                    effect = effect.proposal(ScenarioProvenance.proposed_fact(
+                        ContextKey::Diagnostic,
+                        format!("evolving-proposer-compile-failed-{batch_id}"),
+                        TextPayload::new(format!(
+                            "{EVOLVING_PROPOSER_NAME}: catalog cannot satisfy template for batch \
+                             {batch_id} with exclusions [{exclusions_text}] — {}",
+                            failure.error
+                        )),
+                    ));
+                    continue;
+                }
+            };
+
+            for (index, candidate) in candidates.iter().enumerate() {
+                let descriptor_ids: Vec<SuggestorDescriptorId> = candidate
+                    .roster
+                    .iter()
+                    .map(|r| r.suggestor_id.clone())
+                    .collect();
+                let draft = FormationDraft::new(
+                    format!("candidate-{index}"),
+                    batch_id.clone(),
+                    descriptor_ids,
+                    format!(
+                        "Evolving k-best candidate #{index} for template '{}' \
+                         (batch: {batch_id}, exclusions: [{exclusions_text}]).",
+                        candidate.template_id
+                    ),
+                    EVOLVING_PROPOSER_NAME,
+                );
+                let json = match serde_json::to_string(&draft) {
+                    Ok(s) => s,
+                    Err(err) => {
+                        effect = effect.proposal(ScenarioProvenance.proposed_fact(
+                            ContextKey::Diagnostic,
+                            format!("evolving-proposer-serialize-error-{batch_id}-{index}"),
+                            TextPayload::new(format!(
+                                "{EVOLVING_PROPOSER_NAME}: serialize error for {batch_id}/{index}: {err}"
+                            )),
+                        ));
+                        continue;
+                    }
+                };
+                effect = effect.proposal(ScenarioProvenance.proposed_fact(
+                    ContextKey::Strategies,
+                    format!("evolving-draft-{batch_id}-{index}"),
+                    TextPayload::new(json),
+                ));
+            }
+        }
+        effect.build()
+    }
+}
+
 struct RoundAdvancer;
 
 impl RoundAdvancer {
@@ -669,8 +920,24 @@ fn build_round_note(ctx: &dyn Context, round: u8, batch_id: &str) -> String {
     let shortlist = extract_drafts_for_batch(ctx, ContextKey::Proposals, batch_id);
 
     let mut out = String::new();
-    writeln!(out, "Round {round} — deliberation trace (batch: {batch_id})").unwrap();
+    writeln!(
+        out,
+        "Round {round} — deliberation trace (batch: {batch_id})"
+    )
+    .unwrap();
     writeln!(out).unwrap();
+
+    let exclusions_id = format!("evolving-proposer-exclusions-{batch_id}");
+    let exclusions_text = ctx
+        .get(ContextKey::Diagnostic)
+        .iter()
+        .find(|f| f.id().as_str() == exclusions_id)
+        .and_then(|f| f.text().map(str::to_string));
+    if let Some(line) = exclusions_text {
+        writeln!(out, "Evolution context (input to this round's proposer):").unwrap();
+        writeln!(out, "- {line}").unwrap();
+        writeln!(out).unwrap();
+    }
     writeln!(out, "Drafts considered:").unwrap();
 
     for d in &drafts {
@@ -680,22 +947,26 @@ fn build_round_note(ctx: &dyn Context, round: u8, batch_id: &str) -> String {
             .map(|id| id.as_str())
             .collect::<Vec<_>>()
             .join(", ");
-        writeln!(
-            out,
-            "- {} → [{}]",
-            d.draft_id.as_str(),
-            descriptor_list,
-        )
-        .unwrap();
+        writeln!(out, "- {} → [{}]", d.draft_id.as_str(), descriptor_list,).unwrap();
         writeln!(out, "    rationale: {}", d.rationale).unwrap();
 
-        let mech_pass =
-            find_validation_by_critic(&passes, batch_id, d.draft_id.as_str(), "organism-draft-validator-critic");
-        let mech_block =
-            find_validation_by_critic(&blocks, batch_id, d.draft_id.as_str(), "organism-draft-validator-critic");
+        let mech_pass = find_validation_by_critic(
+            &passes,
+            batch_id,
+            d.draft_id.as_str(),
+            "organism-draft-validator-critic",
+        );
+        let mech_block = find_validation_by_critic(
+            &blocks,
+            batch_id,
+            d.draft_id.as_str(),
+            "organism-draft-validator-critic",
+        );
         match (mech_pass, mech_block) {
             (Some(v), _) => writeln!(out, "    mechanical critic: PASS — {}", v.reason).unwrap(),
-            (None, Some(v)) => writeln!(out, "    mechanical critic: BLOCK — {}", v.reason).unwrap(),
+            (None, Some(v)) => {
+                writeln!(out, "    mechanical critic: BLOCK — {}", v.reason).unwrap()
+            }
             (None, None) => writeln!(out, "    mechanical critic: (no verdict)").unwrap(),
         }
 
@@ -705,18 +976,20 @@ fn build_round_note(ctx: &dyn Context, round: u8, batch_id: &str) -> String {
             find_validation_by_critic(&blocks, batch_id, d.draft_id.as_str(), LLM_CRITIC_NAME);
         match (llm_pass, llm_block) {
             (Some(v), _) => writeln!(out, "    LLM critic:        PASS — {}", v.reason).unwrap(),
-            (None, Some(v)) => writeln!(out, "    LLM critic:        BLOCK — {}", v.reason).unwrap(),
-            (None, None) => writeln!(out, "    LLM critic:        (no verdict — late or failed)").unwrap(),
+            (None, Some(v)) => {
+                writeln!(out, "    LLM critic:        BLOCK — {}", v.reason).unwrap()
+            }
+            (None, None) => {
+                writeln!(out, "    LLM critic:        (no verdict — late or failed)").unwrap()
+            }
         }
 
         // Adversarial findings — match by suffix on the strategy
         // fact id. The proposer's wire id is
         // `formation-draft-{encoded_batch}-{index}`; the breaker
         // stamps `assumption-{verdict}-{strategy_fact_id}`.
-        let strategy_fact_id_suffix = format!(
-            "-{}",
-            d.draft_id.as_str().trim_start_matches("candidate-"),
-        );
+        let strategy_fact_id_suffix =
+            format!("-{}", d.draft_id.as_str().trim_start_matches("candidate-"),);
         let adversarial: Vec<String> = ctx
             .get(ContextKey::Evaluations)
             .iter()
@@ -742,11 +1015,7 @@ fn build_round_note(ctx: &dyn Context, round: u8, batch_id: &str) -> String {
         if let (Some(m), Some(l)) = (mech_verdict, llm_verdict)
             && m != l
         {
-            writeln!(
-                out,
-                "    ⚠ DIVERGENCE:      mechanical={m}, LLM={l}",
-            )
-            .unwrap();
+            writeln!(out, "    ⚠ DIVERGENCE:      mechanical={m}, LLM={l}",).unwrap();
         }
         writeln!(out).unwrap();
     }
@@ -836,17 +1105,20 @@ impl SynthesisProducer for LlmSynthesisProducer {
             .join("\n");
         let user_prompt = format!(
             "Round {round} of a design huddle just completed. The deliberation trace below \
-             lists every draft considered, every reviewer's verdict with the verbatim reason, \
-             any adversarial findings, the final shortlist, and explicit DIVERGENCE flags \
-             where two critics disagreed.\n\n\
+             lists the proposer's evolution context (descriptors excluded based on prior \
+             rounds' Block verdicts, if any), every draft considered, every reviewer's \
+             verdict with the verbatim reason, any adversarial findings, the final \
+             shortlist, and explicit DIVERGENCE flags where two critics disagreed.\n\n\
              ---\n\
              {note_block}\n\
              ---\n\n\
-             Write a synthesis (≤80 words, plain prose, no headings) that:\n\
-             1. Names which draft was shortlisted and why (cite the reviewer text).\n\
-             2. Calls out any DIVERGENCE between the mechanical and LLM critics — \
+             Write a synthesis (≤90 words, plain prose, no headings) that:\n\
+             1. If an Evolution context is present, state what this round excluded and why \
+                (cite the descriptor ids that were dropped from consideration).\n\
+             2. Names which draft was shortlisted and why (cite the reviewer text).\n\
+             3. Calls out any DIVERGENCE between the mechanical and LLM critics — \
                 explain which reviewer's reasoning prevailed and the consequence.\n\
-             3. Flags adversarial findings only if they materially affect the decision.\n\n\
+             4. Flags adversarial findings only if they materially affect the decision.\n\n\
              Do NOT restate the shortlist as your whole answer. Do NOT invent details \
              the trace does not state."
         );
@@ -868,7 +1140,7 @@ impl SynthesisProducer for LlmSynthesisProducer {
             ),
             tools: Vec::new(),
             response_format: ResponseFormat::Text,
-            max_tokens: Some(220),
+            max_tokens: Some(260),
             temperature: Some(0.1),
             stop_sequences: Vec::new(),
             model: None,
@@ -996,10 +1268,7 @@ impl LlmCriticSuggestor {
     /// Two-line strict parse. Returns (verdict, reason) or an error
     /// string suitable for Diagnostic.
     fn parse_response(text: &str) -> Result<(DraftVerdict, String), String> {
-        let mut lines = text
-            .lines()
-            .map(str::trim)
-            .filter(|l| !l.is_empty());
+        let mut lines = text.lines().map(str::trim).filter(|l| !l.is_empty());
         let first = lines.next().ok_or("empty response")?;
         let verdict = match first.to_ascii_uppercase().as_str() {
             "PASS" => DraftVerdict::Pass,
