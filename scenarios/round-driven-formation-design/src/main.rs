@@ -6,8 +6,9 @@
 //!
 //!   intent
 //!     → design huddle Formation
-//!         (RoundStarter → EvolvingCatalogProposer[round-driven,
-//!          prior-round-aware] → DraftValidatorCriticSuggestor
+//!         (RoundStarter → CatalogProposerSuggestor[round-driven,
+//!          with_round_exclusion_policy(BlockedMinusPassedPolicy) +
+//!          with_halt_marker(convergence)] → DraftValidatorCriticSuggestor
 //!          → LlmCriticSuggestor[grades PASS/BLOCK + 0..=100 confidence]
 //!          → AssumptionBreakerAgent
 //!          → EvidenceWeightedScorer[combines all evidence]
@@ -67,12 +68,14 @@ use converge_provider::{
 };
 use manifold::llm::select_healthy_chat_backend;
 use organism_adversarial::AssumptionBreakerAgent;
-use organism_catalog::{DiscoveryCatalog, ProviderDescriptorCatalog, SuggestorDescriptorId};
+use organism_catalog::{DiscoveryCatalog, ProviderDescriptorCatalog};
 use organism_catalog_seed as seed;
 use organism_dynamics::{
-    DraftValidation, DraftValidatorCriticSuggestor, DraftVerdict, FormationDraft, compile_draft,
-    completed_batches, critic_pass_complete_marker, extract_draft_validations, extract_drafts,
-    extract_drafts_for_batch, latest_completed_batch, scorer_batch_complete_marker,
+    BlockedMinusPassedPolicy, CatalogProposerSuggestor, DraftValidation,
+    DraftValidatorCriticSuggestor, DraftVerdict, FormationDraft, compile_draft, completed_batches,
+    critic_pass_complete_marker, extract_draft_validations, extract_drafts,
+    extract_drafts_for_batch, latest_completed_batch, proposer_exclusions_marker,
+    scorer_batch_complete_marker,
 };
 use organism_runtime::huddle::{
     RoundConventions, RoundStarter, RoundSynthesizer, SynthesisProducer,
@@ -142,14 +145,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //       chat backend and turns per-round notes into a synthesis
     //       fact.
     let round_starter = RoundStarter::new(3).with_conventions(conventions);
-    let proposer = EvolvingCatalogProposer::new(
+    let proposer = CatalogProposerSuggestor::new(
         catalog.clone(),
         templates.clone(),
         providers.clone(),
         request.clone(),
         2,
-        ROUND_SIGNAL_PREFIX,
-    );
+    )
+    .with_round_signals(ROUND_SIGNAL_PREFIX)
+    .with_round_exclusion_policy(BlockedMinusPassedPolicy::new())
+    .with_halt_marker(CONVERGENCE_STOP_MARKER);
     let critic = DraftValidatorCriticSuggestor::new(
         catalog.clone(),
         templates.clone(),
@@ -391,7 +396,7 @@ fn print_rounds(ctx: &dyn Context) {
             continue;
         }
 
-        let exclusions_id = format!("evolving-proposer-exclusions-{batch_id}");
+        let exclusions_id = proposer_exclusions_marker(batch_id);
         if let Some(fact) = ctx
             .get(ContextKey::Diagnostic)
             .iter()
@@ -651,243 +656,6 @@ fn round_number_from_design_batch_id(batch_id: &str) -> Option<u8> {
     batch_id
         .strip_prefix(ROUND_SIGNAL_PREFIX)
         .and_then(|n| n.parse::<u8>().ok())
-}
-
-/// `EvolvingCatalogProposer` — round-aware k-best catalog proposer.
-///
-/// Mirrors `CatalogProposerSuggestor`'s round-driven mode for round 1
-/// (no prior rounds, no exclusions, k candidates from the full
-/// catalog). For round 2+, it reads every prior batch's drafts and
-/// their critic verdicts, then derives a per-round exclusion set:
-/// any descriptor that appeared in a `Block`-verdict draft and never
-/// appeared in a non-blocked draft of that batch. The compiler then
-/// runs against the filtered catalog so round N+1's drafts differ
-/// from round N's in a way that reflects the deliberation outcome.
-///
-/// On compile failure (the exclusion set leaves the template
-/// unsatisfiable) the proposer emits a Diagnostic fact for the open
-/// batch and skips it — no silent fallback to the unfiltered catalog.
-///
-/// Per-round exclusion choice is also recorded under Diagnostic with
-/// id `evolving-proposer-exclusions-{batch_id}` so the trace shows
-/// what changed between rounds.
-struct EvolvingCatalogProposer {
-    catalog: DiscoveryCatalog,
-    templates: FormationCatalog,
-    providers: ProviderDescriptorCatalog,
-    request: FormationCompileRequest,
-    k: usize,
-    signal_prefix: &'static str,
-}
-
-impl EvolvingCatalogProposer {
-    fn new(
-        catalog: DiscoveryCatalog,
-        templates: FormationCatalog,
-        providers: ProviderDescriptorCatalog,
-        request: FormationCompileRequest,
-        k: usize,
-        signal_prefix: &'static str,
-    ) -> Self {
-        Self {
-            catalog,
-            templates,
-            providers,
-            request,
-            k,
-            signal_prefix,
-        }
-    }
-
-    fn open_batches(&self, ctx: &dyn Context) -> Vec<String> {
-        let existing: std::collections::BTreeSet<String> =
-            extract_drafts(ctx, ContextKey::Strategies)
-                .into_iter()
-                .map(|d| d.draft_batch_id.to_string())
-                .collect();
-        let mut open: Vec<String> = ctx
-            .get(ContextKey::Signals)
-            .iter()
-            .filter_map(|fact| {
-                let id = fact.id().as_str();
-                if id.starts_with(self.signal_prefix) && !existing.contains(id) {
-                    Some(id.to_string())
-                } else {
-                    None
-                }
-            })
-            .collect();
-        open.sort();
-        open.dedup();
-        open
-    }
-
-    /// Descriptors that appeared in a blocked draft of any prior batch
-    /// and were NOT also present in any non-blocked draft of that same
-    /// batch. The pure-block intersection — "responsible for failure"
-    /// in a way no surviving roster vouches for. Keeping a descriptor
-    /// that was blocked in one roster but passed in another is
-    /// deliberate: the issue was the combination, not the descriptor.
-    fn prior_round_exclusions(
-        &self,
-        ctx: &dyn Context,
-        current_batch: &str,
-    ) -> Vec<SuggestorDescriptorId> {
-        let drafts = extract_drafts(ctx, ContextKey::Strategies);
-        let passes = extract_draft_validations(ctx, ContextKey::Evaluations);
-        let blocks = extract_draft_validations(ctx, ContextKey::Constraints);
-
-        let mut blocked: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-        let mut passed_only: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-
-        for draft in &drafts {
-            if draft.draft_batch_id.as_str() == current_batch {
-                continue;
-            }
-            let was_blocked = blocks.iter().any(|v| {
-                v.draft_batch_id == draft.draft_batch_id.as_str()
-                    && v.draft_id == draft.draft_id.as_str()
-            });
-            let was_passed_by_any = passes.iter().any(|v| {
-                v.draft_batch_id == draft.draft_batch_id.as_str()
-                    && v.draft_id == draft.draft_id.as_str()
-            });
-            if was_blocked {
-                for id in &draft.descriptor_ids {
-                    blocked.insert(id.as_str().to_string());
-                }
-            } else if was_passed_by_any {
-                for id in &draft.descriptor_ids {
-                    passed_only.insert(id.as_str().to_string());
-                }
-            }
-        }
-
-        blocked
-            .into_iter()
-            .filter(|id| !passed_only.contains(id))
-            .map(SuggestorDescriptorId::from)
-            .collect()
-    }
-
-    fn filtered_catalog(&self, exclusions: &[SuggestorDescriptorId]) -> DiscoveryCatalog {
-        let mut filtered = DiscoveryCatalog::new();
-        for entry in &self.catalog {
-            let id_str = entry.id().as_str();
-            if !exclusions.iter().any(|e| e.as_str() == id_str) {
-                filtered.register(entry.clone());
-            }
-        }
-        filtered
-    }
-}
-
-const EVOLVING_PROPOSER_NAME: &str = "scenario-evolving-catalog-proposer";
-
-#[async_trait]
-impl Suggestor for EvolvingCatalogProposer {
-    fn name(&self) -> &'static str {
-        EVOLVING_PROPOSER_NAME
-    }
-    fn dependencies(&self) -> &[ContextKey] {
-        &[ContextKey::Seeds, ContextKey::Signals]
-    }
-    fn provenance(&self) -> &'static str {
-        ScenarioProvenance.as_str()
-    }
-    fn accepts(&self, ctx: &dyn Context) -> bool {
-        if !ctx.has(ContextKey::Seeds) {
-            return false;
-        }
-        if convergence_reached(ctx) {
-            return false;
-        }
-        !self.open_batches(ctx).is_empty()
-    }
-
-    async fn execute(&self, ctx: &dyn Context) -> AgentEffect {
-        let mut effect = AgentEffect::builder();
-        for batch_id in self.open_batches(ctx) {
-            let exclusions = self.prior_round_exclusions(ctx, &batch_id);
-            let exclusions_text = if exclusions.is_empty() {
-                "(no prior-round exclusions)".to_string()
-            } else {
-                exclusions
-                    .iter()
-                    .map(|id| id.as_str().to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            };
-            effect = effect.proposal(ScenarioProvenance.proposed_fact(
-                ContextKey::Diagnostic,
-                format!("evolving-proposer-exclusions-{batch_id}"),
-                TextPayload::new(format!(
-                    "{EVOLVING_PROPOSER_NAME}: exclusions for {batch_id} = [{exclusions_text}]"
-                )),
-            ));
-
-            let catalog = self.filtered_catalog(&exclusions);
-            let candidates = match FormationCompiler::new().compile_k_candidates(
-                &self.request,
-                &self.templates,
-                &catalog,
-                &self.providers,
-                self.k,
-            ) {
-                Ok(c) => c,
-                Err(failure) => {
-                    effect = effect.proposal(ScenarioProvenance.proposed_fact(
-                        ContextKey::Diagnostic,
-                        format!("evolving-proposer-compile-failed-{batch_id}"),
-                        TextPayload::new(format!(
-                            "{EVOLVING_PROPOSER_NAME}: catalog cannot satisfy template for batch \
-                             {batch_id} with exclusions [{exclusions_text}] — {}",
-                            failure.error
-                        )),
-                    ));
-                    continue;
-                }
-            };
-
-            for (index, candidate) in candidates.iter().enumerate() {
-                let descriptor_ids: Vec<SuggestorDescriptorId> = candidate
-                    .roster
-                    .iter()
-                    .map(|r| r.suggestor_id.clone())
-                    .collect();
-                let draft = FormationDraft::new(
-                    format!("candidate-{index}"),
-                    batch_id.clone(),
-                    descriptor_ids,
-                    format!(
-                        "Evolving k-best candidate #{index} for template '{}' \
-                         (batch: {batch_id}, exclusions: [{exclusions_text}]).",
-                        candidate.template_id
-                    ),
-                    EVOLVING_PROPOSER_NAME,
-                );
-                let json = match serde_json::to_string(&draft) {
-                    Ok(s) => s,
-                    Err(err) => {
-                        effect = effect.proposal(ScenarioProvenance.proposed_fact(
-                            ContextKey::Diagnostic,
-                            format!("evolving-proposer-serialize-error-{batch_id}-{index}"),
-                            TextPayload::new(format!(
-                                "{EVOLVING_PROPOSER_NAME}: serialize error for {batch_id}/{index}: {err}"
-                            )),
-                        ));
-                        continue;
-                    }
-                };
-                effect = effect.proposal(ScenarioProvenance.proposed_fact(
-                    ContextKey::Strategies,
-                    format!("evolving-draft-{batch_id}-{index}"),
-                    TextPayload::new(json),
-                ));
-            }
-        }
-        effect.build()
-    }
 }
 
 /// `EvidenceWeightedScorer` — replaces the platform's
@@ -1184,7 +952,7 @@ fn convergence_reached(ctx: &dyn Context) -> bool {
 /// verdict + reason are emitted as one fact per round under
 /// `Hypotheses`, and a single `design-convergence-reached` marker
 /// under `Diagnostic` is emitted the first time the judge says
-/// CONVERGED. `EvolvingCatalogProposer.accepts()` checks that marker
+/// CONVERGED. `CatalogProposerSuggestor::with_halt_marker(...)` reads that marker
 /// and halts, so subsequent unstarted rounds never produce drafts —
 /// the work formation handoff picks `latest_completed_batch` and
 /// proceeds.
