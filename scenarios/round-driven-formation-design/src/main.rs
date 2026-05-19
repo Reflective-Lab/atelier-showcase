@@ -56,7 +56,9 @@
 
 use std::sync::Arc;
 
+use arbiter::{ContextIn, DecideRequest, PrincipalIn, ResourceIn};
 use async_trait::async_trait;
+use converge_core::{AuthorityLevel, FlowAction};
 use converge_kernel::formation::{
     FormationCatalog, FormationTemplate, FormationTemplateMetadata, FormationTemplateQuery,
     StaticFormationTemplate, SuggestorCapability, SuggestorRole,
@@ -87,6 +89,19 @@ use organism_runtime::{
 use uuid::Uuid;
 
 const ROUND_SIGNAL_PREFIX: &str = "design-round-";
+
+/// Cedar policy guarding the work formation. Permits `promote` when
+/// the action amount is ≤ $5000 OR the request carries explicit
+/// human approval. The candidate plan in this scenario costs $7500
+/// and lacks human approval, so the gate denies — and the engine
+/// resolves the denial to `Escalate` (no auto-permit fallback).
+const WORK_FORMATION_POLICY: &str = r#"
+permit(principal, action == Action::"promote", resource)
+when {
+  context.amount <= 5000 ||
+  context.human_approval_present == true
+};
+"#;
 const CONTINUE_PREFIX: &str = "design-round:continue:";
 const NOTE_PREFIX: &str = "design-huddle-note:";
 
@@ -248,7 +263,28 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             provenance: "atelier-showcase".to_string(),
         },
     ];
-    let work = executables.instantiate(&plan, seeds)?;
+    // Arbiter typed-policy gate. The bespoke ConstraintCheckerAgent
+    // does pass/fail against the JSON plan; arbiter expresses a
+    // typed Cedar invariant ("permit promote when amount ≤ 5000 OR
+    // human approval present"). The plan has cost = 7500 and no
+    // human approval, so arbiter should DENY/ESCALATE while the
+    // mechanical checker passes — demonstrating richer governance
+    // riding alongside the deterministic critic, not replacing it.
+    let policy_engine = Arc::new(
+        arbiter::PolicyEngine::from_policy_str(WORK_FORMATION_POLICY)
+            .map_err(|e| format!("policy parse: {e:?}"))?,
+    );
+    let policy_gate = arbiter::PolicyGateSuggestor::with_keys(
+        policy_engine,
+        ContextKey::Hypotheses,
+        ContextKey::Constraints,
+    );
+    let decide_request_emitter = DecideRequestEmitter::for_candidate_plan(7500);
+
+    let work = executables
+        .instantiate(&plan, seeds)?
+        .agent_boxed(Box::new(decide_request_emitter))
+        .agent_boxed(Box::new(policy_gate));
     let work_result = work.run().await?;
     if !work_result.converge_result.converged {
         return Err(format!(
@@ -635,6 +671,31 @@ fn print_work_outcome(ctx: &dyn Context) {
         }
         if constraints.len() > 5 {
             println!("    · … {} more", constraints.len() - 5);
+        }
+    }
+
+    // Arbiter typed verdict — show it explicitly so the trace
+    // distinguishes the mechanical critic's pass/fail from the
+    // Cedar policy's typed Permit/Deny/Escalate.
+    if let Some(policy_fact) = constraints
+        .iter()
+        .find(|f| f.id().as_str() == "policy-decision")
+    {
+        println!("  Arbiter (Cedar policy gate):");
+        if let Ok(decision) = policy_fact.require_payload::<arbiter::PolicyDecision>() {
+            println!("    outcome:   {:?}", decision.outcome);
+            println!(
+                "    reason:    {}",
+                decision.reason.as_deref().unwrap_or("(none)")
+            );
+            println!(
+                "    principal: {} → action: {:?} → resource: {}",
+                decision.principal_id.as_str(),
+                decision.action,
+                decision.resource_id.as_str(),
+            );
+        } else {
+            println!("    (raw): {}", policy_fact.text().unwrap_or("(no text)"));
         }
     }
     println!();
@@ -1177,6 +1238,73 @@ impl Suggestor for ConvergenceJudge {
             }
         }
         effect.build()
+    }
+}
+
+/// `DecideRequestEmitter` — converts the work formation's seed
+/// framing into a typed `arbiter::DecideRequest` fact under
+/// `Hypotheses` so `PolicyGateSuggestor` can evaluate the Cedar
+/// policy against the candidate plan. Per-fire idempotent.
+struct DecideRequestEmitter {
+    request: DecideRequest,
+}
+
+const DECIDE_REQUEST_FACT_ID: &str = "work-formation-decide-request";
+const DECIDE_REQUEST_EMITTER_NAME: &str = "scenario-decide-request-emitter";
+
+impl DecideRequestEmitter {
+    fn for_candidate_plan(amount: i64) -> Self {
+        Self {
+            request: DecideRequest {
+                principal: PrincipalIn {
+                    id: "agent:work-formation".into(),
+                    authority: AuthorityLevel::Participatory,
+                    domains: vec!["procurement".into()],
+                    policy_version: None,
+                },
+                resource: ResourceIn {
+                    id: "plan:ALPHA-1".into(),
+                    resource_type: None,
+                    phase: None,
+                    gates_passed: None,
+                },
+                action: FlowAction::Promote,
+                context: Some(ContextIn {
+                    commitment_type: Some("rollout".to_string()),
+                    amount: Some(amount),
+                    human_approval_present: Some(false),
+                    required_gates_met: None,
+                }),
+                delegation_b64: None,
+            },
+        }
+    }
+}
+
+#[async_trait]
+impl Suggestor for DecideRequestEmitter {
+    fn name(&self) -> &'static str {
+        DECIDE_REQUEST_EMITTER_NAME
+    }
+    fn dependencies(&self) -> &[ContextKey] {
+        &[ContextKey::Seeds]
+    }
+    fn provenance(&self) -> &'static str {
+        ScenarioProvenance.as_str()
+    }
+    fn accepts(&self, ctx: &dyn Context) -> bool {
+        ctx.has(ContextKey::Seeds)
+            && !ctx
+                .get(ContextKey::Hypotheses)
+                .iter()
+                .any(|f| f.id().as_str() == DECIDE_REQUEST_FACT_ID)
+    }
+    async fn execute(&self, _ctx: &dyn Context) -> AgentEffect {
+        AgentEffect::with_proposal(ScenarioProvenance.proposed_fact(
+            ContextKey::Hypotheses,
+            DECIDE_REQUEST_FACT_ID,
+            self.request.clone(),
+        ))
     }
 }
 

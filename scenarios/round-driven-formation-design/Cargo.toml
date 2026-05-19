@@ -21,6 +21,12 @@ organism-catalog = "1.9.1"
 organism-catalog-seed = "1.9.1"
 organism-dynamics = "1.9.1"
 
+# Arbiter — Cedar-policy gate in the work formation. The work
+# Suggestors do pass/fail; arbiter expresses typed invariants
+# ("permit promote when amount <= 5000 OR human approval present").
+arbiter.workspace = true
+converge-core = "3.9.1"
+
 # Manifold — provider-agnostic LLM selection. Enable the major
 # chat-backend features so a deployment can pick any one at runtime
 # via env vars; the code declares needs, Manifold selects.
