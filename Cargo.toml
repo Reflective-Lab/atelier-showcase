@@ -7,6 +7,7 @@ members = [
     # Scenarios — full end-to-end domain demos
     "scenarios/expense-approval",
     "scenarios/arbiter-ferrox-solver-gallery",
+    "scenarios/arbiter-governance",
     "scenarios/cedar-smt-analysis",
     "scenarios/loan-application",
     "scenarios/lp-diet",

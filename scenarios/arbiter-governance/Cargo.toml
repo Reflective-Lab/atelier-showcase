@@ -1,0 +1,12 @@
+[package]
+name = "scenario-arbiter-governance"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+converge-kernel = "3.9.1"
+converge-pack = "3.9.1"
+arbiter = { package = "converge-arbiter-policy", path = "../../../mosaic-extensions/arbiter-policy/crates/arbiter", version = "2.0.1", default-features = false }
+
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

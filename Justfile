@@ -120,6 +120,12 @@ show-cedar-smt:
 show-cedar-smt-solver:
     cargo run -p scenario-cedar-smt-analysis --features with-cvc5
 
+# Arbiter runtime governance: budget + approval + PII + rate-limit
+# gates firing on a synthetic proposal stream, each emitting typed
+# constraint verdicts. No external solver — pure Rust gates.
+show-arbiter-governance:
+    cargo run -p scenario-arbiter-governance
+
 # Ferrox stress test: N=50 N-Queens via CP-SAT.
 # AllDifferent on queens + diagonals + anti-diagonals; ~150
 # variables, ~103 constraints. Solves in well under a second.
