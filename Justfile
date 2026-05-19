@@ -112,6 +112,15 @@ show-jobshop:
 show-jobshop-solver:
     cargo run -p scenario-jobshop-ft06 --features with-solver
 
+# Ferrox VRPTW (single-vehicle TSP with time windows): runs both
+# greedy nearest-neighbor and CP-SAT against the same input and
+# prints both routes side-by-side. Shows the cost of "good
+# enough heuristics" vs "proven optimal."
+show-vrptw:
+    cargo run -p scenario-vrptw-comparison
+show-vrptw-solver:
+    cargo run -p scenario-vrptw-comparison --features with-solver
+
 # Arbiter Cedar SMT analysis via CVC5: formally verifies safety
 # invariants across ALL request environments, not just one
 # concrete input. cvc5 is vendored under soter-smt — no install.

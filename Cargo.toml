@@ -23,6 +23,7 @@ members = [
     "scenarios/sudoku-cp-sat",
     "scenarios/truth-driven-formation",
     "scenarios/vendor-selection",
+    "scenarios/vrptw-comparison",
 
     # Tutorials — numbered learning spine (read in order)
     "tutorials/01-hello-convergence",
