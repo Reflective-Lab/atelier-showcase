@@ -1,0 +1,20 @@
+[package]
+name = "scenario-n-queens-cp-sat"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Same portable/with-solver split as sibling ferrox scenarios.
+# libortools is vendored under
+# mosaic-extensions/ferrox-solvers/vendor/ortools/ — no system
+# install needed.
+[features]
+default = []
+with-solver = ["ferrox/ortools"]
+
+[dependencies]
+converge-kernel = "3.9.1"
+converge-pack = "3.9.1"
+ferrox = { package = "converge-ferrox-solver", path = "../../../mosaic-extensions/ferrox-solvers/crates/ferrox", version = "0.7.1", default-features = false }
+
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

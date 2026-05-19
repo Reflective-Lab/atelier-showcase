@@ -82,6 +82,14 @@ show-sudoku:
 show-sudoku-solver:
     cargo run -p scenario-sudoku-cp-sat --features with-solver
 
+# Ferrox stress test: N=50 N-Queens via CP-SAT.
+# AllDifferent on queens + diagonals + anti-diagonals; ~150
+# variables, ~103 constraints. Solves in well under a second.
+show-n-queens:
+    cargo run -p scenario-n-queens-cp-sat
+show-n-queens-solver:
+    cargo run -p scenario-n-queens-cp-sat --features with-solver
+
 # Run every showcase scenario in sequence. Halts on the first
 # non-zero exit. Note: scenario-round-driven-formation-design will
 # exit honestly without an LLM key set; that's intentional — drop

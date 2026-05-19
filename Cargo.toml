@@ -12,6 +12,7 @@ members = [
     "scenarios/solver-policy-allocation",
     "scenarios/high-risk-claim-portfolio",
     "scenarios/multi-plan-allocation",
+    "scenarios/n-queens-cp-sat",
     "scenarios/round-driven-formation-design",
     "scenarios/sudoku-cp-sat",
     "scenarios/truth-driven-formation",
