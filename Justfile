@@ -82,6 +82,13 @@ show-sudoku:
 show-sudoku-solver:
     cargo run -p scenario-sudoku-cp-sat --features with-solver
 
+# Ferrox LP: classic diet problem (cheapest fractional servings
+# meeting nutrient minimums). Solves via GLOP in microseconds.
+show-lp-diet:
+    cargo run -p scenario-lp-diet
+show-lp-diet-solver:
+    cargo run -p scenario-lp-diet --features with-solver
+
 # Ferrox stress test: N=50 N-Queens via CP-SAT.
 # AllDifferent on queens + diagonals + anti-diagonals; ~150
 # variables, ~103 constraints. Solves in well under a second.

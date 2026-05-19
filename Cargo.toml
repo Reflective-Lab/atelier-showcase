@@ -8,6 +8,7 @@ members = [
     "scenarios/expense-approval",
     "scenarios/arbiter-ferrox-solver-gallery",
     "scenarios/loan-application",
+    "scenarios/lp-diet",
     "scenarios/meeting-scheduler",
     "scenarios/solver-policy-allocation",
     "scenarios/high-risk-claim-portfolio",
