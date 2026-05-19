@@ -82,6 +82,13 @@ fn period_close_final_output_exists(ctx: &dyn converge_core::Context, period_id:
         .any(|fact| fact.id().as_str() == closed_id || fact.id().as_str() == rejected_id)
 }
 
+fn overdue_action_exists(ctx: &dyn converge_core::Context, invoice_id: &str) -> bool {
+    let action_id = format!("{INVOICE_PREFIX}overdue_action:{invoice_id}");
+    ctx.get(ContextKey::Proposals)
+        .iter()
+        .any(|fact| fact.id().as_str() == action_id)
+}
+
 // ============================================================================
 // Agents
 // ============================================================================
@@ -488,6 +495,7 @@ impl Suggestor for OverdueDetectorAgent {
                 && (crate::payload_contains(inv, "\"state\":\"open\"")
                     || crate::payload_contains(inv, "\"state\":\"partial\""))
                 && crate::payload_contains(inv, "\"overdue\":true")
+                && !overdue_action_exists(ctx, inv.id().as_str())
         })
     }
 
@@ -498,6 +506,7 @@ impl Suggestor for OverdueDetectorAgent {
         for invoice in proposals {
             if invoice.id().as_str().starts_with(INVOICE_PREFIX)
                 && crate::payload_contains(invoice, "\"overdue\":true")
+                && !overdue_action_exists(ctx, invoice.id().as_str())
             {
                 facts.push(crate::json_record(
                     self.name(),
@@ -831,6 +840,32 @@ mod tests {
                         && crate::payload_contains(fact, "\"state\":\"issued\"")
                 })
         );
+    }
+
+    #[tokio::test]
+    async fn overdue_detector_is_idempotent_for_existing_action() {
+        let mut engine = Engine::new();
+        engine.register_suggestor(OverdueDetectorAgent);
+
+        let mut ctx = ContextState::new();
+        let _ = ctx.add_input(
+            ContextKey::Proposals,
+            "invoice:subscription-payment:sub_123",
+            r#"{"type":"invoice","state":"open","overdue":true,"days_overdue":7}"#,
+        );
+
+        let result = engine.run(ctx).await.expect("should converge");
+        assert!(result.converged);
+
+        let action_count = result
+            .context
+            .get(ContextKey::Proposals)
+            .iter()
+            .filter(|fact| {
+                fact.id() == "invoice:overdue_action:invoice:subscription-payment:sub_123"
+            })
+            .count();
+        assert_eq!(action_count, 1);
     }
 
     #[tokio::test]
