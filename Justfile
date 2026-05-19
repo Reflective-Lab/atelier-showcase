@@ -39,6 +39,45 @@ fix-lint:
     cargo clippy --fix --allow-staged --allow-dirty --allow-no-vcs
     cargo fmt
 
+# ── Showcase scenarios ─────────────────────────────────────────────────────
+#
+# Each scenario is a runnable end-to-end demo under scenarios/. Some
+# need API keys (round-driven-formation-design) — drop them into a
+# .env at the workspace root or next to the scenario; `set
+# dotenv-load := true` above pulls them in for both `just` and the
+# child `cargo run`.
+
+# Run a single showcase scenario by its crate name (the `name` field
+# in scenarios/*/Cargo.toml — `example-*` for legacy scenarios,
+# `scenario-*` for newer ones).
+#
+#   just show example-expense-approval
+#   just show scenario-round-driven-formation-design
+show name:
+    cargo run -p {{name}}
+
+# The round-driven design Formation showcase. Needs at least one
+# LLM provider key (ANTHROPIC_API_KEY / OPENAI_API_KEY /
+# GEMINI_API_KEY / …) — see
+# scenarios/round-driven-formation-design/.env.example.
+show-round-driven:
+    cargo run -p scenario-round-driven-formation-design
+
+# Run every showcase scenario in sequence. Halts on the first
+# non-zero exit. Note: scenario-round-driven-formation-design will
+# exit honestly without an LLM key set; that's intentional — drop
+# the key in .env before running this if you want the full sweep.
+show-all:
+    cargo run -p example-arbiter-ferrox-solver-gallery
+    cargo run -p example-expense-approval
+    cargo run -p scenario-high-risk-claim-portfolio
+    cargo run -p example-loan-application
+    cargo run -p example-meeting-scheduler
+    cargo run -p scenario-round-driven-formation-design
+    cargo run -p example-solver-policy-allocation
+    cargo run -p scenario-truth-driven-formation
+    cargo run -p example-vendor-selection
+
 # ── Test layout guard ──────────────────────────────────────────────────────
 
 # Reject ad-hoc property/proptest/negative test files outside src/ and tests/
