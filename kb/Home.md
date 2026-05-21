@@ -9,6 +9,8 @@ Knowledge base for the `atelier` Converge extension.
 **Standard:** Every release follows the
 [Extension Release Checklist](https://github.com/Reflective-Lab/converge/blob/main/kb/Standards/Extension%20Release%20Checklist.md).
 
+**For scenario authors:** read `~/dev/reflective/stack/mosaic-extensions/kb/Capability Matrix.md` *before* designing a new showcase. atelier exists to show specificity — every scenario should name the exact Mosaic functions it pulls and why a generic substitute (LLM call, hand-rolled `if`, single solver) is insufficient. Showcases that don't name specific Mosaic capabilities are off-mission.
+
 **Meta:** [[INDEX]] — entity catalog | [[LOG]] — mutation log
 
 ## Philosophy
