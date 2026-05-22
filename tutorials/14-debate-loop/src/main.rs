@@ -5,14 +5,20 @@
 //!
 //! Planner proposes → Skeptic challenges → Planner revises → Converge.
 //!
-//! Both agents call Claude via the Anthropic API. The debate IS the
-//! convergence loop — no special machinery, just Suggestors reading
+//! Both agents call a Manifold-selected live chat backend. The debate IS
+//! the convergence loop — no special machinery, just Suggestors reading
 //! and writing to shared context until fixed point.
 //!
-//! Requires: ANTHROPIC_API_KEY environment variable.
+//! Requires: at least one live chat provider credential supported by Manifold.
+
+use std::sync::Arc;
 
 use converge_kernel::{AgentEffect, Context, ContextKey, Engine, ProposedFact, Suggestor};
-use converge_pack::{FactPayload, TextPayload};
+use converge_pack::{DiagnosticPayload, FactPayload, TextPayload};
+use converge_provider::{
+    ChatBackendSelectionConfig, ChatMessage, ChatRequest, ChatRole, DynChatBackend, ResponseFormat,
+};
+use manifold::llm::select_healthy_chat_backend;
 
 use organism_pack::{CONFIDENCE_STEP_MAJOR, CONFIDENCE_STEP_MEDIUM, Severity, SkepticismKind};
 
@@ -47,48 +53,53 @@ impl FactPayload for DebateChallenge {
 
 // ── LLM Client ─────────────────────────────────────────────────────
 
-fn call_claude(system: &str, user: &str) -> String {
-    let api_key = std::env::var("ANTHROPIC_API_KEY").unwrap_or_default();
-    if api_key.is_empty() {
-        return format!(
-            "[MOCK — set ANTHROPIC_API_KEY for real LLM] System: {system} | User: {user}"
-        );
-    }
+async fn call_llm(
+    backend: &Arc<dyn DynChatBackend>,
+    system: &str,
+    user: &str,
+) -> Result<String, String> {
+    let request = ChatRequest {
+        messages: vec![ChatMessage {
+            role: ChatRole::User,
+            content: user.to_string(),
+            tool_calls: Vec::new(),
+            tool_call_id: None,
+        }],
+        system: Some(system.to_string()),
+        tools: Vec::new(),
+        response_format: ResponseFormat::Text,
+        max_tokens: Some(1024),
+        temperature: Some(0.2),
+        stop_sequences: Vec::new(),
+        model: None,
+    };
 
-    let client = reqwest::blocking::Client::new();
-    let response = client
-        .post("https://api.anthropic.com/v1/messages")
-        .header("x-api-key", &api_key)
-        .header("anthropic-version", "2023-06-01")
-        .header("content-type", "application/json")
-        .json(&serde_json::json!({
-            "model": "claude-sonnet-4-20250514",
-            "max_tokens": 1024,
-            "system": system,
-            "messages": [{ "role": "user", "content": user }]
-        }))
-        .send();
-
-    match response {
-        Ok(resp) => {
-            if let Ok(json) = resp.json::<serde_json::Value>() {
-                json["content"][0]["text"]
-                    .as_str()
-                    .unwrap_or("(no response)")
-                    .to_string()
-            } else {
-                "(failed to parse response)".to_string()
-            }
-        }
-        Err(e) => format!("(API error: {e})"),
+    match backend.chat(request).await {
+        Ok(response) => Ok(response.content),
+        Err(e) => Err(format!("Manifold chat backend error: {e}")),
     }
+}
+
+fn diagnostic_effect(
+    id: impl Into<String>,
+    source: &str,
+    message: impl Into<String>,
+) -> AgentEffect {
+    AgentEffect::with_proposal(ProposedFact::new(
+        ContextKey::Diagnostic,
+        id.into(),
+        DiagnosticPayload::new(source, message.into()),
+        "atelier-showcase.debate-loop",
+    ))
 }
 
 // ── Planner Agent ──────────────────────────────────────────────────
 
 /// LLM-backed planner. On first run, proposes a plan from the seed intent.
 /// On subsequent runs (after challenges appear), revises the plan.
-struct LlmPlannerAgent;
+struct LlmPlannerAgent {
+    backend: Arc<dyn DynChatBackend>,
+}
 
 #[async_trait::async_trait]
 impl Suggestor for LlmPlannerAgent {
@@ -140,12 +151,20 @@ impl Suggestor for LlmPlannerAgent {
         if challenges.is_empty() {
             // First pass: propose initial plan
             println!("  [Planner] Proposing initial plan...");
-            let plan = call_claude(
+            let plan = match call_llm(
+                &self.backend,
                 "You are an organizational planner. Given a business intent, produce a concrete \
                  3-5 step action plan. Be specific about who does what and when. \
                  Return ONLY the plan steps, numbered.",
                 &format!("Create an action plan for: {intent}"),
-            );
+            )
+            .await
+            {
+                Ok(plan) => plan,
+                Err(err) => {
+                    return diagnostic_effect("diagnostic:planner-initial", self.name(), err);
+                }
+            };
             println!("  [Planner] {}", truncate(&plan, 200));
 
             AgentEffect::with_proposal(
@@ -183,7 +202,8 @@ impl Suggestor for LlmPlannerAgent {
                 .find_map(|p| p.payload::<DebatePlan>().map(|plan| plan.intent.clone()))
                 .unwrap_or_else(|| intent.to_string());
 
-            let revised = call_claude(
+            let revised = match call_llm(
+                &self.backend,
                 "You are an organizational planner. Your initial plan was challenged by skeptics. \
                  Revise the plan to address their concerns. Keep what works, fix what was challenged. \
                  Return ONLY the revised plan steps, numbered.",
@@ -191,7 +211,14 @@ impl Suggestor for LlmPlannerAgent {
                     "Original plan:\n{original_plan}\n\nChallenges raised:\n{challenge_text}\n\n\
                      Revise the plan to address these challenges."
                 ),
-            );
+            )
+            .await
+            {
+                Ok(revised) => revised,
+                Err(err) => {
+                    return diagnostic_effect("diagnostic:planner-revised", self.name(), err);
+                }
+            };
             println!("  [Planner] Revised: {}", truncate(&revised, 200));
 
             AgentEffect::with_proposal(
@@ -217,7 +244,9 @@ impl Suggestor for LlmPlannerAgent {
 
 /// LLM-backed adversarial skeptic. Reads the current plan and
 /// challenges weak assumptions, missing constraints, or operational risks.
-struct LlmSkepticAgent;
+struct LlmSkepticAgent {
+    backend: Arc<dyn DynChatBackend>,
+}
 
 #[async_trait::async_trait]
 impl Suggestor for LlmSkepticAgent {
@@ -277,7 +306,8 @@ impl Suggestor for LlmSkepticAgent {
 
         println!("  [Skeptic] Running {review_type}...");
 
-        let critique = call_claude(
+        let critique = match call_llm(
+            &self.backend,
             "You are an adversarial reviewer for organizational plans. Your job is to find \
              weaknesses, challenged assumptions, missing safeguards, and operational risks. \
              Be constructive but thorough. For each issue, classify it as:\n\
@@ -287,7 +317,19 @@ impl Suggestor for LlmSkepticAgent {
              If the plan is solid after revision, say 'APPROVED — no blocking issues remain.' \
              Return your findings as a numbered list.",
             &format!("Review this plan ({review_type}):\n\n{plan_content}"),
-        );
+        )
+        .await
+        {
+            Ok(critique) => critique,
+            Err(err) => {
+                let id = if is_final_review {
+                    "diagnostic:skeptic-final"
+                } else {
+                    "diagnostic:skeptic-initial"
+                };
+                return diagnostic_effect(id, self.name(), err);
+            }
+        };
 
         println!("  [Skeptic] {}", truncate(&critique, 200));
 
@@ -350,21 +392,36 @@ impl Suggestor for LlmSkepticAgent {
 // ── Main ───────────────────────────────────────────────────────────
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("=== Organism Debate Loop ===");
     println!("    Planner (LLM) vs Skeptic (LLM) → Converge\n");
 
-    let has_key = std::env::var("ANTHROPIC_API_KEY").is_ok();
-    if has_key {
-        println!("    Mode: LIVE (calling Claude API)");
-    } else {
-        println!("    Mode: MOCK (set ANTHROPIC_API_KEY for real LLM debate)");
-    }
+    let llm_config = ChatBackendSelectionConfig::from_env()?;
+    let selected = select_healthy_chat_backend(&llm_config).await.map_err(
+        |err| -> Box<dyn std::error::Error> {
+            format!(
+                "no healthy Manifold chat backend available: {err}. \
+                 Configure a live provider credential supported by Manifold. \
+                 CONVERGE_LLM_PROFILE selects criteria and CONVERGE_LLM_PROVIDER can pin \
+                 an operator-chosen provider. Mocked debate fixtures belong in arena-tests."
+            )
+            .into()
+        },
+    )?;
+    println!(
+        "    Mode: REAL LIVE via Manifold (provider={} model={})",
+        selected.provider(),
+        selected.model()
+    );
     println!();
 
     let mut engine = Engine::new();
-    engine.register_suggestor(LlmPlannerAgent);
-    engine.register_suggestor(LlmSkepticAgent);
+    engine.register_suggestor(LlmPlannerAgent {
+        backend: selected.backend.clone(),
+    });
+    engine.register_suggestor(LlmSkepticAgent {
+        backend: selected.backend.clone(),
+    });
 
     let intent = "Hire a senior Rust engineer for the Converge team within 60 days, \
                   budget $180k-220k, must pass security clearance, remote-first but \
@@ -432,6 +489,7 @@ async fn main() {
     }
 
     println!("\n=== Done ===");
+    Ok(())
 }
 
 fn truncate(s: &str, max: usize) -> String {

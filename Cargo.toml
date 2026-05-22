@@ -82,7 +82,7 @@ organism-intent = "1.9.0"
 organism-domain = { path = "crates/organism-domain" }
 
 # Axiom — Truth source parsing and IntentPacket compilation (patched to local).
-axiom-truth = "0.8"
+axiom-truth = "0.15.0"
 
 # Common
 anyhow = "1"
@@ -98,7 +98,6 @@ thiserror = "2"
 chrono = { version = "0.4", features = ["serde"] }
 uuid = { version = "1.11", features = ["v4", "serde"] }
 clap = { version = "4.5", features = ["derive", "env", "wrap_help"] }
-reqwest = { version = "0.12", features = ["blocking", "json"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
@@ -128,11 +127,8 @@ opt-level = 3
 lto = true
 codegen-units = 1
 
-# Remaining release-coupling debt — axiom-truth 0.7.0 on crates.io
-# imports `converge_provider::select_healthy_chat_backend`, which
-# now lives in `converge-manifold-adapters` (lib name `manifold`).
-# Local source is already migrated; remove this patch once
-# axiom-truth is republished against the 3.9 contract.
+# Remaining release-coupling debt — axiom-truth is consumed from local
+# source until the 0.15 line is released against the 3.9 contract.
 #
 # The Organism path-patches stay alongside axiom: axiom-truth
 # transitively pulls local-source `organism-pack` / `-runtime` /

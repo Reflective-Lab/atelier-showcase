@@ -23,6 +23,7 @@ Major entities in the `atelier` knowledge base.
 ## Standards
 
 - [Code Review](Standards/Code%20Review.md) — review drift through pinned platform versions and typed protocol boundaries
+- [Example Resource Declarations](Standards/Example%20Resource%20Declarations.md) — required live/stub/mock trust labels for runnable tutorials and scenarios
 
 ## Planning
 

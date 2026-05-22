@@ -1,8 +1,8 @@
 # 03 — Custom Provider
 
 Plug your own backend into Converge's chat-provider interface. Same
-shape an OpenAI / Anthropic / local-model adapter would take, minus
-the network call.
+shape a managed or local chat adapter would take, minus the network
+call.
 
 ## Prereq
 

@@ -1,6 +1,6 @@
 # 14 — Debate Loop
 
-Real LLM-backed planning with adversarial review. Planner proposes
+Real Manifold-backed planning with adversarial review. Planner proposes
 a plan; Skeptic challenges it; Planner revises. The debate **is**
 the convergence loop — no special debate machinery, just two
 suggestors reading and writing shared context until fixed point.
@@ -19,15 +19,17 @@ the shape vocabulary. This tutorial uses the simplest of all shapes
   vocabulary the Skeptic uses to push back
 - `CONFIDENCE_STEP_MAJOR` / `CONFIDENCE_STEP_MEDIUM` — calibrated
   confidence updates after a successful challenge
-- How a real Anthropic API call slots into a Suggestor (synchronous
-  blocking client; the engine awaits the future)
+- How a Manifold-selected live chat backend slots into a Suggestor;
+  atelier declares the need, Manifold chooses the provider
 
 ## Requires
 
-`ANTHROPIC_API_KEY` in the environment for real LLM behaviour. Without
-it, the example runs in **mock mode** — every call returns a
-deterministic stub so the loop still completes and you can see the
-shape.
+At least one live chat provider credential supported by Manifold. Atelier
+examples run real provider paths by default; without a healthy Manifold backend
+this tutorial exits honestly instead of falling back to a deterministic mock.
+Use `CONVERGE_LLM_PROFILE` to select criteria and `CONVERGE_LLM_PROVIDER` only
+when the operator wants to pin a provider. Mocked debate fixtures belong in
+`arena-tests`.
 
 ## The setup
 
@@ -40,12 +42,24 @@ resolved or the loop reaches a final-review state.
 ## Run it
 
 ```sh
-# real LLM
-ANTHROPIC_API_KEY=sk-ant-... cargo run -p example-debate-loop
-
-# mock mode
 cargo run -p example-debate-loop
 ```
+
+## Resource Declaration
+
+**Trust label:** `REAL LIVE`.
+
+- Live external resources: **yes**. The tutorial calls the live chat provider
+  selected by Manifold.
+- Mosaic extensions: none are mocked or exercised here; this tutorial is on the
+  organism/converge provider path rather than a Mosaic extension path.
+- Backend mode: Manifold-selected live chat backend only. Missing or unhealthy
+  provider credentials cause an honest non-zero exit.
+- Credentials / feature flags: any live provider credential supported by
+  Manifold; optional `CONVERGE_LLM_PROFILE` / `CONVERGE_LLM_PROVIDER`.
+- Trust boundary: trust this as provider-neutral live LLM wiring through
+  Manifold and a real adversarial convergence loop. It is not a Mosaic
+  extension integration.
 
 ## Next
 

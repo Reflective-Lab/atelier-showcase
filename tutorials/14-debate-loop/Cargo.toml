@@ -7,11 +7,11 @@ publish = false
 [dependencies]
 converge-kernel.workspace = true
 converge-pack.workspace = true
+converge-provider.workspace = true
+converge-manifold-adapters = { version = "1.1.1", default-features = false, features = ["llm-all"] }
 organism-pack.workspace = true
 organism-domain.workspace = true
-reqwest.workspace = true
 serde.workspace = true
-serde_json.workspace = true
 async-trait.workspace = true
 tokio.workspace = true
 chrono.workspace = true

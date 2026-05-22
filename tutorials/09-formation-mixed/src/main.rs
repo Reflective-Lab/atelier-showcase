@@ -72,7 +72,8 @@ impl Suggestor for IntentSeeder {
 }
 
 // ── LLM Reasoning Agent (Stub) ───────────────────────────────────────
-// In real usage, this calls Claude/GPT to reason about the allocation.
+// In real usage, this calls a Manifold-selected chat backend to reason
+// about the allocation.
 //
 // Key pattern: depends on Constraints (written by policy), NOT Strategies.
 // This ensures it fires AFTER the policy gate has had a chance to block.
@@ -111,7 +112,7 @@ impl Suggestor for ReasoningAgent {
             if blocked_ids.contains(&strategy.id().as_str()) {
                 continue; // Skip blocked strategies
             }
-            // In production: send to Claude/GPT for evaluation
+            // In production: send to a Manifold-selected chat backend for evaluation.
             let evaluation = ReasoningEvaluation {
                 strategy_id: strategy.id().to_string(),
                 assessment: "allocation meets priority ordering".to_string(),

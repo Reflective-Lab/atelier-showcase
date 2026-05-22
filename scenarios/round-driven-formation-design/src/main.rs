@@ -38,10 +38,9 @@
 //! `RoundSynthesizer` is wired with a real Manifold-backed
 //! `SynthesisProducer` — provider-agnostic selection via
 //! `ChatBackendSelectionConfig::from_env()` + `select_healthy_chat_backend`.
-//! The deployment chooses the provider through env vars
-//! (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, etc.,
-//! plus optional `CONVERGE_LLM_PROFILE` / `CONVERGE_LLM_PROVIDER`).
-//! If no API key is configured, the scenario exits honestly — no
+//! The deployment chooses the provider through Manifold-recognized credentials
+//! plus optional `CONVERGE_LLM_PROFILE` / `CONVERGE_LLM_PROVIDER`. If no
+//! healthy live backend is configured, the scenario exits honestly — no
 //! deterministic stand-in.
 //!
 //! Per-round notes come from a small `ShortlistNoteEmitter` that
@@ -135,16 +134,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //       needs via ChatBackendSelectionConfig (criteria pulled
     //       from CONVERGE_LLM_PROFILE env, or defaulting to
     //       interactive). Manifold's selection layer probes the
-    //       configured provider keys (ANTHROPIC_API_KEY /
-    //       OPENAI_API_KEY / GEMINI_API_KEY / …) and returns the
-    //       first healthy backend, or fails honestly with no
-    //       silent fallback.
+    //       configured Manifold credentials and returns the first
+    //       healthy backend, or fails honestly with no silent fallback.
     let llm_config = ChatBackendSelectionConfig::from_env()?;
     let selected = select_healthy_chat_backend(&llm_config).await.map_err(
         |err| -> Box<dyn std::error::Error> {
             format!(
-                "no healthy LLM backend available: {err}. \
-                 Set ANTHROPIC_API_KEY / OPENAI_API_KEY / GEMINI_API_KEY (etc.) \
+                "no healthy Manifold chat backend available: {err}. \
+                 Configure a live provider credential supported by Manifold \
                  in .env (local) / GitHub Actions secrets (CI) / GCP Secret \
                  Manager (cloud). CONVERGE_LLM_PROFILE selects the criteria \
                  (interactive / analysis / batch / high_volume)."

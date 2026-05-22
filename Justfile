@@ -188,6 +188,25 @@ test-layout:
         exit 1
     fi
 
+# Reject fake-backed scenario declarations. Contract-shape and simulated
+# integration coverage belongs in arena-tests; atelier scenarios are live/local
+# real showcase surfaces.
+resource-declarations:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    bad="$(rg -l 'Trust label:\*\* `(?:CONTRACT-SHAPE|SIMULATED|MIXED)' scenarios -g 'README.md' || true)"
+    if [ -n "${bad}" ]; then
+        echo "atelier scenarios must be REAL LIVE or LOCAL REAL. Move fake-backed declarations to arena-tests:"
+        echo "${bad}"
+        exit 1
+    fi
+    fake_refs="$(rg -l '`(?:Stub\*|Mock\*|Fake\*)|Fake[A-Za-z0-9_]*Backend|Stub[A-Za-z0-9_]*Provider|Mock[A-Za-z0-9_]*Backend' scenarios -g 'README.md' || true)"
+    if [ -n "${fake_refs}" ]; then
+        echo "atelier scenario READMEs reference fake/stub/mock decision backends:"
+        echo "${fake_refs}"
+        exit 1
+    fi
+
 # ── The four release-grade gates ───────────────────────────────────────────
 
 # Gate 1: supply-chain audit. Mirrors foundation's security-audit.
@@ -317,4 +336,5 @@ release-check:
     PERF_BASELINE="v$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"(.*)".*/\1/')" just performance-profile
     SOAK_DURATION_MIN=5 just soak
     just lint
+    just resource-declarations
     cargo test --workspace

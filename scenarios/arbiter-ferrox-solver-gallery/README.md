@@ -37,6 +37,23 @@ Run the native example after the Ferrox native dependencies are built:
 cargo run -p example-arbiter-ferrox-solver-gallery --features native-solvers
 ```
 
+## Resource Declaration
+
+**Trust label:** `LOCAL REAL / NO LIVE NETWORK`.
+
+- Live external resources: **no**. This scenario does not call network
+  providers.
+- Mosaic extensions: atelier uses the real Arbiter and Ferrox crates. It does
+  not replace those extensions with local mocks.
+- Backend mode: the default run uses real portable in-process solver surfaces
+  and catalog metadata. The `native-solvers` feature additionally registers
+  real local OR-Tools/HiGHS-backed Ferrox suggestors where the native
+  dependencies are available.
+- Credentials / feature flags: no credentials. Use `--features native-solvers`
+  for native local solver execution.
+- Trust boundary: trust this as a solver-policy composition and catalog
+  demonstration. Do not read it as a live external-service integration.
+
 The important boundary is visible in the output: Ferrox supplies optimization
 evidence and plans; Arbiter decides whether the selected plan may advance under
 Cedar policy. SMT/SAT-style policy counterexample search remains a deferred

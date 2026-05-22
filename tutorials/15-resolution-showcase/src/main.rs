@@ -199,9 +199,9 @@ fn run_scenario_with_readiness(
     let cred_probe = CredentialProbe::new()
         .require("linkedin", "LINKEDIN_API_KEY")
         .require("web", "ORGANISM_WEB_KEY")
-        .require("social", "ANTHROPIC_API_KEY")
-        .require("ocr", "MISTRAL_API_KEY")
-        .require("vision", "ANTHROPIC_API_KEY");
+        .require("social", "MANIFOLD_LIVE_CHAT_READY")
+        .require("ocr", "MANIFOLD_LIVE_OCR_READY")
+        .require("vision", "MANIFOLD_LIVE_VISION_READY");
     let pack_probe = PackProbe::new(registry);
     let budget_probe = BudgetProbe::new()
         .with_token_budget(50_000)

@@ -4,5 +4,5 @@
 //! LLM-enabled drafting flow.
 //!
 //! Placeholder — the `ChatBackend` trait is now unified across core and provider.
-//! The drafting agents (Perplexity for research, Anthropic for composition) can
-//! be wired here when needed.
+//! Drafting agents should be wired through Manifold-selected chat backends when
+//! needed, not through provider-specific code in atelier.

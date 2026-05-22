@@ -27,16 +27,9 @@ organism-dynamics = "1.9.1"
 arbiter.workspace = true
 converge-core = "3.9.1"
 
-# Manifold — provider-agnostic LLM selection. Enable the major
-# chat-backend features so a deployment can pick any one at runtime
-# via env vars; the code declares needs, Manifold selects.
-converge-manifold-adapters = { version = "1.1.1", default-features = false, features = [
-    "anthropic",
-    "gemini",
-    "openai",
-    "openrouter",
-    "mistral",
-] }
+# Manifold — provider-agnostic LLM selection. The code declares needs,
+# Manifold selects from its live chat adapter set.
+converge-manifold-adapters = { version = "1.1.1", default-features = false, features = ["llm-all"] }
 
 # .env loading for local development. Cloud uses GCP Secret Manager,
 # CI uses GitHub Actions secrets — both expose API keys via env

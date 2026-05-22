@@ -93,14 +93,14 @@ macro_rules! mock_backend {
 }
 
 mock_backend!(
-    ClaudeBackend,
-    "claude-sonnet-4-6",
+    ReasoningBackend,
+    "manifold-reasoning-live",
     BackendKind::Llm,
     vec![Capability::Reasoning, Capability::CodeGeneration]
 );
 mock_backend!(
-    GeminiBackend,
-    "gemini-pro",
+    MultilingualBackend,
+    "manifold-multilingual-live",
     BackendKind::Llm,
     vec![Capability::Reasoning, Capability::MultilingualText]
 );
@@ -777,10 +777,10 @@ async fn main() {
     println!();
 
     // ── Backend pool ──────────────────────────────────────────────────────────
-    // In production: Arc<AnthropicBackend>, Arc<GeminiBackend>, etc.
+    // In production: Manifold-selected live chat backends.
     let backends: Vec<Arc<dyn Backend>> = vec![
-        Arc::new(ClaudeBackend),
-        Arc::new(GeminiBackend),
+        Arc::new(ReasoningBackend),
+        Arc::new(MultilingualBackend),
         Arc::new(BigQueryBackend),
         Arc::new(ORToolsBackend),
     ];
