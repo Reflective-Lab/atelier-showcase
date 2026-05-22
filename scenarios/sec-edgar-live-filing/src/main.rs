@@ -2,10 +2,12 @@ use std::time::Instant;
 
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
-use embassy_sec_edgar::live::{
-    HeadingExtractOptions, LiveFetchOptions, extract_section_headings, fetch_filing_html,
-    locate_item_section,
+use embassy_sec_edgar::live::{HeadingExtractOptions, extract_section_headings};
+use embassy_sec_edgar::{
+    AccessionNumber, CallContext, Cik, FormType, LiveSecEdgarProvider, SecEdgarProvider,
+    SecEdgarRequest,
 };
+use serde_json::Value;
 
 const COMPANY: &str = "Apple Inc.";
 const CIK_PADDED: &str = "0000320193";
@@ -51,48 +53,90 @@ async fn main() -> Result<()> {
     println!();
 
     if args.verbose {
+        println!("Step 1: call the Embassy sec-edgar provider-shaped live transport.");
         println!(
-            "Step 1: fetch the SEC primary document through Embassy sec-edgar live transport."
-        );
-        println!(
-            "        The live transport uses SEC-aware User-Agent, timeout, byte cap, and politeness defaults."
+            "        The provider resolves filing metadata, fetches the SEC primary document, and returns Observation<Filing>."
         );
     }
 
+    let request = SecEdgarRequest::Filing {
+        cik: Cik::parse(CIK_PADDED)?,
+        accession_number: AccessionNumber::parse(ACCESSION)?,
+    };
+    let provider = LiveSecEdgarProvider::new();
     let started = Instant::now();
-    let html = fetch_filing_html(FILING_URL, &LiveFetchOptions::default())
+    let response = provider
+        .fetch(&request, &CallContext::default())
         .await
-        .with_context(|| format!("failed to fetch live SEC filing document: {FILING_URL}"))?;
+        .with_context(|| {
+            format!("failed to fetch live SEC filing through provider: {FILING_URL}")
+        })?;
     let elapsed = started.elapsed();
+    let observation = response
+        .records
+        .first()
+        .context("live SEC provider returned no observations")?;
+    let filing = &observation.content;
 
     ensure!(
-        html.contains(CIK_PADDED),
-        "live SEC response did not contain expected CIK {CIK_PADDED}"
+        filing.cik.as_str() == CIK_PADDED,
+        "live SEC provider returned CIK {}, expected {CIK_PADDED}",
+        filing.cik.as_str()
     );
+    ensure!(
+        filing.accession_number.as_str() == ACCESSION,
+        "live SEC provider returned accession {}, expected {ACCESSION}",
+        filing.accession_number.as_str()
+    );
+    ensure!(
+        filing.form_type == FormType::Form10K,
+        "live SEC provider returned form {}, expected {FORM_TYPE}",
+        filing.form_type.as_label()
+    );
+
+    let raw = observation
+        .raw_response
+        .as_deref()
+        .context("live SEC observation did not include provider metadata")?;
+    let metadata: Value =
+        serde_json::from_str(raw).context("invalid live SEC provider metadata")?;
+    let html_bytes = metadata
+        .get("html_bytes")
+        .and_then(Value::as_u64)
+        .context("live SEC provider metadata missing html_bytes")?;
+    let primary_url = metadata
+        .get("primary_url")
+        .and_then(Value::as_str)
+        .context("live SEC provider metadata missing primary_url")?;
 
     println!("Live fetch:");
     println!("  result: success");
-    println!("  bytes: {}", html.len());
+    println!("  provider: {}", observation.vendor);
+    println!("  observation_id: {}", observation.observation_id);
+    println!("  request_hash: {}", observation.request_hash);
+    println!("  bytes: {html_bytes}");
     println!("  elapsed_ms: {}", elapsed.as_millis());
-    println!("  validated_in_body: CIK {CIK_PADDED}");
+    println!("  provider_latency_ms: {}", observation.latency_ms);
+    println!("  validated_observation: CIK {CIK_PADDED}, accession {ACCESSION}, form {FORM_TYPE}");
+    println!("  primary_url: {primary_url}");
     println!();
 
     if args.verbose {
-        println!("Step 2: locate Item 1A by SEC item markers.");
+        println!("Step 2: read Item 1A from the typed Filing observation.");
         println!(
-            "        The extractor takes the third Item 1A marker as the real section start and the next Item 1B marker as the section end."
+            "        The live provider put the SEC section body under Filing.sections[\"1A\"]."
         );
     }
 
-    let section = locate_item_section(&html, "1A", "1B").with_context(|| {
-        format!("could not locate Item 1A / Item 1B bounds in live SEC filing: {FILING_URL}")
+    let section = filing.sections.get("1A").with_context(|| {
+        format!("live SEC filing observation did not contain Item 1A: {FILING_URL}")
     })?;
 
     println!("Item 1A section:");
-    println!("  section_bytes: {}", section.len());
+    println!("  section_bytes: {}", section.body.len());
     println!(
         "  contains_risk_factors: {}",
-        section.contains("Risk Factors")
+        section.body.contains("Risk Factors")
     );
     println!();
 
@@ -105,15 +149,15 @@ async fn main() -> Result<()> {
         );
     }
 
-    let headings = extract_section_headings(section, &HeadingExtractOptions::default())
+    let headings = extract_section_headings(&section.body, &HeadingExtractOptions::default())
         .with_context(|| {
             format!("could not extract plausible Item 1A headings from {FILING_URL}")
         })?;
 
     println!("Risk-factor heading extraction:");
     println!("  headings: {}", headings.len());
-    println!("  source: live SEC HTML");
-    println!("  extension: converge-embassy-sec-edgar with feature live");
+    println!("  source: typed Filing observation from live SEC HTML");
+    println!("  extension: converge-embassy-sec-edgar LiveSecEdgarProvider");
     println!("  mocked: false");
 
     let sample_count = args.sample_headings.min(headings.len());
@@ -162,7 +206,8 @@ fn print_verbose_close() {
     println!();
     println!("What this proves:");
     println!("  - The example made a live network call to SEC EDGAR.");
-    println!("  - The live call went through the Embassy sec-edgar live feature.");
+    println!("  - The live call went through Embassy's provider-shaped LiveSecEdgarProvider.");
+    println!("  - The provider returned Observation<Filing>, not just raw HTML.");
     println!("  - No stub, mock, fake, or recorded fixture supplied the filing content.");
     println!("  - The output can be checked against an official SEC page in human speed.");
     println!();

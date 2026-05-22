@@ -9,6 +9,7 @@ description = "REAL LIVE SEC EDGAR filing fetch and Item 1A extraction through E
 anyhow.workspace = true
 clap.workspace = true
 embassy-sec-edgar = { workspace = true, features = ["live"] }
+serde_json.workspace = true
 tokio.workspace = true
 
 [lints]

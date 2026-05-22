@@ -2,8 +2,8 @@
 
 This scenario is the smallest live-resource proof slice for atelier-showcase.
 It fetches Apple Inc.'s 2025 Form 10-K primary document from official SEC EDGAR
-through the Embassy `sec-edgar` live feature, locates Item 1A, and extracts
-risk-factor headings.
+through Embassy's provider-shaped `LiveSecEdgarProvider`, reads Item 1A from
+the returned typed `Observation<Filing>`, and extracts risk-factor headings.
 
 Run:
 
@@ -24,11 +24,13 @@ cargo run -p scenario-sec-edgar-live-filing -- --verbose
 - Live external resources: **yes**. The scenario calls official SEC EDGAR over
   the network.
 - Mosaic extensions: atelier uses the real `converge-embassy-sec-edgar` crate
-  with its `live` feature. It does not replace Embassy with a local mock.
+  with its `live` feature and the source-shaped `LiveSecEdgarProvider`. It does
+  not replace Embassy with a local mock.
 - Mocking: **none**. The run does not use Embassy's deterministic SEC stub
   provider, recorded HTTP, canned HTML fixtures, or fake provider output.
-- Backend mode: live SEC HTTP fetch plus Embassy's Item-section locator and
-  heading extractor.
+- Backend mode: provider-shaped live SEC fetch returning
+  `SecEdgarResponse { records: Vec<Observation<Filing>> }`; the example then
+  runs Embassy's heading extractor over `Filing.sections["1A"]`.
 - Credentials / feature flags: no API key. The scenario enables Embassy
   `sec-edgar`'s `live` cargo feature in its package dependency.
 - Trust boundary: trust this as proof that atelier can call a real external
@@ -68,9 +70,9 @@ network call is live, and the no-mock boundary is visible before results print.
 
 ## Pressure Finding
 
-This scenario proves a narrow live path exists today, but it also names the next
-gap: Embassy `sec-edgar` exposes live fetch and extraction helpers, while the
-default provider trait still ships a stub implementation for provider-shaped
-formation tests. The next upstream improvement is a live `SecEdgarProvider`
-implementation that returns typed `Observation<Filing>` records through the same
-provider trait used by stub-backed tests.
+This scenario started by using Embassy's lower-level live helper functions. The
+pressure finding was resolved upstream: Embassy now exposes
+`LiveSecEdgarProvider`, which implements the same `SecEdgarProvider` trait used
+by deterministic tests and returns typed `Observation<Filing>` records. The next
+larger gap is downstream composition: feed this live filing observation into a
+policy, memory, or solver-backed Converge decision without losing provenance.
