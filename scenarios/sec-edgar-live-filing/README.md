@@ -2,8 +2,9 @@
 
 This scenario is the smallest live-resource proof slice for atelier-showcase.
 It fetches Apple Inc.'s 2025 Form 10-K primary document from official SEC EDGAR
-through Embassy's provider-shaped `LiveSecEdgarProvider`, reads Item 1A from
-the returned typed `Observation<Filing>`, and extracts risk-factor headings.
+through Converge's engine by seeding a typed `SecEdgarRequest`, running
+Embassy's `SecFilingSuggestor<LiveSecEdgarProvider>`, reading Item 1A from the
+returned typed `SecFilingPayload`, and extracting risk-factor headings.
 
 Run:
 
@@ -24,13 +25,16 @@ cargo run -p scenario-sec-edgar-live-filing -- --verbose
 - Live external resources: **yes**. The scenario calls official SEC EDGAR over
   the network.
 - Mosaic extensions: atelier uses the real `converge-embassy-sec-edgar` crate
-  with its `live` feature and the source-shaped `LiveSecEdgarProvider`. It does
-  not replace Embassy with a local mock.
-- Mocking: **none**. The run does not use Embassy's deterministic SEC stub
+  with its `live` feature. The Converge engine registers Embassy's
+  `SecFilingSuggestor` with the live SEC provider; atelier does not replace
+  Embassy with a local mock.
+- Mocking: **none**. The run does not use Embassy's deterministic SEC test
   provider, recorded HTTP, canned HTML fixtures, or fake provider output.
-- Backend mode: provider-shaped live SEC fetch returning
-  `SecEdgarResponse { records: Vec<Observation<Filing>> }`; the example then
-  runs Embassy's heading extractor over `Filing.sections["1A"]`.
+- Backend mode: live SEC fetch initiated from a Converge seed fact:
+  `SecEdgarRequest` under `ContextKey::Seeds` -> `SecFilingSuggestor` ->
+  `LiveSecEdgarProvider` -> typed `SecFilingPayload` under
+  `ContextKey::Hypotheses`. The example then runs Embassy's heading extractor
+  over `SecFilingPayload.filing.sections["1A"]`.
 - Credentials / feature flags: no API key. The scenario enables Embassy
   `sec-edgar`'s `live` cargo feature in its package dependency.
 - Trust boundary: trust this as proof that atelier can call a real external
@@ -63,10 +67,12 @@ document name.
 
 A generic scrape can fetch bytes, but it does not carry the source boundary,
 SEC-specific politeness contract, item-section heuristic, or reusable Embassy
-surface. A chat model can summarize a filing after someone gives it text, but it
-cannot prove where the text came from or whether the current run called the live
-SEC resource. This example keeps the proof small: the source is official, the
-network call is live, and the no-mock boundary is visible before results print.
+and Converge surfaces. A chat model can summarize a filing after someone gives
+it text, but it cannot prove where the text came from, whether the current run
+called the live SEC resource, or whether the filing moved through Converge as a
+typed fact. This example keeps the proof small: the source is official, the
+network call is live, the fact boundary is typed, and the no-mock boundary is
+visible before results print.
 
 ## Pressure Finding
 
@@ -74,5 +80,9 @@ This scenario started by using Embassy's lower-level live helper functions. The
 pressure finding was resolved upstream: Embassy now exposes
 `LiveSecEdgarProvider`, which implements the same `SecEdgarProvider` trait used
 by deterministic tests and returns typed `Observation<Filing>` records. The next
-larger gap is downstream composition: feed this live filing observation into a
-policy, memory, or solver-backed Converge decision without losing provenance.
+downstream pressure point is now partially resolved: this scenario no longer
+calls the provider directly from `main`; it seeds `SecEdgarRequest` into the
+Converge engine and reads the resulting `SecFilingPayload` fact from
+`ContextKey::Hypotheses`. The next larger gap is decision composition: feed this
+live filing fact into a policy, memory, or solver-backed Converge decision
+without losing provenance.

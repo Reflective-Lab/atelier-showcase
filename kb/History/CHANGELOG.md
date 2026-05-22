@@ -8,12 +8,16 @@ All notable changes to `atelier` are recorded here.
 ## [Unreleased]
 
 - Added `scenario-sec-edgar-live-filing`, a narrow `REAL LIVE` proof slice that
-  fetches Apple Inc.'s 2025 Form 10-K from official SEC EDGAR through Embassy
-  `sec-edgar`'s provider-shaped `LiveSecEdgarProvider`, reads Item 1A from the
-  returned typed `Observation<Filing>`, and extracts risk-factor headings
-  without `StubSecEdgarProvider`, recorded HTTP, or canned fixtures. Finding
-  resolved upstream: Embassy now has a live `SecEdgarProvider` trait
-  implementation instead of only live helper functions.
+  fetches Apple Inc.'s 2025 Form 10-K from official SEC EDGAR through a
+  Converge engine run: `SecEdgarRequest` is seeded into `ContextKey::Seeds`,
+  Embassy's `SecFilingSuggestor<LiveSecEdgarProvider>` calls the live SEC
+  provider, Converge promotes a typed `SecFilingPayload` under
+  `ContextKey::Hypotheses`, and the scenario extracts Item 1A risk-factor
+  headings without deterministic test providers, recorded HTTP, or canned
+  fixtures. Findings resolved: Embassy now has a live `SecEdgarProvider` trait
+  implementation instead of only live helper functions, and the showcase now
+  exercises the downstream Converge composition boundary instead of calling the
+  provider directly from `main`.
 - Raised the atelier example bar to live-by-default:
   - External-provider and Mosaic source-observation scenarios must be
     `REAL LIVE`; real local solvers, policy engines, and product logic may be

@@ -1,13 +1,14 @@
-use std::time::Instant;
+use std::{sync::Arc, time::Instant};
 
 use anyhow::{Context, Result, ensure};
 use clap::Parser;
+use converge_kernel::{Budget, ContextState, ConvergeResult, Engine, ProposedFact};
+use converge_pack::ContextKey;
 use embassy_sec_edgar::live::{HeadingExtractOptions, extract_section_headings};
 use embassy_sec_edgar::{
-    AccessionNumber, CallContext, Cik, FormType, LiveSecEdgarProvider, SecEdgarProvider,
-    SecEdgarRequest,
+    AccessionNumber, Cik, FormType, LiveSecEdgarProvider, SecEdgarRequest, SecFilingPayload,
+    SecFilingSuggestor,
 };
-use serde_json::Value;
 
 const COMPANY: &str = "Apple Inc.";
 const CIK_PADDED: &str = "0000320193";
@@ -53,9 +54,13 @@ async fn main() -> Result<()> {
     println!();
 
     if args.verbose {
-        println!("Step 1: call the Embassy sec-edgar provider-shaped live transport.");
+        println!("Step 1: seed a typed SEC EDGAR request into Converge.");
         println!(
-            "        The provider resolves filing metadata, fetches the SEC primary document, and returns Observation<Filing>."
+            "        The request is a SecEdgarRequest fact under ContextKey::Seeds, not an ad hoc URL string."
+        );
+        println!("Step 2: run SecFilingSuggestor with Embassy's live SEC provider.");
+        println!(
+            "        The Suggestor owns the Converge boundary; LiveSecEdgarProvider owns the network call to SEC EDGAR."
         );
     }
 
@@ -63,74 +68,73 @@ async fn main() -> Result<()> {
         cik: Cik::parse(CIK_PADDED)?,
         accession_number: AccessionNumber::parse(ACCESSION)?,
     };
-    let provider = LiveSecEdgarProvider::new();
     let started = Instant::now();
-    let response = provider
-        .fetch(&request, &CallContext::default())
-        .await
-        .with_context(|| {
-            format!("failed to fetch live SEC filing through provider: {FILING_URL}")
-        })?;
+    let result = run_converge(request).await.with_context(|| {
+        format!("failed to fetch live SEC filing through Converge: {FILING_URL}")
+    })?;
     let elapsed = started.elapsed();
-    let observation = response
-        .records
-        .first()
-        .context("live SEC provider returned no observations")?;
-    let filing = &observation.content;
+    let filing_fact = result
+        .context
+        .get(ContextKey::Hypotheses)
+        .iter()
+        .find(|fact| fact.payload::<SecFilingPayload>().is_some())
+        .context("Converge run produced no SEC filing hypothesis")?;
+    let payload = filing_fact
+        .require_payload::<SecFilingPayload>()
+        .context("SEC filing hypothesis carried the wrong payload type")?;
+    let filing = &payload.filing;
 
     ensure!(
         filing.cik.as_str() == CIK_PADDED,
-        "live SEC provider returned CIK {}, expected {CIK_PADDED}",
+        "Converge SEC filing fact returned CIK {}, expected {CIK_PADDED}",
         filing.cik.as_str()
     );
     ensure!(
         filing.accession_number.as_str() == ACCESSION,
-        "live SEC provider returned accession {}, expected {ACCESSION}",
+        "Converge SEC filing fact returned accession {}, expected {ACCESSION}",
         filing.accession_number.as_str()
     );
     ensure!(
         filing.form_type == FormType::Form10K,
-        "live SEC provider returned form {}, expected {FORM_TYPE}",
+        "Converge SEC filing fact returned form {}, expected {FORM_TYPE}",
         filing.form_type.as_label()
     );
 
-    let raw = observation
-        .raw_response
-        .as_deref()
-        .context("live SEC observation did not include provider metadata")?;
-    let metadata: Value =
-        serde_json::from_str(raw).context("invalid live SEC provider metadata")?;
-    let html_bytes = metadata
-        .get("html_bytes")
-        .and_then(Value::as_u64)
-        .context("live SEC provider metadata missing html_bytes")?;
-    let primary_url = metadata
-        .get("primary_url")
-        .and_then(Value::as_str)
-        .context("live SEC provider metadata missing primary_url")?;
-
     println!("Live fetch:");
     println!("  result: success");
-    println!("  provider: {}", observation.vendor);
-    println!("  observation_id: {}", observation.observation_id);
-    println!("  request_hash: {}", observation.request_hash);
-    println!("  bytes: {html_bytes}");
+    println!("  path: Converge Engine -> SecFilingSuggestor -> LiveSecEdgarProvider -> SEC EDGAR");
+    println!("  converged: {}", result.converged);
+    println!("  cycles: {}", result.cycles);
+    println!("  stop_reason: {:?}", result.stop_reason);
+    println!("  fact_id: {}", filing_fact.id());
+    println!("  fact_key: {:?}", filing_fact.key());
+    println!("  provider: {}", payload.vendor);
+    println!("  request_hash: {}", payload.request_hash);
     println!("  elapsed_ms: {}", elapsed.as_millis());
-    println!("  provider_latency_ms: {}", observation.latency_ms);
-    println!("  validated_observation: CIK {CIK_PADDED}, accession {ACCESSION}, form {FORM_TYPE}");
-    println!("  primary_url: {primary_url}");
+    println!("  provider_latency_ms: {}", payload.latency_ms);
+    println!(
+        "  execution_producer: {} {}",
+        payload.execution_identity.producer.name, payload.execution_identity.producer.version
+    );
+    println!(
+        "  execution_backend: {}",
+        payload.execution_identity.backend
+    );
+    println!("  validated_fact: CIK {CIK_PADDED}, accession {ACCESSION}, form {FORM_TYPE}");
+    println!("  official_primary_url: {FILING_URL}");
     println!();
 
     if args.verbose {
-        println!("Step 2: read Item 1A from the typed Filing observation.");
+        println!("Step 3: read Item 1A from the typed Filing fact.");
         println!(
-            "        The live provider put the SEC section body under Filing.sections[\"1A\"]."
+            "        The live provider filled Filing.sections[\"1A\"], then the Suggestor carried it into ContextKey::Hypotheses."
         );
     }
 
-    let section = filing.sections.get("1A").with_context(|| {
-        format!("live SEC filing observation did not contain Item 1A: {FILING_URL}")
-    })?;
+    let section = filing
+        .sections
+        .get("1A")
+        .with_context(|| format!("live SEC filing fact did not contain Item 1A: {FILING_URL}"))?;
 
     println!("Item 1A section:");
     println!("  section_bytes: {}", section.body.len());
@@ -142,7 +146,7 @@ async fn main() -> Result<()> {
 
     if args.verbose {
         println!(
-            "Step 3: extract risk-factor headings through Embassy's calibrated selector chain."
+            "Step 4: extract risk-factor headings through Embassy's calibrated selector chain."
         );
         println!(
             "        A low or implausibly high heading count fails loudly instead of pretending the parse is good."
@@ -156,8 +160,8 @@ async fn main() -> Result<()> {
 
     println!("Risk-factor heading extraction:");
     println!("  headings: {}", headings.len());
-    println!("  source: typed Filing observation from live SEC HTML");
-    println!("  extension: converge-embassy-sec-edgar LiveSecEdgarProvider");
+    println!("  source: typed SecFilingPayload fact from live SEC HTML");
+    println!("  extension: converge-embassy-sec-edgar SecFilingSuggestor<LiveSecEdgarProvider>");
     println!("  mocked: false");
 
     let sample_count = args.sample_headings.min(headings.len());
@@ -178,12 +182,33 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+async fn run_converge(request: SecEdgarRequest) -> Result<ConvergeResult> {
+    let mut engine = Engine::with_budget(Budget {
+        max_cycles: 4,
+        max_facts: 8,
+    });
+    engine.register_suggestor(SecFilingSuggestor::new(Arc::new(
+        LiveSecEdgarProvider::new(),
+    )));
+
+    let mut ctx = ContextState::new();
+    ctx.add_proposal(ProposedFact::new(
+        ContextKey::Seeds,
+        "sec-edgar-request:apple-2025-10k",
+        request,
+        "atelier-sec-edgar-live-filing",
+    ))?;
+
+    Ok(engine.run(ctx).await?)
+}
+
 fn print_declaration() {
     println!("Declaration: REAL LIVE");
     println!("This scenario calls official SEC EDGAR over the network.");
     println!("It does not mock any Mosaic extension.");
-    println!("It does not use StubSecEdgarProvider.");
+    println!("It does not use Embassy's deterministic SEC provider.");
     println!("It does not use recorded HTTP fixtures.");
+    println!("Converge path: SecEdgarRequest seed -> SecFilingSuggestor -> LiveSecEdgarProvider.");
     println!("External resource: SEC EDGAR primary filing document for Apple Inc. 2025 Form 10-K.");
     println!();
 }
@@ -194,7 +219,7 @@ fn print_verbose_intro() {
         "  This is a deliberately small proof slice. The goal is not a polished product workflow yet."
     );
     println!(
-        "  The goal is to prove that atelier can call a live Mosaic extension path and make the trust boundary obvious."
+        "  The goal is to prove that atelier can call a live Mosaic extension through Converge and make the trust boundary obvious."
     );
     println!(
         "  Human verification is intentionally simple: open the SEC filing detail URL and compare the CIK, accession, form, and primary document."
@@ -206,8 +231,9 @@ fn print_verbose_close() {
     println!();
     println!("What this proves:");
     println!("  - The example made a live network call to SEC EDGAR.");
-    println!("  - The live call went through Embassy's provider-shaped LiveSecEdgarProvider.");
-    println!("  - The provider returned Observation<Filing>, not just raw HTML.");
+    println!("  - The live call was triggered by a Converge seed fact and SecFilingSuggestor.");
+    println!("  - The Suggestor used Embassy's provider-shaped LiveSecEdgarProvider.");
+    println!("  - Converge promoted a typed SecFilingPayload fact, not just raw HTML.");
     println!("  - No stub, mock, fake, or recorded fixture supplied the filing content.");
     println!("  - The output can be checked against an official SEC page in human speed.");
     println!();
