@@ -22,6 +22,7 @@ members = [
     "scenarios/n-queens-cp-sat",
     "scenarios/network-flow-transport",
     "scenarios/round-driven-formation-design",
+    "scenarios/sec-edgar-live-filing",
     "scenarios/sudoku-cp-sat",
     "scenarios/truth-driven-formation",
     "scenarios/vendor-selection",
@@ -67,6 +68,7 @@ converge-kernel = "3.9.1"
 converge-model = "3.9.1"
 arbiter = { package = "converge-arbiter-policy", path = "../mosaic-extensions/arbiter-policy/crates/arbiter", version = "2.0.1" }
 ferrox = { package = "converge-ferrox-solver", path = "../mosaic-extensions/ferrox-solvers/crates/ferrox", version = "0.7.1" }
+embassy-sec-edgar = { package = "converge-embassy-sec-edgar", path = "../mosaic-extensions/embassy-ports/crates/sec-edgar", version = "0.1.0" }
 converge-provider = "3.9.1"
 converge-optimization = "3.9.1"
 converge-runtime = "3.9.1"

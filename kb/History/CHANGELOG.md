@@ -7,6 +7,13 @@ All notable changes to `atelier` are recorded here.
 
 ## [Unreleased]
 
+- Added `scenario-sec-edgar-live-filing`, a narrow `REAL LIVE` proof slice that
+  fetches Apple Inc.'s 2025 Form 10-K from official SEC EDGAR through Embassy
+  `sec-edgar`'s live feature, locates Item 1A, and extracts risk-factor
+  headings without `StubSecEdgarProvider`, recorded HTTP, or canned fixtures.
+  Finding: Embassy has live SEC fetch/extraction helpers today; the next
+  upstream improvement is a live `SecEdgarProvider` trait implementation that
+  returns typed `Observation<Filing>` records through the provider shape.
 - Raised the atelier example bar to live-by-default:
   - External-provider and Mosaic source-observation scenarios must be
     `REAL LIVE`; real local solvers, policy engines, and product logic may be

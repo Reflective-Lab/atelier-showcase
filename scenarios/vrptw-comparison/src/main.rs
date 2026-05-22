@@ -254,8 +254,8 @@ fn print_problem() {
     println!("─────────");
     for c in CUSTOMERS {
         println!(
-            "  {:<10} ({:>5.1}, {:>5.1})   window [{:>3}..{:>3}]   service {}",
-            c.name, c.x, c.y, c.window_open, c.window_close, c.service
+            "  C{:<2} {:<10} ({:>5.1}, {:>5.1})   window [{:>3}..{:>3}]   service {}",
+            c.id, c.name, c.x, c.y, c.window_open, c.window_close, c.service
         );
     }
     println!();

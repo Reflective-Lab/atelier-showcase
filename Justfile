@@ -57,11 +57,18 @@ show name:
     cargo run -p {{name}}
 
 # The round-driven design Formation showcase. Needs at least one
-# LLM provider key (ANTHROPIC_API_KEY / OPENAI_API_KEY /
-# GEMINI_API_KEY / …) — see
-# scenarios/round-driven-formation-design/.env.example.
+# Manifold-recognized live chat credential in the operator environment.
+# Most local runs inherit the workspace .envrc; scenario-level overrides
+# can follow scenarios/round-driven-formation-design/.envrc.example.
 show-round-driven:
     cargo run -p scenario-round-driven-formation-design
+
+# REAL LIVE SEC EDGAR proof slice: fetch Apple Inc.'s 2025 10-K from
+# official SEC EDGAR through Embassy's live sec-edgar feature.
+show-sec-edgar-live:
+    cargo run -p scenario-sec-edgar-live-filing
+show-sec-edgar-live-verbose:
+    cargo run -p scenario-sec-edgar-live-filing -- --verbose
 
 # Ferrox CP-SAT K-of-N plan-selection showcase. Default build
 # prints constraints + a feature hint and exits; pass
@@ -169,6 +176,7 @@ show-all:
     cargo run -p scenario-multi-plan-allocation
     cargo run -p example-meeting-scheduler
     cargo run -p scenario-round-driven-formation-design
+    cargo run -p scenario-sec-edgar-live-filing
     cargo run -p example-solver-policy-allocation
     cargo run -p scenario-truth-driven-formation
     cargo run -p example-vendor-selection

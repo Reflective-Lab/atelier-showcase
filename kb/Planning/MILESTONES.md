@@ -75,6 +75,16 @@ Defer **cross-llm-adjudication** until the first four land. It is useful, but it
 
 ### Proposed scenarios
 
+- [x] **sec-edgar-live-filing** — landed 2026-05-22 as the first narrow
+  `REAL LIVE` Mosaic source-observation proof slice. It fetches Apple Inc.'s
+  2025 Form 10-K from official SEC EDGAR through Embassy `sec-edgar`'s live
+  feature, locates Item 1A, and extracts risk-factor headings. This is not one
+  of the full three-module combinatory scenarios; it is the live-resource anchor
+  proving atelier can show a human-verifiable external call without stubs,
+  recorded fixtures, or fake provider output. *Pressure finding:* live SEC
+  fetch/extraction helpers exist, but a provider-shaped live
+  `SecEdgarProvider` returning typed `Observation<Filing>` remains the next
+  Embassy improvement.
 - [ ] **counterparty-kyc-convergence** — not landed in atelier until the Embassy leg is `REAL LIVE`. The first contract-shape slice proved the intended chain (Embassy `gleif`, `bolagsverket`, `ofac-sls`, `eu-sanctions` → Arbiter `ComplianceGateSuggestor` → Soter `SmtSuggestor` → Mnemos `agentic::causal` + `agentic::temporal`) and surfaced/fixed an upstream contract gap: Embassy lookup request payloads implemented `FactPayload` but not `PartialEq`, blocking direct downstream seeding through `ProposedFact::new`; request payloads now derive `PartialEq` upstream. A second contract-shape slice (2026-05-22) lives at `~/dev/reflective/stack/arena-tests/crates/counterparty-kyc-convergence`. It enforces REAL-by-default at the binary boundary: `cargo run` exits code 2 with a diagnostic naming the Embassy-stubs-only gap; `cargo run -- --mock-ok` runs end-to-end against `StubGleifProvider` + `StubOfacSlsProvider` and clearly labels every step as CONTRACT-SHAPE. *Next required fix:* implement or select live Embassy providers for the identity and sanctions sources, then move (or template a new) `REAL LIVE` scenario into atelier with a Resource Declaration.
 - [ ] **drift-triggered-retrain-loop** — Crucible `MonitoringAgent` → Mnemos `agentic::temporal` recall of historical drift → Arbiter `BudgetGateSuggestor` + `ApprovalGateSuggestor` → Crucible `ModelRegistryAgent` + `DeploymentAgent`. *Pressure-tests:* the closed-loop "experience → drift → retrain → deploy" story end-to-end; forces the drift signal into a Converge fact shape; surfaces whether registry promotion authority crosses the Converge boundary cleanly. Extends `loan-application`.
 - [ ] **policy-constrained-allocation** — Prism `RankingPack` → Embassy (`sam-gov`, `ofac-sls`, `commerce-csl`) → Ferrox `HighsMipSuggestor` → Arbiter `ComplianceGateSuggestor` → Soter `CedarAnalysisSuggestor`. *Pressure-tests:* analytic-score → solver-objective coupling (does `UnitFraction` flow into HiGHS coefficients without a homemade conversion?); whether Soter can prove "no sanctioned counterparty is allocatable under any feasible input." Extends `vendor-selection` and `mip-facility-location`.

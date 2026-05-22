@@ -1,0 +1,15 @@
+[package]
+name = "scenario-sec-edgar-live-filing"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "REAL LIVE SEC EDGAR filing fetch and Item 1A extraction through Embassy"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+embassy-sec-edgar = { workspace = true, features = ["live"] }
+tokio.workspace = true
+
+[lints]
+workspace = true
