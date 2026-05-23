@@ -5,14 +5,20 @@ edition = "2024"
 publish = false
 description = "REAL LIVE SEC EDGAR filing fetch and Arbiter review through Converge and Embassy"
 
+[features]
+default = []
+with-solver = ["dep:ferrox", "ferrox/highs"]
+
 [dependencies]
 anyhow.workspace = true
 arbiter.workspace = true
 async-trait.workspace = true
+atelier-domain.workspace = true
 clap.workspace = true
 converge-kernel.workspace = true
 converge-pack.workspace = true
 embassy-sec-edgar = { workspace = true, features = ["live"] }
+ferrox = { workspace = true, optional = true }
 serde_json.workspace = true
 tokio.workspace = true
 

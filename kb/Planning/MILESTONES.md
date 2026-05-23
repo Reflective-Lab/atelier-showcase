@@ -92,9 +92,14 @@ Defer **cross-llm-adjudication** until the first four land. It is useful, but it
   source fact id, request hash, provider, CIK, accession, and source URL, and
   lets `ComplianceGateSuggestor` emit a typed constraint blocking
   auto-clearance when the risk-factor heading count exceeds the configured
-  review threshold. The next gap is richer decision composition: memory-backed
-  or solver-backed review, or a domain policy pack replacing the simple
-  threshold rule.
+  review threshold. The simple rule is now a reusable
+  `atelier_domain::sec_risk::SecRiskPolicyPack` with source-shape,
+  source-vendor, section-size, and heading-count rules. With
+  `--features with-solver`, the Arbiter block feeds a real Ferrox HiGHS MIP
+  allocation that chooses minimum analyst-review lanes subject to heading
+  coverage, breadth, and senior-review constraints. The next gap is
+  memory-backed review: compare the live filing's risk-heading profile against
+  prior filings or review outcomes without losing provenance.
 - [ ] **counterparty-kyc-convergence** — not landed in atelier until the Embassy leg is `REAL LIVE`. The first contract-shape slice proved the intended chain (Embassy `gleif`, `bolagsverket`, `ofac-sls`, `eu-sanctions` → Arbiter `ComplianceGateSuggestor` → Soter `SmtSuggestor` → Mnemos `agentic::causal` + `agentic::temporal`) and surfaced/fixed an upstream contract gap: Embassy lookup request payloads implemented `FactPayload` but not `PartialEq`, blocking direct downstream seeding through `ProposedFact::new`; request payloads now derive `PartialEq` upstream. A second contract-shape slice (2026-05-22) lives at `~/dev/reflective/stack/arena-tests/crates/counterparty-kyc-convergence`. It enforces REAL-by-default at the binary boundary: `cargo run` exits code 2 with a diagnostic naming the Embassy-stubs-only gap; `cargo run -- --mock-ok` runs end-to-end against `StubGleifProvider` + `StubOfacSlsProvider` and clearly labels every step as CONTRACT-SHAPE. *Next required fix:* implement or select live Embassy providers for the identity and sanctions sources, then move (or template a new) `REAL LIVE` scenario into atelier with a Resource Declaration.
 - [ ] **drift-triggered-retrain-loop** — Crucible `MonitoringAgent` → Mnemos `agentic::temporal` recall of historical drift → Arbiter `BudgetGateSuggestor` + `ApprovalGateSuggestor` → Crucible `ModelRegistryAgent` + `DeploymentAgent`. *Pressure-tests:* the closed-loop "experience → drift → retrain → deploy" story end-to-end; forces the drift signal into a Converge fact shape; surfaces whether registry promotion authority crosses the Converge boundary cleanly. Extends `loan-application`.
 - [ ] **policy-constrained-allocation** — Prism `RankingPack` → Embassy (`sam-gov`, `ofac-sls`, `commerce-csl`) → Ferrox `HighsMipSuggestor` → Arbiter `ComplianceGateSuggestor` → Soter `CedarAnalysisSuggestor`. *Pressure-tests:* analytic-score → solver-objective coupling (does `UnitFraction` flow into HiGHS coefficients without a homemade conversion?); whether Soter can prove "no sanctioned counterparty is allocatable under any feasible input." Extends `vendor-selection` and `mip-facility-location`.

@@ -1,11 +1,11 @@
 use std::{sync::Arc, time::Instant};
 
 use anyhow::{Context, Result, ensure};
-use arbiter::{
-    ComplianceCondition, ComplianceConstraintPayload, ComplianceDocumentPayload,
-    ComplianceGateSuggestor, ComplianceRule,
-};
+use arbiter::{ComplianceConstraintPayload, ComplianceDocumentPayload, ComplianceGateSuggestor};
 use async_trait::async_trait;
+use atelier_domain::sec_risk::{
+    HEADING_COUNT_REVIEW_RULE_ID, SEC_RISK_FRAMEWORK, SecRiskPolicyPack,
+};
 use clap::Parser;
 use converge_kernel::{
     AgentEffect, Budget, Context as ConvergeContext, ContextState, ConvergeResult, Engine,
@@ -17,6 +17,8 @@ use embassy_sec_edgar::{
     AccessionNumber, Cik, FormType, LiveSecEdgarProvider, SecEdgarRequest, SecFilingPayload,
     SecFilingSuggestor,
 };
+#[cfg(feature = "with-solver")]
+use ferrox::mip::MipPlan;
 use serde_json::{Map, Number, Value};
 
 const COMPANY: &str = "Apple Inc.";
@@ -30,9 +32,53 @@ const FILING_URL: &str =
 const DETAIL_URL: &str =
     "https://www.sec.gov/Archives/edgar/data/320193/0000320193-25-000079-index.htm";
 const REVIEW_DOC_ID: &str = "sec-risk-review:apple-2025-10k";
-const REVIEW_RULE_ID: &str = "sec-risk-heading-count-review";
-const REVIEW_HEADING_THRESHOLD: f64 = 20.0;
-const REVIEW_FRAMEWORK: &str = "SEC-10K-RISK-REVIEW";
+#[cfg(feature = "with-solver")]
+const REVIEW_MIP_REQUEST_ID: &str = "sec-risk-review-allocation-apple-2025-10k";
+#[cfg(feature = "with-solver")]
+const REVIEW_MIP_PLAN_ID: &str = "mip-plan:sec-risk-review-allocation-apple-2025-10k";
+
+#[cfg(feature = "with-solver")]
+#[derive(Debug, Clone, Copy)]
+struct ReviewLane {
+    name: &'static str,
+    analyst_hours: f64,
+    heading_capacity: f64,
+    senior: bool,
+}
+
+#[cfg(feature = "with-solver")]
+const REVIEW_LANES: &[ReviewLane] = &[
+    ReviewLane {
+        name: "disclosure_counsel",
+        analyst_hours: 3.0,
+        heading_capacity: 8.0,
+        senior: true,
+    },
+    ReviewLane {
+        name: "supply_chain_risk",
+        analyst_hours: 4.0,
+        heading_capacity: 9.0,
+        senior: false,
+    },
+    ReviewLane {
+        name: "financial_liquidity",
+        analyst_hours: 4.0,
+        heading_capacity: 8.0,
+        senior: false,
+    },
+    ReviewLane {
+        name: "market_competition",
+        analyst_hours: 3.0,
+        heading_capacity: 7.0,
+        senior: false,
+    },
+    ReviewLane {
+        name: "platform_privacy",
+        analyst_hours: 5.0,
+        heading_capacity: 10.0,
+        senior: true,
+    },
+];
 
 #[derive(Debug, Parser)]
 #[command(about = "Fetch a REAL LIVE SEC EDGAR filing and route it through Arbiter")]
@@ -80,7 +126,15 @@ async fn main() -> Result<()> {
             "        The derived document carries source_fact_id, request_hash, provider, CIK, accession, and source URL."
         );
         println!(
-            "Step 4: let Arbiter's ComplianceGateSuggestor decide whether auto-clearance is blocked."
+            "Step 4: load atelier-domain's SEC 10-K risk policy pack and let Arbiter decide whether auto-clearance is blocked."
+        );
+        #[cfg(feature = "with-solver")]
+        println!(
+            "Step 5: translate the Arbiter review constraint into a Ferrox HiGHS MIP allocation problem."
+        );
+        #[cfg(not(feature = "with-solver"))]
+        println!(
+            "Step 5: solver allocation is disabled in this build; rerun with --features with-solver."
         );
     }
 
@@ -118,7 +172,7 @@ async fn main() -> Result<()> {
         .iter()
         .find(|fact| {
             fact.payload::<ComplianceConstraintPayload>()
-                .is_some_and(|constraint| constraint.rule_id == REVIEW_RULE_ID)
+                .is_some_and(|constraint| constraint.rule_id == HEADING_COUNT_REVIEW_RULE_ID)
         })
         .context("Arbiter produced no SEC risk review constraint")?;
     let review_constraint = review_constraint_fact
@@ -145,6 +199,11 @@ async fn main() -> Result<()> {
         "Arbiter constraint references {}, expected review document {}",
         review_constraint.fact_id.as_str(),
         review_doc_fact.id().as_str()
+    );
+    ensure!(
+        review_constraint.framework == SEC_RISK_FRAMEWORK,
+        "Arbiter constraint framework {}, expected {SEC_RISK_FRAMEWORK}",
+        review_constraint.framework
     );
     ensure!(
         field_str(review_doc, "source_fact_id")? == filing_fact.id().as_str(),
@@ -184,7 +243,7 @@ async fn main() -> Result<()> {
     println!();
 
     if args.verbose {
-        println!("Step 5: read Item 1A from the typed Filing fact.");
+        println!("Step 6: read Item 1A from the typed Filing fact.");
         println!(
             "        The live provider filled Filing.sections[\"1A\"], then the Suggestor carried it into ContextKey::Hypotheses."
         );
@@ -205,7 +264,7 @@ async fn main() -> Result<()> {
 
     if args.verbose {
         println!(
-            "Step 6: extract risk-factor headings through Embassy's calibrated selector chain."
+            "Step 7: extract risk-factor headings through Embassy's calibrated selector chain."
         );
         println!(
             "        A low or implausibly high heading count fails loudly instead of pretending the parse is good."
@@ -221,6 +280,10 @@ async fn main() -> Result<()> {
         field_u64(review_doc, "risk_factor_heading_count")? == headings.len() as u64,
         "review document heading count drifted from Item 1A extractor output"
     );
+    #[cfg(feature = "with-solver")]
+    let review_plan = run_review_solver(headings.len() as u64).await?;
+    #[cfg(feature = "with-solver")]
+    let allocation = validate_review_plan(&review_plan, headings.len())?;
 
     println!("Risk-factor heading extraction:");
     println!("  headings: {}", headings.len());
@@ -259,12 +322,19 @@ async fn main() -> Result<()> {
     );
     println!("  rule_id: {}", review_constraint.rule_id);
     println!("  framework: {}", review_constraint.framework);
+    println!(
+        "  policy_pack: {}",
+        atelier_domain::sec_risk::SEC_RISK_POLICY_ID
+    );
     println!("  action: {:?}", review_constraint.action);
     println!(
         "  threshold: risk_factor_heading_count <= {:.0}",
-        REVIEW_HEADING_THRESHOLD
+        heading_review_threshold()
     );
     println!("  observed_risk_factor_heading_count: {}", headings.len());
+    print_solver_decision();
+    #[cfg(feature = "with-solver")]
+    print_review_allocation(&review_plan, &allocation);
 
     if args.verbose {
         print_verbose_close();
@@ -275,8 +345,8 @@ async fn main() -> Result<()> {
 
 async fn run_converge(request: SecEdgarRequest) -> Result<ConvergeResult> {
     let mut engine = Engine::with_budget(Budget {
-        max_cycles: 8,
-        max_facts: 16,
+        max_cycles: 12,
+        max_facts: 32,
     });
     engine.register_suggestor(SecFilingSuggestor::new(Arc::new(
         LiveSecEdgarProvider::new(),
@@ -361,13 +431,183 @@ impl Suggestor for SecRiskReviewDocumentEmitter {
     }
 }
 
-fn sec_review_rules() -> Vec<ComplianceRule> {
-    vec![ComplianceRule {
-        id: REVIEW_RULE_ID.to_string(),
-        framework: REVIEW_FRAMEWORK.to_string(),
-        field: "risk_factor_heading_count".to_string(),
-        condition: ComplianceCondition::MaxValue(REVIEW_HEADING_THRESHOLD),
-    }]
+#[cfg(feature = "with-solver")]
+#[derive(Debug)]
+struct ReviewAllocation {
+    selected: Vec<ReviewLane>,
+    analyst_hours: f64,
+    heading_capacity: f64,
+    senior_count: usize,
+}
+
+#[cfg(feature = "with-solver")]
+async fn run_review_solver(heading_count: u64) -> Result<MipPlan> {
+    let mut engine = Engine::with_budget(Budget {
+        max_cycles: 4,
+        max_facts: 8,
+    });
+    engine.register_suggestor(ferrox::mip::HighsMipSuggestor);
+
+    let mut ctx = ContextState::new();
+    ctx.add_proposal(ProposedFact::new(
+        ContextKey::Seeds,
+        format!("mip-request:{REVIEW_MIP_REQUEST_ID}"),
+        build_review_mip_request(heading_count),
+        "atelier-sec-edgar-risk-review-solver",
+    ))?;
+
+    let result = engine.run(ctx).await?;
+    let plan_fact = result
+        .context
+        .get(ContextKey::Strategies)
+        .iter()
+        .find(|fact| fact.id().as_str() == REVIEW_MIP_PLAN_ID)
+        .context("Ferrox produced no SEC risk review allocation plan")?;
+
+    Ok(plan_fact
+        .require_payload::<MipPlan>()
+        .context("SEC risk review allocation plan carried the wrong payload type")?
+        .clone())
+}
+
+#[cfg(feature = "with-solver")]
+fn build_review_mip_request(heading_count: u64) -> ferrox::mip::MipRequest {
+    use ferrox::mip::{MipConstraint, MipObjective, MipRequest, MipTerm, MipVariable, VarKind};
+
+    let variable = |lane: &ReviewLane| format!("review_{}", lane.name);
+    let variables = REVIEW_LANES
+        .iter()
+        .map(|lane| MipVariable {
+            name: variable(lane),
+            lb: 0.0,
+            ub: 1.0,
+            kind: VarKind::Binary,
+        })
+        .collect::<Vec<_>>();
+
+    let capacity_terms = REVIEW_LANES
+        .iter()
+        .map(|lane| MipTerm {
+            var: variable(lane),
+            coeff: lane.heading_capacity,
+        })
+        .collect::<Vec<_>>();
+    let breadth_terms = REVIEW_LANES
+        .iter()
+        .map(|lane| MipTerm {
+            var: variable(lane),
+            coeff: 1.0,
+        })
+        .collect::<Vec<_>>();
+    let senior_terms = REVIEW_LANES
+        .iter()
+        .filter(|lane| lane.senior)
+        .map(|lane| MipTerm {
+            var: variable(lane),
+            coeff: 1.0,
+        })
+        .collect::<Vec<_>>();
+    let objective_terms = REVIEW_LANES
+        .iter()
+        .map(|lane| MipTerm {
+            var: variable(lane),
+            coeff: lane.analyst_hours,
+        })
+        .collect::<Vec<_>>();
+
+    MipRequest {
+        id: REVIEW_MIP_REQUEST_ID.to_string(),
+        variables,
+        constraints: vec![
+            MipConstraint {
+                name: "cover_risk_factor_headings".to_string(),
+                lb: heading_count as f64,
+                ub: f64::INFINITY,
+                terms: capacity_terms,
+            },
+            MipConstraint {
+                name: "review_breadth_at_least_three_lanes".to_string(),
+                lb: 3.0,
+                ub: f64::INFINITY,
+                terms: breadth_terms,
+            },
+            MipConstraint {
+                name: "at_least_one_senior_reviewer".to_string(),
+                lb: 1.0,
+                ub: f64::INFINITY,
+                terms: senior_terms,
+            },
+        ],
+        objective: MipObjective {
+            terms: objective_terms,
+            maximize: false,
+        },
+        time_limit_seconds: Some(5.0),
+        mip_gap_tolerance: Some(1e-6),
+    }
+}
+
+#[cfg(feature = "with-solver")]
+fn validate_review_plan(plan: &MipPlan, heading_count: usize) -> Result<ReviewAllocation> {
+    ensure!(
+        plan.status.is_successful(),
+        "review allocation solver did not produce a usable plan: {:?}",
+        plan.status
+    );
+
+    let mut selected = Vec::new();
+    for lane in REVIEW_LANES {
+        let variable = format!("review_{}", lane.name);
+        if plan
+            .values
+            .iter()
+            .any(|(name, value)| name == &variable && *value > 0.5)
+        {
+            selected.push(*lane);
+        }
+    }
+
+    let analyst_hours = selected.iter().map(|lane| lane.analyst_hours).sum::<f64>();
+    let heading_capacity = selected
+        .iter()
+        .map(|lane| lane.heading_capacity)
+        .sum::<f64>();
+    let senior_count = selected.iter().filter(|lane| lane.senior).count();
+
+    ensure!(
+        heading_capacity + 1e-6 >= heading_count as f64,
+        "review allocation covers {heading_capacity} headings, expected at least {heading_count}"
+    );
+    ensure!(
+        selected.len() >= 3,
+        "review allocation selected {} lanes, expected at least 3",
+        selected.len()
+    );
+    ensure!(
+        senior_count >= 1,
+        "review allocation selected no senior reviewer"
+    );
+
+    Ok(ReviewAllocation {
+        selected,
+        analyst_hours,
+        heading_capacity,
+        senior_count,
+    })
+}
+
+fn sec_review_rules() -> Vec<arbiter::ComplianceRule> {
+    sec_risk_policy_pack().rules()
+}
+
+fn sec_risk_policy_pack() -> SecRiskPolicyPack {
+    SecRiskPolicyPack::annual_report_review()
+}
+
+fn heading_review_threshold() -> f64 {
+    sec_risk_policy_pack()
+        .thresholds()
+        .max_headings_for_auto_clearance
 }
 
 fn review_fields(
@@ -410,7 +650,7 @@ fn review_fields(
     );
     fields.insert(
         "review_threshold".to_string(),
-        json_num(REVIEW_HEADING_THRESHOLD),
+        json_num(heading_review_threshold()),
     );
     fields.insert(
         "review_objective".to_string(),
@@ -445,6 +685,42 @@ fn field_u64(doc: &ComplianceDocumentPayload, field: &str) -> Result<u64> {
         .with_context(|| format!("review document missing integer field {field}"))
 }
 
+#[cfg(feature = "with-solver")]
+fn print_solver_decision() {
+    println!("  solver_backing: enabled");
+}
+
+#[cfg(not(feature = "with-solver"))]
+fn print_solver_decision() {
+    println!("  solver_backing: disabled in this build; rerun with --features with-solver");
+}
+
+#[cfg(feature = "with-solver")]
+fn print_review_allocation(plan: &MipPlan, allocation: &ReviewAllocation) {
+    println!();
+    println!("Solver-backed review allocation:");
+    println!("  solver: {}", plan.solver);
+    println!("  status: {:?}", plan.status);
+    println!("  mip_gap: {:.6}", plan.mip_gap);
+    println!("  objective_analyst_hours: {:.1}", plan.objective_value);
+    println!("  selected_lanes: {}", allocation.selected.len());
+    for lane in &allocation.selected {
+        println!(
+            "    - {}: {:.1}h, capacity {:.0} headings{}",
+            lane.name,
+            lane.analyst_hours,
+            lane.heading_capacity,
+            if lane.senior { ", senior" } else { "" }
+        );
+    }
+    println!("  total_analyst_hours: {:.1}", allocation.analyst_hours);
+    println!(
+        "  total_heading_capacity: {:.0}",
+        allocation.heading_capacity
+    );
+    println!("  senior_reviewers: {}", allocation.senior_count);
+}
+
 fn print_declaration() {
     println!("Declaration: REAL LIVE");
     println!("This scenario calls official SEC EDGAR over the network.");
@@ -452,7 +728,13 @@ fn print_declaration() {
     println!("It does not use Embassy's deterministic SEC provider.");
     println!("It does not use recorded HTTP fixtures.");
     println!("Converge path: SecEdgarRequest seed -> SecFilingSuggestor -> LiveSecEdgarProvider.");
-    println!("Downstream decision: Arbiter ComplianceGateSuggestor over the live SEC fact.");
+    println!(
+        "Downstream decision: atelier-domain SEC risk policy pack + Arbiter ComplianceGateSuggestor."
+    );
+    #[cfg(feature = "with-solver")]
+    println!("Solver backing: Ferrox HighsMipSuggestor (HiGHS MIP), LOCAL REAL.");
+    #[cfg(not(feature = "with-solver"))]
+    println!("Solver backing: disabled in this build; no heuristic fallback is used.");
     println!("External resource: SEC EDGAR primary filing document for Apple Inc. 2025 Form 10-K.");
     println!();
 }
@@ -478,7 +760,10 @@ fn print_verbose_close() {
     println!("  - The live call was triggered by a Converge seed fact and SecFilingSuggestor.");
     println!("  - The Suggestor used Embassy's provider-shaped LiveSecEdgarProvider.");
     println!("  - Converge promoted a typed SecFilingPayload fact, not just raw HTML.");
+    println!("  - atelier-domain supplied a reusable SEC 10-K risk policy pack.");
     println!("  - A downstream Arbiter gate made a typed review decision from that SEC fact.");
+    #[cfg(feature = "with-solver")]
+    println!("  - Ferrox HiGHS solved a MIP allocation for the required review lanes.");
     println!(
         "  - The review document preserved source fact id, request hash, provider, CIK, accession, and source URL."
     );
@@ -487,6 +772,13 @@ fn print_verbose_close() {
     println!();
     println!("What this does not prove:");
     println!("  - It is not the full three-module v1.1 combinatory scenario.");
-    println!("  - It is not yet memory-backed, solver-backed, or a complete investment workflow.");
+    #[cfg(feature = "with-solver")]
+    println!(
+        "  - It is solver-backed, but not yet memory-backed or a complete investment workflow."
+    );
+    #[cfg(not(feature = "with-solver"))]
+    println!(
+        "  - This build is not solver-backed; rerun with --features with-solver for Ferrox allocation."
+    );
     println!("  - It is the live-resource anchor that those larger examples can now build from.");
 }

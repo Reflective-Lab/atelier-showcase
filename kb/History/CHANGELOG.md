@@ -22,7 +22,12 @@ All notable changes to `atelier` are recorded here.
   exercises the downstream Converge composition boundary instead of calling the
   provider directly from `main`, and the live filing fact now feeds a real
   downstream Arbiter decision while preserving source fact id, request hash, and
-  provider.
+  provider. The simple review threshold is now a reusable
+  `atelier_domain::sec_risk::SecRiskPolicyPack` with source-shape,
+  source-vendor, section-size, and heading-count rules; when run with
+  `--features with-solver`, the Arbiter block feeds a real Ferrox HiGHS MIP
+  allocation that chooses minimum analyst-review lanes subject to heading
+  coverage, review breadth, and senior-review constraints.
 - Raised the atelier example bar to live-by-default:
   - External-provider and Mosaic source-observation scenarios must be
     `REAL LIVE`; real local solvers, policy engines, and product logic may be

@@ -7,6 +7,7 @@ Append an entry on every kb/ change. Format mirrors converge.
 
 | Date | File | Change | Author |
 |------|------|--------|--------|
+| 2026-05-23 | crates/atelier-domain/src/sec_risk.rs, scenarios/sec-edgar-live-filing, History/CHANGELOG.md, Planning/MILESTONES.md | Replace the scenario-local SEC risk threshold with `SecRiskPolicyPack` and add optional Ferrox HiGHS MIP review allocation for the Arbiter-blocked live SEC filing | llm |
 | 2026-05-22 | scenarios/sec-edgar-live-filing, History/CHANGELOG.md, Planning/MILESTONES.md | Feed the live SEC filing fact into a real downstream Arbiter decision: derive a provenance-preserving `ComplianceDocumentPayload` and let `ComplianceGateSuggestor` emit a typed auto-clearance constraint | llm |
 | 2026-05-22 | scenarios/sec-edgar-live-filing, History/CHANGELOG.md, Planning/MILESTONES.md | Move the live SEC EDGAR proof from a direct provider call to a Converge engine run: `SecEdgarRequest` seed, Embassy `SecFilingSuggestor<LiveSecEdgarProvider>`, promoted `SecFilingPayload`, and Item 1A extraction from the typed fact | llm |
 | 2026-05-22 | Cargo.toml, Justfile, scenarios/sec-edgar-live-filing, History/CHANGELOG.md, Planning/MILESTONES.md | Add the first narrow REAL LIVE Mosaic source-observation proof slice: Apple 2025 Form 10-K fetched from official SEC EDGAR through Embassy `LiveSecEdgarProvider`, with runtime declaration, verbose walkthrough, human verification links, and typed `Observation<Filing>` output | llm |

@@ -19,6 +19,7 @@
 //! - [`ask_converge`]: Query interface
 //! - [`meeting_scheduler`]: Pure constraint satisfaction (kernel)
 //! - [`resource_routing`]: Pure constraint satisfaction (kernel)
+//! - [`sec_risk`]: SEC filing risk-review policy pack
 //! - [`drafting`]: Content drafting (kernel utility)
 //! - [`form_filler`]: Form filling agents (kernel utility)
 
@@ -36,6 +37,7 @@ pub mod meeting_scheduler;
 pub mod packs;
 pub mod protocol;
 pub mod resource_routing;
+pub mod sec_risk;
 
 pub mod llm_utils;
 pub mod mock;

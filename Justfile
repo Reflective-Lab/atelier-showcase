@@ -65,11 +65,15 @@ show-round-driven:
 
 # REAL LIVE SEC EDGAR proof slice: seed Apple Inc.'s 2025 10-K request into
 # Converge, fetch it from official SEC EDGAR through Embassy's live provider,
-# then route the typed filing fact through Arbiter's compliance gate.
+# then route the typed filing fact through atelier-domain's SEC risk policy pack
+# and Arbiter's compliance gate. The solver recipe adds Ferrox HiGHS MIP review
+# allocation.
 show-sec-edgar-live:
     cargo run -p scenario-sec-edgar-live-filing
 show-sec-edgar-live-verbose:
     cargo run -p scenario-sec-edgar-live-filing -- --verbose
+show-sec-edgar-live-solver:
+    cargo run -p scenario-sec-edgar-live-filing --features with-solver
 
 # Ferrox CP-SAT K-of-N plan-selection showcase. Default build
 # prints constraints + a feature hint and exits; pass
