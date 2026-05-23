@@ -14,6 +14,7 @@ Major entities in the `atelier` knowledge base.
 
 - [Surface](Architecture/Surface.md) — public crate surface and contract shape
 - [Algorithmic Backbone](Architecture/Algorithmic%20Backbone.md) — formal problem classes (SAT, SMT, LP, MIP, CP-SAT, network flow, decidable FOL) underlying each scenario; complexity landscape and solver-vs-LLM boundary
+- [Storage, Memory, and Analytics Boundary](Architecture/Storage%20Memory%20and%20Analytics.md) — object storage, Polars, Prism, Runway/GCS, and the threshold for introducing a time-series DB
 
 ## Building
 

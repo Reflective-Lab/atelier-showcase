@@ -10,7 +10,11 @@ and letting `ComplianceGateSuggestor` block auto-clearance when the risk-factor
 heading count exceeds the configured review threshold. With `with-solver`
 enabled, the blocked review is converted into a real Ferrox HiGHS MIP allocation
 that chooses the minimum analyst-review lanes satisfying coverage, breadth, and
-senior-review constraints.
+senior-review constraints. The scenario now also performs a recurring review
+analysis: it fetches Apple's prior-year 2024 Form 10-K through the same live SEC
+provider, persists current and prior review profiles through
+`converge-storage`'s `ObjectStore` contract using a local in-memory backend, and
+runs Prism `SimilarityPack` through Converge over the loaded profile history.
 
 Run:
 
@@ -39,15 +43,19 @@ cargo run -p scenario-sec-edgar-live-filing --features with-solver
 - Mosaic extensions: atelier uses the real `converge-embassy-sec-edgar` crate
   with its `live` feature and the real `converge-arbiter-policy` rule gate.
   With `--features with-solver`, it also uses the real
-  `converge-ferrox-solver` HiGHS MIP suggestor. The Converge engine registers
-  Embassy's `SecFilingSuggestor` with the live SEC provider, derives an Arbiter
-  `ComplianceDocumentPayload`, and registers Arbiter's
+  `converge-ferrox-solver` HiGHS MIP suggestor. Recurring analysis uses
+  `converge-storage`'s real `ObjectStore` contract with the local
+  `object_store::memory::InMemory` backend, then uses the real
+  `converge-prism-analytics` `SimilarityPack` via `PackSuggestor`. The Converge
+  engine registers Embassy's `SecFilingSuggestor` with the live SEC provider,
+  derives an Arbiter `ComplianceDocumentPayload`, and registers Arbiter's
   `ComplianceGateSuggestor`; atelier does not replace those extensions with
   local mocks.
 - Mocking: **none**. The run does not use Embassy's deterministic SEC test
   provider, recorded HTTP, canned HTML fixtures, fake provider output, or a
-  fake policy gate. The solver-enabled run uses HiGHS through Ferrox, not a
-  heuristic fallback.
+  fake policy gate. The memory-backed run uses real local object storage and
+  Prism analytics, not in-process fixture answers. The solver-enabled run uses
+  HiGHS through Ferrox, not a heuristic fallback.
 - Backend mode: live SEC fetch initiated from a Converge seed fact:
   `SecEdgarRequest` under `ContextKey::Seeds` -> `SecFilingSuggestor` ->
   `LiveSecEdgarProvider` -> typed `SecFilingPayload` under
@@ -55,9 +63,13 @@ cargo run -p scenario-sec-edgar-live-filing --features with-solver
   using `atelier_domain::sec_risk::SecRiskPolicyPack` -> Arbiter
   `ComplianceDocumentPayload` under `ContextKey::Strategies` ->
   `ComplianceGateSuggestor` -> typed `ComplianceConstraintPayload` under
-  `ContextKey::Constraints`. With `with-solver`, a second Converge run seeds a
-  Ferrox `MipRequest` and reads the resulting `MipPlan`; the solver run is
-  separate so the MIP request does not re-wake the SEC filing suggestor.
+  `ContextKey::Constraints`. Recurring analysis then fetches the prior-year SEC
+  filing through a second `SecFilingSuggestor<LiveSecEdgarProvider>` run, stores
+  both review profiles as object-store JSON, reloads them, and seeds Prism
+  `SimilarityPack` through `PackSuggestor`. With `with-solver`, a separate
+  Converge run seeds a Ferrox `MipRequest` and reads the resulting `MipPlan`;
+  the solver run is separate so the MIP request does not re-wake the SEC filing
+  suggestor.
 - Credentials / feature flags: no API key. The scenario enables Embassy
   `sec-edgar`'s `live` cargo feature in its package dependency. Ferrox HiGHS is
   enabled only with `--features with-solver`.
@@ -77,10 +89,15 @@ cargo run -p scenario-sec-edgar-live-filing --features with-solver
   <https://www.sec.gov/Archives/edgar/data/320193/0000320193-25-000079-index.htm>
 - SEC primary document:
   <https://www.sec.gov/Archives/edgar/data/320193/000032019325000079/aapl-20250927.htm>
+- Prior-year recurring-analysis accession: `0000320193-24-000123`
+- Prior-year filing date: `2024-11-01`
+- Prior-year primary document:
+  <https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/aapl-20240928.htm>
 
 A human can verify the filing in under a minute by opening the SEC filing detail
 page and checking the accession number, form type, filing date, CIK, and primary
-document name.
+document name. The prior-year document is likewise visible in the official SEC
+archive for accession `0000320193-24-000123`.
 
 ## Capability Matrix Links
 
@@ -88,6 +105,7 @@ document name.
 - [`embassy-sec-edgar`](../../../mosaic-extensions/kb/Capability%20Matrix.md#embassy--named-source-observation)
 - [Arbiter policy as code](../../../mosaic-extensions/kb/Capability%20Matrix.md#arbiter--policy-as-code)
 - [Ferrox optimization](../../../mosaic-extensions/kb/Capability%20Matrix.md#ferrox--optimization)
+- [Prism analytics](../../../mosaic-extensions/kb/Capability%20Matrix.md#prism--analytics)
 
 ## Why Generic Substitutes Fail
 
@@ -101,9 +119,10 @@ text came from, whether the current run called the live SEC resource, whether
 the filing moved through Converge as a typed fact, whether a downstream policy
 gate saw the source fact id and request hash, or whether the review allocation
 is optimal under stated constraints. This example keeps the proof small: the
-source is official, the network call is live, the fact boundary is typed, the
-Arbiter decision is typed, the optional solver witness is real, and the no-mock
-boundary is visible before results print.
+source is official, the network calls are live, the fact boundary is typed, the
+Arbiter decision is typed, the optional solver witness is real, recurring memory
+uses a real object-store backend, Prism supplies the profile comparison, and the
+no-mock boundary is visible before results print.
 
 ## Pressure Finding
 
@@ -123,6 +142,9 @@ accession, and source URL before Arbiter emits a typed
 10-K risk policy pack with source-shape, source-vendor, section-size, and
 heading-count rules. With `with-solver`, the Arbiter block feeds a real Ferrox
 HiGHS MIP that chooses the minimum analyst-review lanes covering all extracted
-risk headings with breadth and senior-review constraints. The next larger gap is
-memory-backed review: compare this filing's risk-heading profile against prior
-filings or past review outcomes without losing provenance.
+risk headings with breadth and senior-review constraints. The memory-backed
+review gap is now partially resolved: the scenario writes current and prior
+review profiles into a `converge-storage` in-memory `ObjectStore`, reloads the
+bounded history set, and runs Prism `SimilarityPack` through Converge. The next
+larger gap is durable Runway/GCS-backed recurrence and broader history beyond a
+single prior-year comparison.

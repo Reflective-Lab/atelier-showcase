@@ -27,7 +27,11 @@ All notable changes to `atelier` are recorded here.
   source-vendor, section-size, and heading-count rules; when run with
   `--features with-solver`, the Arbiter block feeds a real Ferrox HiGHS MIP
   allocation that chooses minimum analyst-review lanes subject to heading
-  coverage, review breadth, and senior-review constraints.
+  coverage, review breadth, and senior-review constraints. The first recurring
+  analysis slice is now also wired: the scenario fetches Apple's prior-year
+  2024 Form 10-K live through Embassy, persists current and prior review
+  profiles behind `converge-storage`'s in-memory `ObjectStore`, reloads the
+  bounded profile history, and runs Prism `SimilarityPack` through Converge.
 - Raised the atelier example bar to live-by-default:
   - External-provider and Mosaic source-observation scenarios must be
     `REAL LIVE`; real local solvers, policy engines, and product logic may be

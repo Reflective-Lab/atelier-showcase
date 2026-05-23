@@ -42,6 +42,7 @@ configuration chooses the provider.
 
 - [[Architecture/Surface]] — public crate surface and contract shape
 - [[Architecture/Algorithmic Backbone]] — SAT/UNSAT, SMT, LP, MIP, CP-SAT, network flow, predicate logic; what each scenario formally proves or optimizes, and why LLMs cannot substitute
+- [[Architecture/Storage Memory and Analytics]] — why memory-backed showcase slices use `converge-storage` object stores plus Polars/Prism before reaching for a time-series DB
 
 ## Building
 

@@ -11,7 +11,8 @@ use converge_kernel::{
     AgentEffect, Budget, Context as ConvergeContext, ContextState, ConvergeResult, Engine,
     ProposedFact,
 };
-use converge_pack::{ContextKey, Suggestor};
+use converge_pack::{ContextKey, PackInputPayload, PackPlanPayload, PackSuggestor, Suggestor};
+use converge_storage::{ObjectPath, object_store};
 use embassy_sec_edgar::live::{HeadingExtractOptions, extract_section_headings};
 use embassy_sec_edgar::{
     AccessionNumber, Cik, FormType, LiveSecEdgarProvider, SecEdgarRequest, SecFilingPayload,
@@ -19,6 +20,9 @@ use embassy_sec_edgar::{
 };
 #[cfg(feature = "with-solver")]
 use ferrox::mip::MipPlan;
+use object_store::ObjectStoreExt;
+use prism::packs::SimilarityPack;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Number, Value};
 
 const COMPANY: &str = "Apple Inc.";
@@ -32,10 +36,107 @@ const FILING_URL: &str =
 const DETAIL_URL: &str =
     "https://www.sec.gov/Archives/edgar/data/320193/0000320193-25-000079-index.htm";
 const REVIEW_DOC_ID: &str = "sec-risk-review:apple-2025-10k";
+const PRIOR_ACCESSION: &str = "0000320193-24-000123";
+const PRIOR_FILING_DATE: &str = "2024-11-01";
+const PRIOR_PRIMARY_DOCUMENT: &str = "aapl-20240928.htm";
+const PRIOR_FILING_URL: &str =
+    "https://www.sec.gov/Archives/edgar/data/320193/000032019324000123/aapl-20240928.htm";
+const PRIOR_DETAIL_URL: &str =
+    "https://www.sec.gov/Archives/edgar/data/320193/0000320193-24-000123-index.html";
+const PROFILE_INDEX_PATH: &str = "sec-review-profiles/index.json";
 #[cfg(feature = "with-solver")]
 const REVIEW_MIP_REQUEST_ID: &str = "sec-risk-review-allocation-apple-2025-10k";
 #[cfg(feature = "with-solver")]
 const REVIEW_MIP_PLAN_ID: &str = "mip-plan:sec-risk-review-allocation-apple-2025-10k";
+
+#[derive(Debug, Clone, Copy)]
+struct FilingTarget {
+    company: &'static str,
+    cik_padded: &'static str,
+    accession: &'static str,
+    form_type: &'static str,
+    filing_date: &'static str,
+    primary_document: &'static str,
+    filing_url: &'static str,
+    detail_url: &'static str,
+    profile_id: &'static str,
+}
+
+const CURRENT_TARGET: FilingTarget = FilingTarget {
+    company: COMPANY,
+    cik_padded: CIK_PADDED,
+    accession: ACCESSION,
+    form_type: FORM_TYPE,
+    filing_date: FILING_DATE,
+    primary_document: PRIMARY_DOCUMENT,
+    filing_url: FILING_URL,
+    detail_url: DETAIL_URL,
+    profile_id: "sec-review-profile:apple-2025-10k",
+};
+
+const PRIOR_TARGET: FilingTarget = FilingTarget {
+    company: COMPANY,
+    cik_padded: CIK_PADDED,
+    accession: PRIOR_ACCESSION,
+    form_type: FORM_TYPE,
+    filing_date: PRIOR_FILING_DATE,
+    primary_document: PRIOR_PRIMARY_DOCUMENT,
+    filing_url: PRIOR_FILING_URL,
+    detail_url: PRIOR_DETAIL_URL,
+    profile_id: "sec-review-profile:apple-2024-10k",
+};
+
+impl FilingTarget {
+    fn request(self) -> Result<SecEdgarRequest> {
+        Ok(SecEdgarRequest::Filing {
+            cik: Cik::parse(self.cik_padded)?,
+            accession_number: AccessionNumber::parse(self.accession)?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct SecReviewProfile {
+    profile_id: String,
+    company: String,
+    cik: String,
+    form_type: String,
+    accession: String,
+    filing_date: String,
+    primary_document: String,
+    source_url: String,
+    detail_url: String,
+    source_fact_id: String,
+    source_payload_family: String,
+    source_request_hash: String,
+    source_vendor: String,
+    source_mode: String,
+    risk_factor_heading_count: u64,
+    item_1a_section_bytes: u64,
+    review_threshold: f64,
+    arbiter_rule_id: String,
+    feature_vector: Vec<f64>,
+}
+
+#[derive(Debug)]
+struct RecurringAnalysis {
+    storage_backend: &'static str,
+    profile_count: usize,
+    profile_paths: Vec<String>,
+    current_profile_id: String,
+    prior_profile_id: String,
+    prism_plan_id: String,
+    prism_confidence: f64,
+    top_pair: prism::packs::similarity::SimilarityPair,
+    current_heading_count: u64,
+    prior_heading_count: u64,
+}
+
+struct SecReviewMemoryStore {
+    store: object_store::memory::InMemory,
+    index_path: ObjectPath,
+}
 
 #[cfg(feature = "with-solver")]
 #[derive(Debug, Clone, Copy)]
@@ -135,6 +236,12 @@ async fn main() -> Result<()> {
         #[cfg(not(feature = "with-solver"))]
         println!(
             "Step 5: solver allocation is disabled in this build; rerun with --features with-solver."
+        );
+        println!(
+            "Step 6: persist recurring review profiles through converge-storage and compare them with Prism."
+        );
+        println!(
+            "        Local development uses an in-memory ObjectStore; Runway can swap the same contract to GCS."
         );
     }
 
@@ -302,6 +409,15 @@ async fn main() -> Result<()> {
         }
     }
 
+    let current_profile = build_review_profile(
+        CURRENT_TARGET,
+        filing_fact.id().as_str(),
+        payload,
+        section.body.len(),
+        headings.len(),
+    );
+    let recurring_analysis = run_recurring_analysis(&current_profile).await?;
+
     println!();
     println!("Downstream Arbiter decision:");
     println!("  result: auto-clearance blocked; manual filing-risk review required");
@@ -335,6 +451,7 @@ async fn main() -> Result<()> {
     print_solver_decision();
     #[cfg(feature = "with-solver")]
     print_review_allocation(&review_plan, &allocation);
+    print_recurring_analysis(&recurring_analysis);
 
     if args.verbose {
         print_verbose_close();
@@ -366,6 +483,324 @@ async fn run_converge(request: SecEdgarRequest) -> Result<ConvergeResult> {
     ))?;
 
     Ok(engine.run(ctx).await?)
+}
+
+async fn run_sec_filing_converge(target: FilingTarget) -> Result<ConvergeResult> {
+    let mut engine = Engine::with_budget(Budget {
+        max_cycles: 8,
+        max_facts: 16,
+    });
+    engine.register_suggestor(SecFilingSuggestor::new(Arc::new(
+        LiveSecEdgarProvider::new(),
+    )));
+
+    let mut ctx = ContextState::new();
+    ctx.add_proposal(ProposedFact::new(
+        ContextKey::Seeds,
+        format!("sec-edgar-request:{}", target.accession),
+        target.request()?,
+        "atelier-sec-edgar-recurring-analysis",
+    ))?;
+
+    Ok(engine.run(ctx).await?)
+}
+
+async fn fetch_live_review_profile(target: FilingTarget) -> Result<SecReviewProfile> {
+    let result = run_sec_filing_converge(target).await.with_context(|| {
+        format!(
+            "failed to fetch historical SEC filing: {}",
+            target.filing_url
+        )
+    })?;
+    let filing_fact = result
+        .context
+        .get(ContextKey::Hypotheses)
+        .iter()
+        .find(|fact| fact.payload::<SecFilingPayload>().is_some())
+        .with_context(|| {
+            format!(
+                "Converge produced no SEC filing hypothesis for {}",
+                target.accession
+            )
+        })?;
+    let payload = filing_fact
+        .require_payload::<SecFilingPayload>()
+        .context("historical SEC filing hypothesis carried the wrong payload type")?;
+    validate_payload_matches_target(target, payload)?;
+    let section = payload.filing.sections.get("1A").with_context(|| {
+        format!(
+            "live SEC filing fact did not contain Item 1A: {}",
+            target.filing_url
+        )
+    })?;
+    let headings = extract_section_headings(&section.body, &HeadingExtractOptions::default())
+        .with_context(|| {
+            format!(
+                "could not extract plausible Item 1A headings from {}",
+                target.filing_url
+            )
+        })?;
+
+    Ok(build_review_profile(
+        target,
+        filing_fact.id().as_str(),
+        payload,
+        section.body.len(),
+        headings.len(),
+    ))
+}
+
+async fn run_recurring_analysis(current_profile: &SecReviewProfile) -> Result<RecurringAnalysis> {
+    let store = SecReviewMemoryStore::new_in_memory();
+    let prior_profile = fetch_live_review_profile(PRIOR_TARGET).await?;
+
+    let mut profile_paths = Vec::new();
+    profile_paths.push(store.put_profile(&prior_profile).await?);
+    profile_paths.push(store.put_profile(current_profile).await?);
+
+    let profiles = store
+        .load_profiles(CIK_PADDED, FORM_TYPE)
+        .await
+        .context("failed to load recurring SEC review profiles from memory store")?;
+    ensure!(
+        profiles.len() >= 2,
+        "recurring analysis loaded {} SEC review profiles, expected at least 2",
+        profiles.len()
+    );
+
+    let prism_plan = run_prism_similarity(&profiles).await?;
+    let output = prism_plan
+        .plan_as::<prism::packs::similarity::SimilarityOutput>()
+        .context("Prism similarity plan payload did not match SimilarityOutput")?;
+    let top_pair = output
+        .pairs
+        .first()
+        .cloned()
+        .context("Prism similarity produced no comparable profile pair")?;
+
+    let current = profiles
+        .iter()
+        .find(|profile| profile.profile_id == current_profile.profile_id)
+        .context("current profile was not loaded back from memory store")?;
+    let prior = profiles
+        .iter()
+        .find(|profile| profile.profile_id == PRIOR_TARGET.profile_id)
+        .context("prior profile was not loaded back from memory store")?;
+
+    Ok(RecurringAnalysis {
+        storage_backend: "converge-storage::object_store::memory::InMemory",
+        profile_count: profiles.len(),
+        profile_paths,
+        current_profile_id: current.profile_id.clone(),
+        prior_profile_id: prior.profile_id.clone(),
+        prism_plan_id: prism_plan.plan_id,
+        prism_confidence: prism_plan.confidence,
+        top_pair,
+        current_heading_count: current.risk_factor_heading_count,
+        prior_heading_count: prior.risk_factor_heading_count,
+    })
+}
+
+async fn run_prism_similarity(profiles: &[SecReviewProfile]) -> Result<PackPlanPayload> {
+    let mut engine = Engine::with_budget(Budget {
+        max_cycles: 5,
+        max_facts: 16,
+    });
+    engine.register_suggestor(PackSuggestor::new(
+        SimilarityPack,
+        ContextKey::Seeds,
+        ContextKey::Strategies,
+    ));
+
+    let items = profiles
+        .iter()
+        .map(|profile| {
+            serde_json::json!({
+                "id": profile.profile_id,
+                "features": profile.feature_vector,
+            })
+        })
+        .collect::<Vec<_>>();
+    let input = serde_json::json!({
+        "items": items,
+        "metric": "euclidean",
+        "top_k": 3,
+    });
+
+    let mut ctx = ContextState::new();
+    ctx.add_proposal(ProposedFact::new(
+        ContextKey::Seeds,
+        "prism-similarity:sec-review-profiles",
+        PackInputPayload::new("similarity", input),
+        "atelier-sec-recurring-analysis",
+    ))?;
+
+    let result = engine.run(ctx).await?;
+    ensure!(result.converged, "Prism similarity run did not converge");
+    let plan_fact = result
+        .context
+        .get(ContextKey::Strategies)
+        .iter()
+        .find(|fact| {
+            fact.payload::<PackPlanPayload>()
+                .is_some_and(|payload| payload.pack == "similarity")
+        })
+        .context("Prism SimilarityPack produced no pack plan")?;
+
+    Ok(plan_fact
+        .require_payload::<PackPlanPayload>()
+        .context("Prism similarity plan carried the wrong payload type")?
+        .clone())
+}
+
+impl SecReviewMemoryStore {
+    fn new_in_memory() -> Self {
+        Self {
+            store: object_store::memory::InMemory::new(),
+            index_path: ObjectPath::from(PROFILE_INDEX_PATH),
+        }
+    }
+
+    async fn put_profile(&self, profile: &SecReviewProfile) -> Result<String> {
+        let path = profile_object_path(profile);
+        let object_path = ObjectPath::from(path.clone());
+        let payload =
+            serde_json::to_vec_pretty(profile).context("failed to serialize SEC review profile")?;
+        self.store
+            .put(&object_path, payload.into())
+            .await
+            .with_context(|| format!("failed to write SEC review profile object {path}"))?;
+
+        let mut index = self.read_index().await?;
+        if !index.iter().any(|existing| existing == &path) {
+            index.push(path.clone());
+            self.write_index(&index).await?;
+        }
+
+        Ok(path)
+    }
+
+    async fn load_profiles(&self, cik: &str, form_type: &str) -> Result<Vec<SecReviewProfile>> {
+        let index = self.read_index().await?;
+        let mut profiles = Vec::new();
+
+        for path in index {
+            let object_path = ObjectPath::from(path.clone());
+            let bytes = self
+                .store
+                .get(&object_path)
+                .await
+                .with_context(|| format!("failed to read SEC review profile object {path}"))?
+                .bytes()
+                .await
+                .with_context(|| format!("failed to read bytes for SEC review profile {path}"))?;
+            let profile = serde_json::from_slice::<SecReviewProfile>(&bytes)
+                .with_context(|| format!("failed to deserialize SEC review profile {path}"))?;
+            if profile.cik == cik && profile.form_type == form_type {
+                profiles.push(profile);
+            }
+        }
+
+        Ok(profiles)
+    }
+
+    async fn read_index(&self) -> Result<Vec<String>> {
+        match self.store.get(&self.index_path).await {
+            Ok(result) => {
+                let bytes = result
+                    .bytes()
+                    .await
+                    .context("failed to read SEC review profile index bytes")?;
+                Ok(serde_json::from_slice(&bytes)
+                    .context("failed to deserialize SEC review profile index")?)
+            }
+            Err(object_store::Error::NotFound { .. }) => Ok(Vec::new()),
+            Err(err) => Err(err).context("failed to read SEC review profile index"),
+        }
+    }
+
+    async fn write_index(&self, index: &[String]) -> Result<()> {
+        let payload = serde_json::to_vec_pretty(index)
+            .context("failed to serialize SEC review profile index")?;
+        self.store
+            .put(&self.index_path, payload.into())
+            .await
+            .context("failed to write SEC review profile index")?;
+        Ok(())
+    }
+}
+
+fn validate_payload_matches_target(target: FilingTarget, payload: &SecFilingPayload) -> Result<()> {
+    ensure!(
+        payload.filing.cik.as_str() == target.cik_padded,
+        "SEC filing fact returned CIK {}, expected {}",
+        payload.filing.cik.as_str(),
+        target.cik_padded
+    );
+    ensure!(
+        payload.filing.accession_number.as_str() == target.accession,
+        "SEC filing fact returned accession {}, expected {}",
+        payload.filing.accession_number.as_str(),
+        target.accession
+    );
+    ensure!(
+        payload.filing.form_type == FormType::Form10K,
+        "SEC filing fact returned form {}, expected {}",
+        payload.filing.form_type.as_label(),
+        target.form_type
+    );
+    Ok(())
+}
+
+fn build_review_profile(
+    target: FilingTarget,
+    source_fact_id: &str,
+    payload: &SecFilingPayload,
+    section_bytes: usize,
+    heading_count: usize,
+) -> SecReviewProfile {
+    SecReviewProfile {
+        profile_id: target.profile_id.to_string(),
+        company: target.company.to_string(),
+        cik: payload.filing.cik.as_str().to_string(),
+        form_type: payload.filing.form_type.as_label().to_string(),
+        accession: payload.filing.accession_number.as_str().to_string(),
+        filing_date: target.filing_date.to_string(),
+        primary_document: target.primary_document.to_string(),
+        source_url: target.filing_url.to_string(),
+        detail_url: target.detail_url.to_string(),
+        source_fact_id: source_fact_id.to_string(),
+        source_payload_family: "embassy.sec_edgar.filing".to_string(),
+        source_request_hash: payload.request_hash.clone(),
+        source_vendor: payload.vendor.clone(),
+        source_mode: "REAL LIVE".to_string(),
+        risk_factor_heading_count: heading_count as u64,
+        item_1a_section_bytes: section_bytes as u64,
+        review_threshold: heading_review_threshold(),
+        arbiter_rule_id: HEADING_COUNT_REVIEW_RULE_ID.to_string(),
+        feature_vector: review_feature_vector(heading_count, section_bytes),
+    }
+}
+
+fn review_feature_vector(heading_count: usize, section_bytes: usize) -> Vec<f64> {
+    let heading_count = heading_count as f64;
+    let section_bytes = section_bytes as f64;
+    let heading_density_per_100k = heading_count / (section_bytes / 100_000.0).max(1.0);
+    vec![
+        heading_count / 100.0,
+        section_bytes / 1_000_000.0,
+        heading_density_per_100k / 20.0,
+        heading_count / heading_review_threshold(),
+    ]
+}
+
+fn profile_object_path(profile: &SecReviewProfile) -> String {
+    format!(
+        "sec-review-profiles/{}/{}/{}.json",
+        profile.cik,
+        profile.form_type.to_ascii_lowercase().replace('-', ""),
+        profile.accession.replace('-', "")
+    )
 }
 
 struct SecRiskReviewDocumentEmitter;
@@ -721,6 +1156,42 @@ fn print_review_allocation(plan: &MipPlan, allocation: &ReviewAllocation) {
     println!("  senior_reviewers: {}", allocation.senior_count);
 }
 
+fn print_recurring_analysis(analysis: &RecurringAnalysis) {
+    println!();
+    println!("Recurring profile analysis:");
+    println!("  result: current filing compared against prior live SEC profile");
+    println!("  storage_contract: converge-storage ObjectStore");
+    println!(
+        "  storage_backend: {} (LOCAL REAL)",
+        analysis.storage_backend
+    );
+    println!("  cloud_swap: Runway/GCS can replace the backend by configuration");
+    println!("  time_series_db: not used");
+    println!("  profiles_loaded: {}", analysis.profile_count);
+    println!("  current_profile: {}", analysis.current_profile_id);
+    println!("  current_headings: {}", analysis.current_heading_count);
+    println!("  prior_profile: {}", analysis.prior_profile_id);
+    println!("  prior_headings: {}", analysis.prior_heading_count);
+    println!("  profile_objects:");
+    for path in &analysis.profile_paths {
+        println!("    - {path}");
+    }
+    println!("  prism_pack: SimilarityPack");
+    println!("  prism_metric: euclidean");
+    println!("  prism_plan: {}", analysis.prism_plan_id);
+    println!("  prism_confidence: {:.3}", analysis.prism_confidence);
+    println!(
+        "  top_pair: {} <-> {}",
+        analysis.top_pair.id_a, analysis.top_pair.id_b
+    );
+    println!("  similarity_score: {:.6}", analysis.top_pair.score);
+    println!(
+        "  heading_delta_current_minus_prior: {}",
+        analysis.current_heading_count as i64 - analysis.prior_heading_count as i64
+    );
+    println!("  mocked: false");
+}
+
 fn print_declaration() {
     println!("Declaration: REAL LIVE");
     println!("This scenario calls official SEC EDGAR over the network.");
@@ -735,7 +1206,13 @@ fn print_declaration() {
     println!("Solver backing: Ferrox HighsMipSuggestor (HiGHS MIP), LOCAL REAL.");
     #[cfg(not(feature = "with-solver"))]
     println!("Solver backing: disabled in this build; no heuristic fallback is used.");
-    println!("External resource: SEC EDGAR primary filing document for Apple Inc. 2025 Form 10-K.");
+    println!(
+        "Storage backing: converge-storage ObjectStore with local InMemory backend, LOCAL REAL."
+    );
+    println!("Analytics backing: Prism SimilarityPack through Converge, LOCAL REAL.");
+    println!(
+        "External resources: SEC EDGAR primary filing documents for Apple Inc. 2025 and 2024 Form 10-K."
+    );
     println!();
 }
 
@@ -765,6 +1242,12 @@ fn print_verbose_close() {
     #[cfg(feature = "with-solver")]
     println!("  - Ferrox HiGHS solved a MIP allocation for the required review lanes.");
     println!(
+        "  - converge-storage persisted the current and prior review profiles behind an ObjectStore contract."
+    );
+    println!(
+        "  - Prism compared the recurring profile history with SimilarityPack through Converge."
+    );
+    println!(
         "  - The review document preserved source fact id, request hash, provider, CIK, accession, and source URL."
     );
     println!("  - No stub, mock, fake, or recorded fixture supplied the filing content.");
@@ -773,9 +1256,7 @@ fn print_verbose_close() {
     println!("What this does not prove:");
     println!("  - It is not the full three-module v1.1 combinatory scenario.");
     #[cfg(feature = "with-solver")]
-    println!(
-        "  - It is solver-backed, but not yet memory-backed or a complete investment workflow."
-    );
+    println!("  - It is not yet a complete investment workflow.");
     #[cfg(not(feature = "with-solver"))]
     println!(
         "  - This build is not solver-backed; rerun with --features with-solver for Ferrox allocation."
