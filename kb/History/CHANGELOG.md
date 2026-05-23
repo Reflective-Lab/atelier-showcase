@@ -13,11 +13,16 @@ All notable changes to `atelier` are recorded here.
   Embassy's `SecFilingSuggestor<LiveSecEdgarProvider>` calls the live SEC
   provider, Converge promotes a typed `SecFilingPayload` under
   `ContextKey::Hypotheses`, and the scenario extracts Item 1A risk-factor
-  headings without deterministic test providers, recorded HTTP, or canned
-  fixtures. Findings resolved: Embassy now has a live `SecEdgarProvider` trait
-  implementation instead of only live helper functions, and the showcase now
+  headings, derives an Arbiter `ComplianceDocumentPayload` preserving SEC
+  provenance fields, and lets `ComplianceGateSuggestor` emit a typed
+  auto-clearance-blocking `ComplianceConstraintPayload` without deterministic
+  test providers, recorded HTTP, canned fixtures, or fake policy gates.
+  Findings resolved: Embassy now has a live `SecEdgarProvider` trait
+  implementation instead of only live helper functions, the showcase now
   exercises the downstream Converge composition boundary instead of calling the
-  provider directly from `main`.
+  provider directly from `main`, and the live filing fact now feeds a real
+  downstream Arbiter decision while preserving source fact id, request hash, and
+  provider.
 - Raised the atelier example bar to live-by-default:
   - External-provider and Mosaic source-observation scenarios must be
     `REAL LIVE`; real local solvers, policy engines, and product logic may be

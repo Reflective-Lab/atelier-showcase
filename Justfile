@@ -64,7 +64,8 @@ show-round-driven:
     cargo run -p scenario-round-driven-formation-design
 
 # REAL LIVE SEC EDGAR proof slice: seed Apple Inc.'s 2025 10-K request into
-# Converge and fetch it from official SEC EDGAR through Embassy's live provider.
+# Converge, fetch it from official SEC EDGAR through Embassy's live provider,
+# then route the typed filing fact through Arbiter's compliance gate.
 show-sec-edgar-live:
     cargo run -p scenario-sec-edgar-live-filing
 show-sec-edgar-live-verbose:

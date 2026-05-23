@@ -4,7 +4,10 @@ This scenario is the smallest live-resource proof slice for atelier-showcase.
 It fetches Apple Inc.'s 2025 Form 10-K primary document from official SEC EDGAR
 through Converge's engine by seeding a typed `SecEdgarRequest`, running
 Embassy's `SecFilingSuggestor<LiveSecEdgarProvider>`, reading Item 1A from the
-returned typed `SecFilingPayload`, and extracting risk-factor headings.
+returned typed `SecFilingPayload`, deriving an Arbiter review document that
+preserves SEC provenance, and letting `ComplianceGateSuggestor` block
+auto-clearance when the risk-factor heading count exceeds the configured review
+threshold.
 
 Run:
 
@@ -25,16 +28,23 @@ cargo run -p scenario-sec-edgar-live-filing -- --verbose
 - Live external resources: **yes**. The scenario calls official SEC EDGAR over
   the network.
 - Mosaic extensions: atelier uses the real `converge-embassy-sec-edgar` crate
-  with its `live` feature. The Converge engine registers Embassy's
-  `SecFilingSuggestor` with the live SEC provider; atelier does not replace
-  Embassy with a local mock.
+  with its `live` feature and the real `converge-arbiter-policy` rule gate. The
+  Converge engine registers Embassy's `SecFilingSuggestor` with the live SEC
+  provider, derives an Arbiter `ComplianceDocumentPayload`, and registers
+  Arbiter's `ComplianceGateSuggestor`; atelier does not replace either
+  extension with a local mock.
 - Mocking: **none**. The run does not use Embassy's deterministic SEC test
-  provider, recorded HTTP, canned HTML fixtures, or fake provider output.
+  provider, recorded HTTP, canned HTML fixtures, fake provider output, or a
+  fake policy gate.
 - Backend mode: live SEC fetch initiated from a Converge seed fact:
   `SecEdgarRequest` under `ContextKey::Seeds` -> `SecFilingSuggestor` ->
   `LiveSecEdgarProvider` -> typed `SecFilingPayload` under
-  `ContextKey::Hypotheses`. The example then runs Embassy's heading extractor
-  over `SecFilingPayload.filing.sections["1A"]`.
+  `ContextKey::Hypotheses` -> scenario-local provenance-preserving adapter ->
+  Arbiter `ComplianceDocumentPayload` under `ContextKey::Strategies` ->
+  `ComplianceGateSuggestor` -> typed `ComplianceConstraintPayload` under
+  `ContextKey::Constraints`. The example then runs Embassy's heading extractor
+  over `SecFilingPayload.filing.sections["1A"]` and verifies the Arbiter
+  decision references the derived document.
 - Credentials / feature flags: no API key. The scenario enables Embassy
   `sec-edgar`'s `live` cargo feature in its package dependency.
 - Trust boundary: trust this as proof that atelier can call a real external
@@ -62,17 +72,21 @@ document name.
 
 - [Embassy named-source observation](../../../mosaic-extensions/kb/Capability%20Matrix.md#embassy--named-source-observation)
 - [`embassy-sec-edgar`](../../../mosaic-extensions/kb/Capability%20Matrix.md#embassy--named-source-observation)
+- [Arbiter policy as code](../../../mosaic-extensions/kb/Capability%20Matrix.md#arbiter--policy-as-code)
 
 ## Why Generic Substitutes Fail
 
 A generic scrape can fetch bytes, but it does not carry the source boundary,
 SEC-specific politeness contract, item-section heuristic, or reusable Embassy
-and Converge surfaces. A chat model can summarize a filing after someone gives
-it text, but it cannot prove where the text came from, whether the current run
-called the live SEC resource, or whether the filing moved through Converge as a
-typed fact. This example keeps the proof small: the source is official, the
-network call is live, the fact boundary is typed, and the no-mock boundary is
-visible before results print.
+and Converge surfaces. A hand-written `if` statement can count headings, but it
+does not emit a typed policy constraint that another Converge step can route or
+audit. A chat model can summarize a filing after someone gives it text, but it
+cannot prove where the text came from, whether the current run called the live
+SEC resource, whether the filing moved through Converge as a typed fact, or
+whether a downstream policy gate saw the source fact id and request hash. This
+example keeps the proof small: the source is official, the network call is live,
+the fact boundary is typed, the Arbiter decision is typed, and the no-mock
+boundary is visible before results print.
 
 ## Pressure Finding
 
@@ -83,6 +97,10 @@ by deterministic tests and returns typed `Observation<Filing>` records. The next
 downstream pressure point is now partially resolved: this scenario no longer
 calls the provider directly from `main`; it seeds `SecEdgarRequest` into the
 Converge engine and reads the resulting `SecFilingPayload` fact from
-`ContextKey::Hypotheses`. The next larger gap is decision composition: feed this
-live filing fact into a policy, memory, or solver-backed Converge decision
-without losing provenance.
+`ContextKey::Hypotheses`. The next pressure point is also partially resolved:
+the live filing fact is transformed into an Arbiter `ComplianceDocumentPayload`
+that preserves `source_fact_id`, `source_request_hash`, `source_vendor`, CIK,
+accession, and source URL before Arbiter emits a typed
+`ComplianceConstraintPayload`. The next larger gap is richer decision
+composition: feed the live filing fact into memory or solver-backed decisions,
+or replace the simple threshold rule with a real domain policy pack.
