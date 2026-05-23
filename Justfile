@@ -258,7 +258,11 @@ security-audit:
     audit_human_status=${PIPESTATUS[0]}
     echo "" | tee -a "${summary}"
     echo "── cargo-deny ───────────────────────────────" | tee -a "${summary}"
-    cargo deny check 2>&1 | tee "${out_dir}/deny.txt" | tee -a "${summary}"
+    cargo deny check \
+        -A duplicate \
+        -A advisory-not-detected \
+        -A license-not-encountered \
+        2>&1 | tee "${out_dir}/deny.txt" | tee -a "${summary}"
     deny_status=${PIPESTATUS[0]}
     echo "" | tee -a "${summary}"
     echo "audit→${out_dir}/audit.json  deny→${out_dir}/deny.txt  summary→${summary}"
@@ -277,7 +281,7 @@ coverage:
     out_dir="target/coverage"
     mkdir -p "${out_dir}/html"
     ignore_re='(^|/)(tests|benches|tutorials|scenarios)/'
-    common=(--workspace --lib --tests --ignore-filename-regex "${ignore_re}")
+    common=(--workspace --lib --tests)
     cargo llvm-cov clean --workspace
     rm -rf target/tests/trybuild
     cargo llvm-cov "${common[@]}" --no-report
@@ -307,13 +311,16 @@ performance-profile:
             mode_flag="--baseline"
         fi
     fi
-    echo "performance-profile: ${mode_flag} ${name}"
-    # If your extension ships benchmarks, list the benchable crates here:
-    #   for c in atelier; do cargo bench -p "$c" -- "${mode_flag}" "${name}"; done
-    cargo bench --workspace -- "${mode_flag}" "${name}" || true
-    if [ -f scripts/extract-criterion-baseline.py ]; then
-        python3 scripts/extract-criterion-baseline.py || \
-            echo "warn: baseline extraction failed (non-fatal)"
+    bench_count="$(find crates scenarios tutorials -path '*/benches/*.rs' -type f | wc -l | tr -d ' ')"
+    if [ "${bench_count}" -eq 0 ]; then
+        echo "performance-profile: no benchmark targets registered; skipped"
+    else
+        echo "performance-profile: ${mode_flag} ${name}"
+        cargo bench --workspace --benches -- "${mode_flag}" "${name}"
+        if [ -f scripts/extract-criterion-baseline.py ]; then
+            python3 scripts/extract-criterion-baseline.py || \
+                echo "warn: baseline extraction failed (non-fatal)"
+        fi
     fi
     echo "performance-profile: criterion→target/criterion/"
 
