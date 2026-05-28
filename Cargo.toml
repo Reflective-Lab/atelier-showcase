@@ -10,6 +10,7 @@ members = [
     "scenarios/arbiter-ferrox-solver-gallery",
     "scenarios/arbiter-governance",
     "scenarios/cedar-smt-analysis",
+    "scenarios/crm-helm",
     "scenarios/loan-application",
     "scenarios/lp-diet",
     "scenarios/meeting-scheduler",
