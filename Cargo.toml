@@ -164,3 +164,13 @@ organism-dynamics = { path = "../bedrock-platform/organism/crates/dynamics" }
 # patching them produces an "unused patch" warning on every build.
 # Re-add when something on the path actually depends on them.
 axiom-truth = { path = "../bedrock-platform/axiom" }
+
+# CRM-Helm scenario (Phase 6b) pulls application-kernel and application-storage
+# from helms, which in turn depend on converge-* via local path.  Redirect the
+# crates.io 3.9.1 references to the same local head so both sides unify on a
+# single copy — same version, no graph fork.  Drop these four lines once
+# application-storage is published standalone (without local path converge deps).
+converge-core        = { path = "../bedrock-platform/converge/crates/core" }
+converge-experience  = { path = "../bedrock-platform/converge/crates/experience" }
+converge-pack        = { path = "../bedrock-platform/converge/crates/pack" }
+converge-kernel      = { path = "../bedrock-platform/converge/crates/kernel" }
