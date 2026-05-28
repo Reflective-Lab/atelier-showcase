@@ -1,3 +1,5 @@
+#![allow(clippy::result_large_err)]
+
 //! CRM Helm Showcase
 //!
 //! Demonstrates how Runway + Helm modules compose into a thin app binary.
