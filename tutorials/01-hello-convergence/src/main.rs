@@ -10,10 +10,26 @@
 //! - Dependency-driven sequencing: ReactOnce depends on Seeds
 //! - Fixed-point convergence: engine stops when context stabilizes
 
+use converge_kernel::Provenance;
 use converge_kernel::{
     AgentEffect, Context, ContextFact, ContextKey, ContextState, Engine, ProposedFact, Suggestor,
     TextPayload,
 };
+
+#[derive(Clone, Copy, Debug)]
+struct AtelierShowcaseProvenance;
+
+impl converge_kernel::ProvenanceSource for AtelierShowcaseProvenance {
+    fn as_str(&self) -> &'static str {
+        "atelier-showcase.hello-convergence"
+    }
+}
+
+const ATELIER_SHOWCASE_PROVENANCE: AtelierShowcaseProvenance = AtelierShowcaseProvenance;
+
+fn atelier_showcase_provenance() -> Provenance {
+    converge_kernel::ProvenanceSource::provenance(ATELIER_SHOWCASE_PROVENANCE)
+}
 
 const NO_DEPENDENCIES: [ContextKey; 0] = [];
 const SEED_DEPENDENCIES: [ContextKey; 1] = [ContextKey::Seeds];
@@ -36,8 +52,8 @@ impl Suggestor for SeedOnceSuggestor {
         self.name
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.hello-convergence"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -54,7 +70,7 @@ impl Suggestor for SeedOnceSuggestor {
                 ContextKey::Seeds,
                 self.id,
                 TextPayload::new(self.content),
-                self.name,
+                self.provenance(),
             )
             .with_confidence(1.0),
         )
@@ -79,8 +95,8 @@ impl Suggestor for ReactOnceSuggestor {
         self.name
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.hello-convergence"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -97,7 +113,7 @@ impl Suggestor for ReactOnceSuggestor {
                 ContextKey::Hypotheses,
                 self.id,
                 TextPayload::new(self.content),
-                self.name,
+                self.provenance(),
             )
             .with_confidence(0.95),
         )

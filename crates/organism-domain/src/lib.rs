@@ -48,6 +48,17 @@ pub mod standard_packs;
 
 pub use standard_packs::{register_standard_packs, registry_with_standard_packs};
 
+#[derive(Clone, Copy, Debug)]
+pub struct OrganismDomainProvenance;
+
+impl converge_pack::ProvenanceSource for OrganismDomainProvenance {
+    fn as_str(&self) -> &'static str {
+        "organism-domain"
+    }
+}
+
+pub const ORGANISM_DOMAIN_PROVENANCE: OrganismDomainProvenance = OrganismDomainProvenance;
+
 // Pack contract types live in `organism-pack`. Re-exported here so existing
 // consumers keep working with `organism_domain::pack::*` paths.
 pub use organism_pack::pack;

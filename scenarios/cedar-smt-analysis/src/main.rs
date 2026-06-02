@@ -101,7 +101,7 @@ use arbiter::analysis::{
 // PATH. The scenario sets this env var if it isn't already.
 #[cfg(feature = "with-cvc5")]
 const VENDORED_CVC5: &str =
-    "/Users/kpernyer/dev/reflective/stack/mosaic-extensions/soter-smt/vendor/cvc5/build/bin/cvc5";
+    "/Users/kpernyer/dev/reflective/mosaic-extensions/soter-smt/vendor/cvc5/build/bin/cvc5";
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {

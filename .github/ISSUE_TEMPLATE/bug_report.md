@@ -23,4 +23,4 @@ Steps to reproduce:
 - OS: [e.g., macOS, Linux]
 - Rust version: [e.g., 1.94.0]
 - atelier version: [e.g., 1.0.0]
-- Converge head: [git SHA of `~/dev/reflective/stack/bedrock-platform/converge` checkout]
+- Converge head: [git SHA of `~/dev/reflective/bedrock-platform/converge` checkout]

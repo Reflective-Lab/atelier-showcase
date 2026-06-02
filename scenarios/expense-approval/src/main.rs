@@ -11,6 +11,7 @@
 
 use arbiter::{EXPENSE_APPROVAL_POLICY, PolicyEngine};
 use atelier_domain::{DomainRecordPayload, json_value};
+use converge_kernel::Provenance;
 use converge_kernel::{
     AgentEffect, AuthorityLevel, Context, ContextFact, ContextKey, ContextState, Engine,
     EngineHitlPolicy, FlowAction, FlowGateAuthorizer, FlowGateContext, FlowGateInput,
@@ -19,6 +20,21 @@ use converge_kernel::{
 };
 use converge_pack::TextPayload;
 use std::sync::Arc;
+
+#[derive(Clone, Copy, Debug)]
+struct AtelierShowcaseProvenance;
+
+impl converge_kernel::ProvenanceSource for AtelierShowcaseProvenance {
+    fn as_str(&self) -> &'static str {
+        "atelier-showcase.expense-approval"
+    }
+}
+
+const ATELIER_SHOWCASE_PROVENANCE: AtelierShowcaseProvenance = AtelierShowcaseProvenance;
+
+fn atelier_showcase_provenance() -> Provenance {
+    converge_kernel::ProvenanceSource::provenance(ATELIER_SHOWCASE_PROVENANCE)
+}
 
 struct ExpenseParsingAgent;
 
@@ -115,8 +131,8 @@ impl Suggestor for ExpenseParsingAgent {
         "ExpenseParsingAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.expense-approval"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -137,7 +153,7 @@ impl Suggestor for ExpenseParsingAgent {
                 ContextKey::Strategies,
                 "parsed-expense",
                 record("expense", json),
-                self.name().to_owned(),
+                self.provenance(),
             )
             .with_confidence(1.0)
         } else {
@@ -145,7 +161,7 @@ impl Suggestor for ExpenseParsingAgent {
                 ContextKey::Strategies,
                 "parsed-expense",
                 record("expense", serde_json::json!({})),
-                self.name().to_owned(),
+                self.provenance(),
             )
             .with_confidence(1.0)
         };
@@ -164,8 +180,8 @@ impl Suggestor for PolicyValidationAgent {
         "PolicyValidationAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.expense-approval"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -213,7 +229,7 @@ impl Suggestor for PolicyValidationAgent {
                 ContextKey::Evaluations,
                 "expense-validate-policy",
                 record("expense_policy_validation", result),
-                self.name().to_owned(),
+                self.provenance(),
             )
             .with_confidence(1.0),
         )
@@ -232,8 +248,8 @@ impl Suggestor for ApprovalRoutingAgent {
         "ApprovalRoutingAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.expense-approval"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -292,7 +308,7 @@ impl Suggestor for ApprovalRoutingAgent {
                     ContextKey::Constraints,
                     "expense-approval-routing",
                     record("expense_approval_routing", routing),
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(1.0),
             );
@@ -318,8 +334,8 @@ impl Suggestor for CommitDecisionAgent {
         "CommitDecisionAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.expense-approval"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -381,7 +397,7 @@ impl Suggestor for CommitDecisionAgent {
                 ContextKey::Evaluations,
                 "expense-commit-policy",
                 record("expense_commit_policy", result),
-                self.name().to_owned(),
+                self.provenance(),
             )
             .with_confidence(1.0),
         )
@@ -396,8 +412,8 @@ impl Suggestor for ApprovalSimulationAgent {
         "ApprovalSimulationAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.expense-approval"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -435,7 +451,7 @@ impl Suggestor for ApprovalSimulationAgent {
                 ContextKey::Proposals,
                 format!("{current}-approval"),
                 TextPayload::new(format!("Approved by {current}")),
-                format!("{current} approval agent"),
+                self.provenance(),
             )
             .with_confidence(0.95);
 
@@ -487,7 +503,7 @@ async fn main() {
         ContextKey::Seeds,
         "expense-1",
         record("expense", expense.clone()),
-        "example-expense-approval",
+        atelier_showcase_provenance(),
     ));
 
     println!(

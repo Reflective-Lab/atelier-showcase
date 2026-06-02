@@ -110,8 +110,8 @@ impl Suggestor for InvoiceCreatorAgent {
         "invoice_creator"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -139,7 +139,6 @@ impl Suggestor for InvoiceCreatorAgent {
         for trigger in triggers {
             if crate::payload_contains(trigger, "deal.closed_won") {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{}draft:{}", INVOICE_PREFIX, trigger.id()),
                     serde_json::json!({
@@ -190,8 +189,8 @@ impl Suggestor for InvoiceIssuerAgent {
         "invoice_issuer"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -271,7 +270,6 @@ impl Suggestor for InvoiceIssuerAgent {
 
             match decision.outcome {
                 FlowGateOutcome::Promote => facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{INVOICE_PREFIX}issued:{}", invoice.id()),
                     serde_json::json!({
@@ -289,7 +287,6 @@ impl Suggestor for InvoiceIssuerAgent {
                 FlowGateOutcome::Escalate => {
                     if !invoice_issue_request_exists(ctx, invoice.id()) {
                         facts.push(crate::json_record(
-                            self.name(),
                             ContextKey::Proposals,
                             format!("{INVOICE_PREFIX}issue_request:{}", invoice.id()),
                             serde_json::json!({
@@ -305,7 +302,6 @@ impl Suggestor for InvoiceIssuerAgent {
                     }
                 }
                 FlowGateOutcome::Reject => facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{INVOICE_PREFIX}issue_rejected:{}", invoice.id()),
                     serde_json::json!({
@@ -337,8 +333,8 @@ impl Suggestor for PaymentAllocatorAgent {
         "payment_allocator"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -373,7 +369,6 @@ impl Suggestor for PaymentAllocatorAgent {
             // Try to find matching invoice
             if let Some(invoice) = invoices.first() {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!(
                         "{}allocation:{}->{}",
@@ -408,8 +403,8 @@ impl Suggestor for ReconciliationMatcherAgent {
         "reconciliation_matcher"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -447,7 +442,6 @@ impl Suggestor for ReconciliationMatcherAgent {
         for txn in &bank_txns {
             if let Some(invoice) = invoices.first() {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{}{}->{}", LEDGER_PREFIX, txn.id(), invoice.id()),
                     serde_json::json!({
@@ -480,8 +474,8 @@ impl Suggestor for OverdueDetectorAgent {
         "overdue_detector"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -509,7 +503,6 @@ impl Suggestor for OverdueDetectorAgent {
                 && !overdue_action_exists(ctx, invoice.id().as_str())
             {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{}overdue_action:{}", INVOICE_PREFIX, invoice.id()),
                     serde_json::json!({
@@ -560,8 +553,8 @@ impl Suggestor for PeriodCloserAgent {
         "period_closer"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -621,7 +614,6 @@ impl Suggestor for PeriodCloserAgent {
 
             match decision.outcome {
                 FlowGateOutcome::Promote => facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{PERIOD_PREFIX}closed:{}", period.id()),
                     serde_json::json!({
@@ -635,7 +627,6 @@ impl Suggestor for PeriodCloserAgent {
                 FlowGateOutcome::Escalate => {
                     if !period_close_request_exists(ctx, period.id()) {
                         facts.push(crate::json_record(
-                            self.name(),
                             ContextKey::Proposals,
                             format!("{PERIOD_PREFIX}close_request:{}", period.id()),
                             serde_json::json!({
@@ -651,7 +642,6 @@ impl Suggestor for PeriodCloserAgent {
                     }
                 }
                 FlowGateOutcome::Reject => facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{PERIOD_PREFIX}close_rejected:{}", period.id()),
                     serde_json::json!({

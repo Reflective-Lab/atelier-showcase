@@ -14,17 +14,22 @@ use converge_kernel::{
     AgentEffect, Budget, Context, ContextFact, ContextKey, ContextState, ConvergeResult, Engine,
     FactPayload, ProposedFact, Suggestor,
 };
+use converge_kernel::{Provenance, ProvenanceSource};
 use converge_optimization::assignment::{AssignmentProblem, solve as solve_assignment};
 use serde::{Deserialize, Serialize};
 
 const SEED_ID: &str = "reconciliation-seed:default";
 
-/// Provenance source for every fact proposed by this tutorial. The
-/// 3.9 contract requires fact-emitting Suggestors to override the
-/// default empty `provenance()` — see `Suggestor::provenance` in
-/// converge-pack. One shared identifier for the whole tutorial keeps
-/// the audit trail readable.
-const RECONCILIATION_PROVENANCE: &str = "example-reconciliation-loop";
+#[derive(Clone, Copy, Debug)]
+struct ReconciliationProvenance;
+
+impl ProvenanceSource for ReconciliationProvenance {
+    fn as_str(&self) -> &'static str {
+        "example-reconciliation-loop"
+    }
+}
+
+const RECONCILIATION_PROVENANCE: ReconciliationProvenance = ReconciliationProvenance;
 const MATRIX_ID: &str = "candidate-matrix:default";
 const RESULT_ID: &str = "reconciliation-result:default";
 const SUMMARY_ID: &str = "reconciliation-summary:default";
@@ -133,8 +138,8 @@ impl Suggestor for CandidateScorerSuggestor {
         "candidate-scorer"
     }
 
-    fn provenance(&self) -> &'static str {
-        RECONCILIATION_PROVENANCE
+    fn provenance(&self) -> Provenance {
+        RECONCILIATION_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -156,7 +161,7 @@ impl Suggestor for CandidateScorerSuggestor {
                 ContextKey::Evaluations,
                 MATRIX_ID,
                 matrix,
-                RECONCILIATION_PROVENANCE,
+                self.provenance(),
             )
             .with_confidence(0.9),
         )
@@ -171,8 +176,8 @@ impl Suggestor for ExactAssignmentSuggestor {
         "exact-assignment"
     }
 
-    fn provenance(&self) -> &'static str {
-        RECONCILIATION_PROVENANCE
+    fn provenance(&self) -> Provenance {
+        RECONCILIATION_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -190,13 +195,8 @@ impl Suggestor for ExactAssignmentSuggestor {
 
         let result = reconcile_exact(&matrix);
         AgentEffect::with_proposal(
-            ProposedFact::new(
-                ContextKey::Strategies,
-                RESULT_ID,
-                result,
-                RECONCILIATION_PROVENANCE,
-            )
-            .with_confidence(0.94),
+            ProposedFact::new(ContextKey::Strategies, RESULT_ID, result, self.provenance())
+                .with_confidence(0.94),
         )
     }
 }
@@ -209,8 +209,8 @@ impl Suggestor for ResidueSummarySuggestor {
         "residue-summary"
     }
 
-    fn provenance(&self) -> &'static str {
-        RECONCILIATION_PROVENANCE
+    fn provenance(&self) -> Provenance {
+        RECONCILIATION_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -247,7 +247,7 @@ impl Suggestor for ResidueSummarySuggestor {
                 ContextKey::Diagnostic,
                 SUMMARY_ID,
                 summary,
-                RECONCILIATION_PROVENANCE,
+                self.provenance(),
             )
             .with_confidence(0.96),
         )
@@ -310,7 +310,7 @@ fn seed_context(seed: &ReconciliationSeed) -> ContextState {
             ContextKey::Seeds,
             SEED_ID,
             seed.clone(),
-            "example:reconciliation-loop",
+            RECONCILIATION_PROVENANCE.provenance(),
         ))
         .expect("should stage seed");
     context

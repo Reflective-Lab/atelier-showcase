@@ -3,11 +3,29 @@
 
 //! Atelier fact payloads for the Converge 3.9 typed fact boundary.
 
-use converge_core::{ContextFact, ContextKey, FactPayload, TextPayload};
+use converge_core::{
+    ContextFact, ContextKey, FactPayload, Provenance, ProvenanceSource, TextPayload,
+};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
-/// Canonical provenance for facts emitted by this crate.
-pub const ATELIER_DOMAIN_PROVENANCE: &str = "atelier-domain";
+/// Canonical provenance marker for facts emitted by this crate.
+#[derive(Clone, Copy, Debug)]
+pub struct AtelierDomainProvenance;
+
+impl ProvenanceSource for AtelierDomainProvenance {
+    fn as_str(&self) -> &'static str {
+        "atelier-domain"
+    }
+}
+
+impl AtelierDomainProvenance {
+    #[must_use]
+    pub fn provenance(self) -> Provenance {
+        ProvenanceSource::provenance(self)
+    }
+}
+
+pub const ATELIER_DOMAIN_PROVENANCE: AtelierDomainProvenance = AtelierDomainProvenance;
 
 /// Structured record payload for domain-pack records that are still
 /// represented as JSON-shaped domain data.

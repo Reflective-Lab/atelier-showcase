@@ -13,6 +13,22 @@
 
 use std::sync::Arc;
 
+#[derive(Clone, Copy, Debug)]
+struct AtelierShowcaseProvenance;
+
+impl converge_kernel::ProvenanceSource for AtelierShowcaseProvenance {
+    fn as_str(&self) -> &'static str {
+        "atelier-showcase.debate-loop"
+    }
+}
+
+const ATELIER_SHOWCASE_PROVENANCE: AtelierShowcaseProvenance = AtelierShowcaseProvenance;
+
+fn atelier_showcase_provenance() -> Provenance {
+    converge_kernel::ProvenanceSource::provenance(ATELIER_SHOWCASE_PROVENANCE)
+}
+
+use converge_kernel::Provenance;
 use converge_kernel::{AgentEffect, Context, ContextKey, Engine, ProposedFact, Suggestor};
 use converge_pack::{DiagnosticPayload, FactPayload, TextPayload};
 use converge_provider::{
@@ -89,7 +105,7 @@ fn diagnostic_effect(
         ContextKey::Diagnostic,
         id.into(),
         DiagnosticPayload::new(source, message.into()),
-        "atelier-showcase.debate-loop",
+        atelier_showcase_provenance(),
     ))
 }
 
@@ -107,8 +123,8 @@ impl Suggestor for LlmPlannerAgent {
         "llm_planner"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.debate-loop"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -177,7 +193,7 @@ impl Suggestor for LlmPlannerAgent {
                         intent: intent.to_string(),
                         addressed_challenges: 0,
                     },
-                    "llm_planner",
+                    self.provenance(),
                 )
                 .with_confidence(0.5)
                 .adjust_confidence(CONFIDENCE_STEP_MAJOR),
@@ -231,7 +247,7 @@ impl Suggestor for LlmPlannerAgent {
                         intent: original_intent,
                         addressed_challenges: challenges.len(),
                     },
-                    "llm_planner",
+                    self.provenance(),
                 )
                 .with_confidence(0.7)
                 .adjust_confidence(CONFIDENCE_STEP_MEDIUM),
@@ -254,8 +270,8 @@ impl Suggestor for LlmSkepticAgent {
         "llm_skeptic"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.debate-loop"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -377,7 +393,7 @@ impl Suggestor for LlmSkepticAgent {
                     critique,
                     approved: is_approved,
                 },
-                "llm_skeptic",
+                self.provenance(),
             )
             .with_confidence(0.75)
             .adjust_confidence(if is_approved {
@@ -435,7 +451,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ContextKey::Seeds,
         "intent-1",
         TextPayload::new(intent),
-        "debate-loop-input",
+        atelier_showcase_provenance(),
     ));
 
     match engine.run(ctx).await {

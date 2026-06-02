@@ -41,8 +41,8 @@ impl Suggestor for PromiseCreatorAgent {
         "promise_creator"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -66,7 +66,6 @@ impl Suggestor for PromiseCreatorAgent {
         for trigger in triggers {
             if crate::payload_contains(trigger, "deal.closed_won") {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", PROMISE_PREFIX, trigger.id()),
                     serde_json::json!({
@@ -94,8 +93,8 @@ impl Suggestor for ScopeExtractorAgent {
         "scope_extractor"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -117,7 +116,6 @@ impl Suggestor for ScopeExtractorAgent {
                 && crate::payload_contains(promise, "\"state\":\"draft\"")
             {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", SCOPE_PREFIX, promise.id()),
                     serde_json::json!({
@@ -145,8 +143,8 @@ impl Suggestor for WorkBreakdownAgent {
         "work_breakdown"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -172,7 +170,6 @@ impl Suggestor for WorkBreakdownAgent {
         for item in proposals {
             if item.id().starts_with(SCOPE_PREFIX) {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{}1:{}", TASK_PREFIX, item.id()),
                     serde_json::json!({
@@ -200,8 +197,8 @@ impl Suggestor for BlockerDetectorAgent {
         "blocker_detector"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -223,7 +220,6 @@ impl Suggestor for BlockerDetectorAgent {
                 && crate::payload_contains(task, "\"blocked\":true")
             {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", BLOCKER_PREFIX, task.id()),
                     serde_json::json!({
@@ -251,8 +247,8 @@ impl Suggestor for BlockerRouterAgent {
         "blocker_router"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -274,7 +270,6 @@ impl Suggestor for BlockerRouterAgent {
                 && crate::payload_contains(blocker, "\"state\":\"raised\"")
             {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{}routed:{}", BLOCKER_PREFIX, blocker.id()),
                     serde_json::json!({
@@ -302,8 +297,8 @@ impl Suggestor for RiskAssessorAgent {
         "risk_assessor"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -342,7 +337,6 @@ impl Suggestor for RiskAssessorAgent {
                 };
 
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Evaluations,
                     format!("{}{}", RISK_PREFIX, promise.id()),
                     serde_json::json!({
@@ -370,8 +364,8 @@ impl Suggestor for StatusAggregatorAgent {
         "status_aggregator"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -406,8 +400,8 @@ impl Suggestor for AcceptanceRequestorAgent {
         "acceptance_requestor"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -429,7 +423,6 @@ impl Suggestor for AcceptanceRequestorAgent {
                 && crate::payload_contains(promise, "\"state\":\"review\"")
             {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", ACCEPTANCE_PREFIX, promise.id()),
                     serde_json::json!({
@@ -456,8 +449,8 @@ impl Suggestor for PostmortemSchedulerAgent {
         "postmortem_scheduler"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -480,7 +473,6 @@ impl Suggestor for PostmortemSchedulerAgent {
                 && crate::payload_contains(promise, "\"state\":\"completed\"")
             {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", POSTMORTEM_PREFIX, promise.id()),
                     serde_json::json!({

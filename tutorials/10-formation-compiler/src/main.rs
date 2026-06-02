@@ -3,6 +3,7 @@
 
 //! Formation Compiler — compile the vendor-selection F3 proof wedge.
 
+use converge_kernel::Provenance;
 use converge_kernel::formation::{
     FormationTemplateQuery, ProfileSnapshot, SuggestorCapability, SuggestorRole,
 };
@@ -18,6 +19,21 @@ use organism_runtime::{
     Runtime, Seed, SuggestorDescriptor, vendor_selection_formation_catalog,
 };
 use uuid::Uuid;
+
+#[derive(Clone, Copy, Debug)]
+struct AtelierShowcaseProvenance;
+
+impl converge_kernel::ProvenanceSource for AtelierShowcaseProvenance {
+    fn as_str(&self) -> &'static str {
+        "atelier-showcase.formation-compiler"
+    }
+}
+
+const ATELIER_SHOWCASE_PROVENANCE: AtelierShowcaseProvenance = AtelierShowcaseProvenance;
+
+fn atelier_showcase_provenance() -> Provenance {
+    converge_kernel::ProvenanceSource::provenance(ATELIER_SHOWCASE_PROVENANCE)
+}
 
 #[tokio::main]
 async fn main() {
@@ -74,7 +90,7 @@ async fn main() {
         key: ContextKey::Seeds,
         id: "vendor-selection-f3".into(),
         content: "evaluate AI automation vendors for claims and invoice exceptions".to_string(),
-        provenance: "tutorial-fixture".to_string(),
+        provenance: atelier_showcase_provenance(),
     };
 
     let record = Runtime::new()
@@ -272,8 +288,8 @@ impl Suggestor for FixtureSuggestor {
         self.name
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.formation-compiler"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -289,7 +305,7 @@ impl Suggestor for FixtureSuggestor {
             self.output,
             format!("{}-fixture-output", self.name),
             TextPayload::new(format!("{} fixture output", self.name)),
-            self.name,
+            self.provenance(),
         ))
     }
 }

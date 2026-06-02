@@ -14,7 +14,7 @@ The architecture should be:
 ```text
 converge-storage ObjectStore contract
   -> local InMemory / file store for development
-  -> Runway / GCS-backed object store for cloud durability
+  -> Runtime Runway / GCS-backed object store for cloud durability
   -> JSON or Parquet review-profile objects
   -> Polars / Prism analysis
   -> Converge facts, Arbiter decisions, Ferrox allocations
@@ -25,7 +25,7 @@ converge-storage ObjectStore contract
 - `converge-storage` is the persistence contract. It should let the same
   scenario switch between local development storage and a cloud object store
   without changing the domain workflow.
-- Runway should provide the production Google Cloud Storage implementation and
+- Runtime Runway should provide the production Google Cloud Storage implementation and
   deployment-time configuration. atelier should not hard-code a cloud backend.
 - Polars is the data-frame / columnar compute layer. It is not the durable
   storage boundary.
@@ -48,7 +48,7 @@ example `SecReviewMemoryStore`:
 - feed those rows to Prism `SimilarityPack` or `RankingPack`;
 - keep local development on `object_store::memory::InMemory` through
   `converge-storage`;
-- switch to Runway/GCS by configuration when the showcase runs in cloud mode.
+- switch to Runtime Runway/GCS by configuration when the showcase runs in cloud mode.
 
 The stored profile is memory for a decision, not a mock. If the current profile
 comes from a `REAL LIVE` SEC EDGAR call, the profile must preserve that

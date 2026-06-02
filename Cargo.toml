@@ -52,7 +52,7 @@ members = [
 ]
 
 [workspace.package]
-version = "1.0.0"
+version = "1.0.1"
 edition = "2024"
 rust-version = "1.94.0"
 license = "MIT"
@@ -63,20 +63,20 @@ repository = "https://github.com/Reflective-Lab/atelier-showcase"
 atelier-domain = { package = "converge-atelier-domain", path = "crates/atelier-domain" }
 
 # Converge platform
-converge-pack = "3.9.1"
-converge-core = "3.9.1"
-converge-kernel = "3.9.1"
-converge-model = "3.9.1"
-arbiter = { package = "converge-arbiter-policy", path = "../mosaic-extensions/arbiter-policy/crates/arbiter", version = "2.0.1" }
-ferrox = { package = "converge-ferrox-solver", path = "../mosaic-extensions/ferrox-solvers/crates/ferrox", version = "0.7.1" }
-embassy-sec-edgar = { package = "converge-embassy-sec-edgar", path = "../mosaic-extensions/embassy-ports/crates/sec-edgar", version = "0.1.0" }
-converge-provider = "3.9.1"
-converge-optimization = "3.9.1"
-converge-runtime = "3.9.1"
-converge-experience = "3.9.1"
-converge-protocol = "3.9.1"
-converge-client = "3.9.1"
-converge-storage = { version = "3.9.1", default-features = false }
+converge-pack = "3.9.2"
+converge-core = "3.9.2"
+converge-kernel = "3.9.2"
+converge-model = "3.9.2"
+arbiter = { package = "converge-arbiter-policy", path = "../mosaic-extensions/arbiter-policy/crates/arbiter", version = "2.0.2" }
+ferrox = { package = "converge-ferrox-solver", path = "../mosaic-extensions/ferrox-solvers/crates/ferrox", version = "0.7.2" }
+embassy-sec-edgar = { package = "converge-embassy-sec-edgar", path = "../mosaic-extensions/embassy-ports/crates/sec-edgar", version = "1.3.1" }
+converge-provider = "3.9.2"
+converge-optimization = "3.9.2"
+converge-runtime = "3.9.2"
+converge-experience = "3.9.2"
+converge-protocol = "3.9.2"
+converge-client = "3.9.2"
+converge-storage = { version = "3.9.2", default-features = false }
 
 # Organism platform (also patched while unreleased)
 organism-pack = "1.9.0"
@@ -142,35 +142,27 @@ codegen-units = 1
 # them. Drop these patches in the same move that drops the
 # axiom-truth patch.
 #
-# converge-prism-analytics — NOT patched. Local source has diverged
-# past published 2.0.1 (added a `UnitFraction` newtype that
-# organism-planning 1.9.1 does not yet consume); atelier resolves
-# through the same crates.io 2.0.1 organism does. Re-add the patch
-# when both ends move to the next prism line.
-[patch.crates-io]
-organism-pack = { path = "../bedrock-platform/organism/crates/pack" }
-organism-runtime = { path = "../bedrock-platform/organism/crates/runtime" }
-organism-intent = { path = "../bedrock-platform/organism/crates/intent" }
-organism-planning = { path = "../bedrock-platform/organism/crates/planning" }
-organism-adversarial = { path = "../bedrock-platform/organism/crates/adversarial" }
-organism-simulation = { path = "../bedrock-platform/organism/crates/simulation" }
-organism-learning = { path = "../bedrock-platform/organism/crates/learning" }
-organism-catalog = { path = "../bedrock-platform/organism/crates/catalog" }
-organism-catalog-seed = { path = "../bedrock-platform/organism/crates/catalog-seed" }
-organism-dynamics = { path = "../bedrock-platform/organism/crates/dynamics" }
-# Dropped 2026-05-19: organism-notes / organism-intelligence are not
-# actually reached through the atelier dep graph (axiom-truth pulls
-# pack/runtime/intent, scenarios use catalog/dynamics, etc.) and
-# patching them produces an "unused patch" warning on every build.
-# Re-add when something on the path actually depends on them.
-axiom-truth = { path = "../bedrock-platform/axiom" }
+# converge-prism-analytics is path-patched with the rest of the stack because
+# Converge 3.9's typed provenance contract changed the Suggestor trait. The
+# published 2.0.1 crate still returns string provenance.
 
-# CRM-Helm scenario (Phase 6b) pulls application-kernel and application-storage
-# from helms, which in turn depend on converge-* via local path.  Redirect the
-# crates.io 3.9.1 references to the same local head so both sides unify on a
-# single copy — same version, no graph fork.  Drop these four lines once
-# application-storage is published standalone (without local path converge deps).
-converge-core        = { path = "../bedrock-platform/converge/crates/core" }
-converge-experience  = { path = "../bedrock-platform/converge/crates/experience" }
-converge-pack        = { path = "../bedrock-platform/converge/crates/pack" }
-converge-kernel      = { path = "../bedrock-platform/converge/crates/kernel" }
+[patch.crates-io]
+converge-pack         = { path = "../bedrock-platform/converge/crates/pack" }
+converge-kernel       = { path = "../bedrock-platform/converge/crates/kernel" }
+converge-core         = { path = "../bedrock-platform/converge/crates/core" }
+converge-model        = { path = "../bedrock-platform/converge/crates/model" }
+converge-optimization = { path = "../bedrock-platform/converge/crates/optimization" }
+converge-runtime      = { path = "../bedrock-platform/converge/crates/runtime" }
+converge-experience   = { path = "../bedrock-platform/converge/crates/experience" }
+converge-provider     = { path = "../bedrock-platform/converge/crates/provider" }
+organism-pack         = { path = "../bedrock-platform/organism/crates/pack" }
+organism-catalog      = { path = "../bedrock-platform/organism/crates/catalog" }
+organism-catalog-seed = { path = "../bedrock-platform/organism/crates/catalog-seed" }
+organism-intent       = { path = "../bedrock-platform/organism/crates/intent" }
+organism-planning     = { path = "../bedrock-platform/organism/crates/planning" }
+organism-adversarial  = { path = "../bedrock-platform/organism/crates/adversarial" }
+organism-simulation   = { path = "../bedrock-platform/organism/crates/simulation" }
+organism-learning     = { path = "../bedrock-platform/organism/crates/learning" }
+organism-runtime      = { path = "../bedrock-platform/organism/crates/runtime" }
+organism-dynamics     = { path = "../bedrock-platform/organism/crates/dynamics" }
+converge-prism-analytics = { path = "../mosaic-extensions/prism-analytics/crates/prism" }

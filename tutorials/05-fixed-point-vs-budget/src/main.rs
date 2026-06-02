@@ -13,6 +13,22 @@
 
 use std::collections::{BTreeSet, HashMap};
 
+#[derive(Clone, Copy, Debug)]
+struct AtelierShowcaseProvenance;
+
+impl converge_kernel::ProvenanceSource for AtelierShowcaseProvenance {
+    fn as_str(&self) -> &'static str {
+        "atelier-showcase.fixed-point-vs-budget"
+    }
+}
+
+const ATELIER_SHOWCASE_PROVENANCE: AtelierShowcaseProvenance = AtelierShowcaseProvenance;
+
+fn atelier_showcase_provenance() -> Provenance {
+    converge_kernel::ProvenanceSource::provenance(ATELIER_SHOWCASE_PROVENANCE)
+}
+
+use converge_kernel::Provenance;
 use converge_kernel::{
     AgentEffect, Budget, Context, ContextFact, ContextKey, ContextState, ConvergeError,
     ConvergeResult, Engine, FactPayload, Suggestor, TextPayload,
@@ -114,8 +130,8 @@ impl Suggestor for ArtifactSurveySuggestor {
         "artifact-survey"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.fixed-point-vs-budget"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -157,7 +173,7 @@ impl Suggestor for ArtifactSurveySuggestor {
                     ContextKey::Signals,
                     signal_id(&request.root, &request.target),
                     signal,
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(0.93),
             );
@@ -175,8 +191,8 @@ impl Suggestor for FrontierPlannerSuggestor {
         "frontier-planner"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.fixed-point-vs-budget"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -222,7 +238,7 @@ impl Suggestor for FrontierPlannerSuggestor {
                     ContextKey::Hypotheses,
                     choice_id(&root, &candidate.target),
                     choice,
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(0.82),
             );
@@ -231,7 +247,7 @@ impl Suggestor for FrontierPlannerSuggestor {
                     ContextKey::Strategies,
                     request_id(&root, &candidate.target),
                     request,
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(0.88),
             );
@@ -249,8 +265,8 @@ impl Suggestor for SummarySuggestor {
         "fixed-point-summary"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.fixed-point-vs-budget"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -280,7 +296,7 @@ impl Suggestor for SummarySuggestor {
                     ContextKey::Diagnostic,
                     summary_id(&root),
                     summary,
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(0.96),
             );
@@ -355,7 +371,7 @@ fn seed_root(root: &str) -> ContextState {
             ContextKey::Seeds,
             root_id(root),
             root,
-            "example:fixed-point-vs-budget",
+            atelier_showcase_provenance(),
         )
         .expect("should stage root seed");
     context

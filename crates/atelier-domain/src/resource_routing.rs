@@ -79,8 +79,8 @@ impl Suggestor for TaskRetrievalAgent {
         "TaskRetrievalAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -119,7 +119,6 @@ impl Suggestor for TaskRetrievalAgent {
 
             for (i, task) in tasks.iter().enumerate() {
                 facts.push(crate::text(
-                    self.name(),
                     ContextKey::Signals,
                     format!("task:{}", i + 1),
                     "resource_routing.task",
@@ -135,14 +134,12 @@ impl Suggestor for TaskRetrievalAgent {
         } else {
             // Default tasks
             facts.push(crate::text(
-                self.name(),
                 ContextKey::Signals,
                 "task:1",
                 "resource_routing.task",
                 "Task 1: Delivery A | Priority: High | Duration: 30 min",
             ));
             facts.push(crate::text(
-                self.name(),
                 ContextKey::Signals,
                 "task:2",
                 "resource_routing.task",
@@ -166,8 +163,8 @@ impl Suggestor for ResourceRetrievalAgent {
         "ResourceRetrievalAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -211,7 +208,6 @@ impl Suggestor for ResourceRetrievalAgent {
 
             for (i, resource) in resources.iter().enumerate() {
                 facts.push(crate::text(
-                    self.name(),
                     ContextKey::Signals,
                     format!("resource:{}", i + 1),
                     "resource_routing.resource",
@@ -226,14 +222,12 @@ impl Suggestor for ResourceRetrievalAgent {
         } else {
             // Default resources
             facts.push(crate::text(
-                self.name(),
                 ContextKey::Signals,
                 "resource:1",
                 "resource_routing.resource",
                 "Resource 1: Vehicle 1 | Capacity: 3 tasks | Status: Available",
             ));
             facts.push(crate::text(
-                self.name(),
                 ContextKey::Signals,
                 "resource:2",
                 "resource_routing.resource",
@@ -257,8 +251,8 @@ impl Suggestor for ConstraintValidationAgent {
         "ConstraintValidationAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -297,7 +291,6 @@ impl Suggestor for ConstraintValidationAgent {
 
         // Define capacity constraints
         facts.push(crate::text(
-            self.name(),
             ContextKey::Constraints,
             "constraint:capacity",
             "resource_routing.constraint",
@@ -308,7 +301,6 @@ impl Suggestor for ConstraintValidationAgent {
 
         // Define objective
         facts.push(crate::text(
-            self.name(),
             ContextKey::Constraints,
             "constraint:objective",
             "resource_routing.constraint",
@@ -317,7 +309,6 @@ impl Suggestor for ConstraintValidationAgent {
 
         // Define feasibility requirement
         facts.push(crate::text(
-            self.name(),
             ContextKey::Constraints,
             "constraint:feasibility",
             "resource_routing.constraint",
@@ -341,8 +332,8 @@ impl Suggestor for SolverAgent {
         "SolverAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -408,7 +399,6 @@ impl Suggestor for SolverAgent {
                     .unwrap_or(2);
 
                 facts.push(crate::text(
-                    self.name(),
                     ContextKey::Strategies,
                     format!("assignment:{assignment_id}"),
                     "resource_routing.assignment",
@@ -431,7 +421,6 @@ impl Suggestor for SolverAgent {
         // If no assignments were made, create a fallback
         if facts.is_empty() {
             facts.push(crate::text(
-                self.name(),
                 ContextKey::Strategies,
                 "assignment:infeasible",
                 "resource_routing.assignment",
@@ -455,8 +444,8 @@ impl Suggestor for FeasibilityAgent {
         "FeasibilityAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -499,7 +488,6 @@ impl Suggestor for FeasibilityAgent {
                 let (score, rationale) = evaluate_assignment(assignment, i, all_tasks_assigned);
 
                 facts.push(crate::text(
-                    self.name(),
                     ContextKey::Evaluations,
                     format!(
                         "eval:{}",
@@ -523,7 +511,6 @@ impl Suggestor for FeasibilityAgent {
             }
         } else {
             facts.push(crate::text(
-                self.name(),
                 ContextKey::Evaluations,
                 "eval:infeasible",
                 "resource_routing.feasibility",
@@ -536,7 +523,6 @@ impl Suggestor for FeasibilityAgent {
         // Ensure at least one evaluation
         if facts.is_empty() {
             facts.push(crate::text(
-                self.name(),
                 ContextKey::Evaluations,
                 "eval:unknown",
                 "resource_routing.feasibility",

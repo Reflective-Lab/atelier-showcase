@@ -120,8 +120,8 @@ impl Suggestor for AskConvergeAgent {
         "ask_converge"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -148,7 +148,7 @@ impl Suggestor for AskConvergeAgent {
         }
 
         let answer = build_answer(&question, &sources);
-        let fact = crate::proposal(self.name(), ContextKey::Strategies, ANSWER_ID, answer);
+        let fact = crate::proposal(ContextKey::Strategies, ANSWER_ID, answer);
 
         AgentEffect::with_proposal(fact)
     }
@@ -277,7 +277,7 @@ mod tests {
             ContextKey::Strategies,
             ANSWER_ID,
             payload,
-            crate::ATELIER_DOMAIN_PROVENANCE,
+            crate::ATELIER_DOMAIN_PROVENANCE.provenance(),
         ))
         .unwrap();
         let ctx = tokio::runtime::Runtime::new()

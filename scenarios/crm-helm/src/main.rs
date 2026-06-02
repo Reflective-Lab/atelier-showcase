@@ -2,7 +2,7 @@
 
 //! CRM Helm Showcase
 //!
-//! Demonstrates how Runway + Helm modules compose into a thin app binary.
+//! Demonstrates how Runtime Runway + Helm modules compose into a thin app binary.
 //! Phase 6b wires the 7 CRM gRPC modules extracted from helms/application-server.
 
 mod conversations;

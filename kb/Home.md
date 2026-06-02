@@ -9,7 +9,7 @@ Knowledge base for the `atelier` Converge extension.
 **Standard:** Every release follows the
 [Extension Release Checklist](https://github.com/Reflective-Lab/converge/blob/main/kb/Standards/Extension%20Release%20Checklist.md).
 
-**For scenario authors:** read `~/dev/reflective/stack/mosaic-extensions/kb/Capability Matrix.md` *before* designing a new showcase. atelier exists to show specificity — every scenario should name the exact Mosaic functions it pulls and why a generic substitute (LLM call, hand-rolled `if`, single solver) is insufficient. Showcases that don't name specific Mosaic capabilities are off-mission.
+**For scenario authors:** read `~/dev/reflective/mosaic-extensions/kb/Capability Matrix.md` *before* designing a new showcase. atelier exists to show specificity — every scenario should name the exact Mosaic functions it pulls and why a generic substitute (LLM call, hand-rolled `if`, single solver) is insufficient. Showcases that don't name specific Mosaic capabilities are off-mission.
 
 **No-theatre rule:** a scenario is only ambitious if it changes the assurance
 story. Module count is not enough. The README must name the customer outcome,
@@ -23,7 +23,7 @@ pure Rust product logic. `CONTRACT-SHAPE`, `SIMULATED`, and fake-backed `MIXED`
 runs belong in `arena-tests` unless explicitly tracked as migration debt.
 Importing a real Mosaic crate is not enough; the declaration must name the
 actual backend that decides the result. Canonical version of this rule:
-[`~/dev/reflective/stack/mosaic-extensions/kb/Standards/Real-by-Default Connections.md`](../../mosaic-extensions/kb/Standards/Real-by-Default%20Connections.md)
+[`~/dev/reflective/mosaic-extensions/kb/Standards/Real-by-Default Connections.md`](../../stack/mosaic-extensions/kb/Standards/Real-by-Default%20Connections.md)
 — REAL default, `--mock-ok` opt-in for CLI scenarios, loud failure on missing
 API key. Binding on every v1.1.0 scenario.
 

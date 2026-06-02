@@ -51,8 +51,8 @@ impl Suggestor for EvalExecutionAgent {
         &self.name
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -118,7 +118,6 @@ impl Suggestor for EvalExecutionAgent {
                 // Include agent name in eval ID for traceability
                 let id = format!("eval:{}:{}", result.eval_name, self.name);
                 crate::record(
-                    self.name(),
                     ContextKey::Evaluations,
                     id,
                     "eval.result",

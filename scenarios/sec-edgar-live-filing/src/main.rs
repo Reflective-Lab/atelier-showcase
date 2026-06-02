@@ -1,5 +1,20 @@
 use std::{sync::Arc, time::Instant};
 
+#[derive(Clone, Copy, Debug)]
+struct AtelierShowcaseProvenance;
+
+impl converge_kernel::ProvenanceSource for AtelierShowcaseProvenance {
+    fn as_str(&self) -> &'static str {
+        "atelier-sec-edgar-risk-review"
+    }
+}
+
+const ATELIER_SHOWCASE_PROVENANCE: AtelierShowcaseProvenance = AtelierShowcaseProvenance;
+
+fn atelier_showcase_provenance() -> Provenance {
+    converge_kernel::ProvenanceSource::provenance(ATELIER_SHOWCASE_PROVENANCE)
+}
+
 use anyhow::{Context, Result, ensure};
 use arbiter::{ComplianceConstraintPayload, ComplianceDocumentPayload, ComplianceGateSuggestor};
 use async_trait::async_trait;
@@ -7,6 +22,7 @@ use atelier_domain::sec_risk::{
     HEADING_COUNT_REVIEW_RULE_ID, SEC_RISK_FRAMEWORK, SecRiskPolicyPack,
 };
 use clap::Parser;
+use converge_kernel::Provenance;
 use converge_kernel::{
     AgentEffect, Budget, Context as ConvergeContext, ContextState, ConvergeResult, Engine,
     ProposedFact,
@@ -241,7 +257,7 @@ async fn main() -> Result<()> {
             "Step 6: persist recurring review profiles through converge-storage and compare them with Prism."
         );
         println!(
-            "        Local development uses an in-memory ObjectStore; Runway can swap the same contract to GCS."
+            "        Local development uses an in-memory ObjectStore; Runtime Runway can swap the same contract to GCS."
         );
     }
 
@@ -479,7 +495,7 @@ async fn run_converge(request: SecEdgarRequest) -> Result<ConvergeResult> {
         ContextKey::Seeds,
         "sec-edgar-request:apple-2025-10k",
         request,
-        "atelier-sec-edgar-live-filing",
+        atelier_showcase_provenance(),
     ))?;
 
     Ok(engine.run(ctx).await?)
@@ -499,7 +515,7 @@ async fn run_sec_filing_converge(target: FilingTarget) -> Result<ConvergeResult>
         ContextKey::Seeds,
         format!("sec-edgar-request:{}", target.accession),
         target.request()?,
-        "atelier-sec-edgar-recurring-analysis",
+        atelier_showcase_provenance(),
     ))?;
 
     Ok(engine.run(ctx).await?)
@@ -632,7 +648,7 @@ async fn run_prism_similarity(profiles: &[SecReviewProfile]) -> Result<PackPlanP
         ContextKey::Seeds,
         "prism-similarity:sec-review-profiles",
         PackInputPayload::new("similarity", input),
-        "atelier-sec-recurring-analysis",
+        atelier_showcase_provenance(),
     ))?;
 
     let result = engine.run(ctx).await?;
@@ -815,8 +831,8 @@ impl Suggestor for SecRiskReviewDocumentEmitter {
         &[ContextKey::Hypotheses]
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-sec-edgar-risk-review"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn accepts(&self, ctx: &dyn ConvergeContext) -> bool {
@@ -888,7 +904,7 @@ async fn run_review_solver(heading_count: u64) -> Result<MipPlan> {
         ContextKey::Seeds,
         format!("mip-request:{REVIEW_MIP_REQUEST_ID}"),
         build_review_mip_request(heading_count),
-        "atelier-sec-edgar-risk-review-solver",
+        atelier_showcase_provenance(),
     ))?;
 
     let result = engine.run(ctx).await?;
@@ -1165,7 +1181,7 @@ fn print_recurring_analysis(analysis: &RecurringAnalysis) {
         "  storage_backend: {} (LOCAL REAL)",
         analysis.storage_backend
     );
-    println!("  cloud_swap: Runway/GCS can replace the backend by configuration");
+    println!("  cloud_swap: Runtime Runway/GCS can replace the backend by configuration");
     println!("  time_series_db: not used");
     println!("  profiles_loaded: {}", analysis.profile_count);
     println!("  current_profile: {}", analysis.current_profile_id);

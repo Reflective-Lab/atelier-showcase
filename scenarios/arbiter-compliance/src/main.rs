@@ -48,6 +48,19 @@ use converge_kernel::{Budget as ConvergeBudget, ContextState, Engine, ProposedFa
 use converge_pack::ContextKey;
 use serde_json::Value;
 
+#[derive(Clone, Copy, Debug)]
+struct ScenarioProvenance;
+
+impl converge_pack::ProvenanceSource for ScenarioProvenance {
+    fn as_str(&self) -> &'static str {
+        "atelier-arbiter-compliance"
+    }
+}
+
+fn scenario_provenance() -> converge_pack::Provenance {
+    converge_pack::ProvenanceSource::provenance(ScenarioProvenance)
+}
+
 struct Document {
     id: &'static str,
     description: &'static str,
@@ -82,7 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ContextKey::Strategies,
             doc.id,
             ComplianceDocumentPayload { fields: field_map },
-            "atelier-arbiter-compliance",
+            scenario_provenance(),
         ))
         .map_err(|e| format!("seed {}: {e:?}", doc.id))?;
     }

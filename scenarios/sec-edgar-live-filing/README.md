@@ -101,11 +101,11 @@ archive for accession `0000320193-24-000123`.
 
 ## Capability Matrix Links
 
-- [Embassy named-source observation](../../../mosaic-extensions/kb/Capability%20Matrix.md#embassy--named-source-observation)
-- [`embassy-sec-edgar`](../../../mosaic-extensions/kb/Capability%20Matrix.md#embassy--named-source-observation)
-- [Arbiter policy as code](../../../mosaic-extensions/kb/Capability%20Matrix.md#arbiter--policy-as-code)
-- [Ferrox optimization](../../../mosaic-extensions/kb/Capability%20Matrix.md#ferrox--optimization)
-- [Prism analytics](../../../mosaic-extensions/kb/Capability%20Matrix.md#prism--analytics)
+- [Embassy named-source observation](../../../stack/mosaic-extensions/kb/Capability%20Matrix.md#embassy--named-source-observation)
+- [`embassy-sec-edgar`](../../../stack/mosaic-extensions/kb/Capability%20Matrix.md#embassy--named-source-observation)
+- [Arbiter policy as code](../../../stack/mosaic-extensions/kb/Capability%20Matrix.md#arbiter--policy-as-code)
+- [Ferrox optimization](../../../stack/mosaic-extensions/kb/Capability%20Matrix.md#ferrox--optimization)
+- [Prism analytics](../../../stack/mosaic-extensions/kb/Capability%20Matrix.md#prism--analytics)
 
 ## Why Generic Substitutes Fail
 
@@ -146,5 +146,5 @@ risk headings with breadth and senior-review constraints. The memory-backed
 review gap is now partially resolved: the scenario writes current and prior
 review profiles into a `converge-storage` in-memory `ObjectStore`, reloads the
 bounded history set, and runs Prism `SimilarityPack` through Converge. The next
-larger gap is durable Runway/GCS-backed recurrence and broader history beyond a
+larger gap is durable Runtime Runway/GCS-backed recurrence and broader history beyond a
 single prior-year comparison.

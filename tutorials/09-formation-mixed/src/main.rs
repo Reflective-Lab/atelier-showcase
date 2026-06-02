@@ -10,6 +10,7 @@
 //! All converge in ONE Engine run. Same contract, same governance.
 
 use arbiter::{engine::PolicyEngine, suggestor::PolicyGateSuggestor};
+use converge_kernel::Provenance;
 use converge_kernel::{
     AgentEffect, Budget, Context, ContextKey, ContextState, Engine, ProposedFact, Suggestor,
 };
@@ -17,6 +18,21 @@ use converge_optimization::packs::budget_allocation::BudgetAllocationPack;
 use converge_pack::{FactPayload, PackInputPayload, PackPlanPayload, PackSuggestor, TextPayload};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
+
+#[derive(Clone, Copy, Debug)]
+struct AtelierShowcaseProvenance;
+
+impl converge_kernel::ProvenanceSource for AtelierShowcaseProvenance {
+    fn as_str(&self) -> &'static str {
+        "atelier-showcase.formation-mixed"
+    }
+}
+
+const ATELIER_SHOWCASE_PROVENANCE: AtelierShowcaseProvenance = AtelierShowcaseProvenance;
+
+fn atelier_showcase_provenance() -> Provenance {
+    converge_kernel::ProvenanceSource::provenance(ATELIER_SHOWCASE_PROVENANCE)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
@@ -42,8 +58,8 @@ impl Suggestor for IntentSeeder {
     fn name(&self) -> &str {
         "intent-seeder"
     }
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.formation-mixed"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
     fn dependencies(&self) -> &[ContextKey] {
         &[]
@@ -66,7 +82,7 @@ impl Suggestor for IntentSeeder {
             ContextKey::Seeds,
             "budget-intent",
             PackInputPayload::new("budget-allocation", problem),
-            "organism",
+            self.provenance(),
         ))
     }
 }
@@ -86,8 +102,8 @@ impl Suggestor for ReasoningAgent {
     fn name(&self) -> &str {
         "llm-reasoning"
     }
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.formation-mixed"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
     fn dependencies(&self) -> &[ContextKey] {
         // Depends on Constraints — fires after policy has evaluated
@@ -123,7 +139,7 @@ impl Suggestor for ReasoningAgent {
                 ContextKey::Evaluations,
                 format!("eval-{}", strategy.id()),
                 evaluation,
-                "llm-reasoning",
+                self.provenance(),
             ));
         }
         AgentEffect::with_proposals(proposals)

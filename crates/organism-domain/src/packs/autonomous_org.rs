@@ -4,10 +4,11 @@
 //! `delegation:`, `risk_control:`
 
 use crate::{
-    fact_json_of,
+    ORGANISM_DOMAIN_PROVENANCE, fact_json_of,
     pack::{AgentMeta, ContextKey, InvariantClass, InvariantMeta},
     record,
 };
+use converge_pack::{Provenance, ProvenanceSource};
 use organism_pack::{
     AdmissionResult, AdversarialReview, Challenge, DimensionResult, FeasibilityAssessment,
     FeasibilityDimension, Sample, Severity, SimulationDimension, SimulationRecommendation,
@@ -164,8 +165,8 @@ impl converge_pack::Suggestor for SpendAdmissionSuggestor {
         "spend_admission"
     }
 
-    fn provenance(&self) -> &'static str {
-        "organism-domain"
+    fn provenance(&self) -> Provenance {
+        ORGANISM_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[converge_pack::ContextKey] {
@@ -232,7 +233,7 @@ impl converge_pack::Suggestor for SpendAdmissionSuggestor {
                     "admission_result",
                     serde_json::to_value(&admission).unwrap_or_default(),
                 ),
-                "spend_admission",
+                ORGANISM_DOMAIN_PROVENANCE.provenance(),
             )
             .with_confidence(1.0),
         ];
@@ -243,7 +244,7 @@ impl converge_pack::Suggestor for SpendAdmissionSuggestor {
                     converge_pack::ContextKey::Signals,
                     "expense:parsed",
                     record("expense", expense),
-                    "spend_admission",
+                    ORGANISM_DOMAIN_PROVENANCE.provenance(),
                 )
                 .with_confidence(1.0),
             );
@@ -264,8 +265,8 @@ impl converge_pack::Suggestor for ApprovalRoutingSuggestor {
         "approval_router"
     }
 
-    fn provenance(&self) -> &'static str {
-        "organism-domain"
+    fn provenance(&self) -> Provenance {
+        ORGANISM_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[converge_pack::ContextKey] {
@@ -321,7 +322,7 @@ impl converge_pack::Suggestor for ApprovalRoutingSuggestor {
                 converge_pack::ContextKey::Strategies,
                 "approval:plan",
                 record("approval_plan", plan),
-                "approval_router",
+                ORGANISM_DOMAIN_PROVENANCE.provenance(),
             )
             .with_confidence(0.9),
         )
@@ -340,8 +341,8 @@ impl converge_pack::Suggestor for ApprovalPolicySkepticSuggestor {
         "approval_policy_skeptic"
     }
 
-    fn provenance(&self) -> &'static str {
-        "organism-domain"
+    fn provenance(&self) -> Provenance {
+        ORGANISM_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[converge_pack::ContextKey] {
@@ -418,7 +419,7 @@ impl converge_pack::Suggestor for ApprovalPolicySkepticSuggestor {
                 converge_pack::ContextKey::Evaluations,
                 "adversarial:review",
                 record("adversarial_review", review.summary()),
-                "approval_policy_skeptic",
+                ORGANISM_DOMAIN_PROVENANCE.provenance(),
             )
             .with_confidence(review.confidence()),
         )
@@ -466,8 +467,8 @@ impl converge_pack::Suggestor for BudgetSimulationSuggestor {
         "budget_simulation"
     }
 
-    fn provenance(&self) -> &'static str {
-        "organism-domain"
+    fn provenance(&self) -> Provenance {
+        ORGANISM_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[converge_pack::ContextKey] {
@@ -512,7 +513,7 @@ impl converge_pack::Suggestor for BudgetSimulationSuggestor {
                             "blockers": blocked.get("blockers"),
                         }),
                     ),
-                    "budget_simulation",
+                    ORGANISM_DOMAIN_PROVENANCE.provenance(),
                 )
                 .with_confidence(0.95),
             );
@@ -526,7 +527,7 @@ impl converge_pack::Suggestor for BudgetSimulationSuggestor {
                 converge_pack::ContextKey::Proposals,
                 "decision:expense",
                 record("spend_decision", budget_decision_payload(&budget_decision)),
-                "budget_simulation",
+                ORGANISM_DOMAIN_PROVENANCE.provenance(),
             )
             .with_confidence(budget_decision.result.overall_confidence.as_f64()),
         )
@@ -646,7 +647,7 @@ mod tests {
             ContextKey::Seeds,
             "expense-1",
             crate::record("expense_request", request),
-            "autonomous-org-test",
+            converge_pack::ProvenanceSource::provenance(crate::ORGANISM_DOMAIN_PROVENANCE),
         ));
     }
 
@@ -728,7 +729,7 @@ mod tests {
             ContextKey::Seeds,
             "vendor-1",
             crate::record("vendor", serde_json::json!({ "amount": 2500 })),
-            "autonomous-org-test",
+            converge_pack::ProvenanceSource::provenance(crate::ORGANISM_DOMAIN_PROVENANCE),
         ));
 
         let result = engine.run(ctx).await.expect("admission run");

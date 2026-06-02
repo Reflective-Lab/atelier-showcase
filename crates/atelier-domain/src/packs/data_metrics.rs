@@ -49,8 +49,8 @@ impl Suggestor for MetricRegistrarAgent {
         "metric_registrar"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -73,7 +73,6 @@ impl Suggestor for MetricRegistrarAgent {
                 || crate::payload_contains(trigger, "metric.update")
             {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", METRIC_PREFIX, trigger.id()),
                     serde_json::json!({
@@ -102,8 +101,8 @@ impl Suggestor for SourceConnectorAgent {
         "source_connector"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -126,7 +125,6 @@ impl Suggestor for SourceConnectorAgent {
                 || crate::payload_contains(trigger, "source.connect")
             {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Signals,
                     format!("{}{}", SOURCE_PREFIX, trigger.id()),
                     serde_json::json!({
@@ -155,8 +153,8 @@ impl Suggestor for PipelineCoordinatorAgent {
         "pipeline_coordinator"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -179,7 +177,6 @@ impl Suggestor for PipelineCoordinatorAgent {
                 && crate::payload_contains(source, "\"state\":\"healthy\"")
             {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", PIPELINE_PREFIX, source.id()),
                     serde_json::json!({
@@ -208,8 +205,8 @@ impl Suggestor for DataValidatorAgent {
         "data_validator"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -232,7 +229,6 @@ impl Suggestor for DataValidatorAgent {
                 && crate::payload_contains(pipeline, "\"state\":\"succeeded\"")
             {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Evaluations,
                     format!("{}{}", VALIDATION_PREFIX, pipeline.id()),
                     serde_json::json!({
@@ -262,8 +258,8 @@ impl Suggestor for AnomalyDetectorAgent {
         "anomaly_detector"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -281,7 +277,6 @@ impl Suggestor for AnomalyDetectorAgent {
         // In real implementation, would analyze data for anomalies
         // For now, creates a placeholder showing no anomalies detected
         AgentEffect::with_proposal(crate::json_record(
-            self.name(),
             ContextKey::Evaluations,
             format!("{}scan:latest", ANOMALY_PREFIX),
             serde_json::json!({
@@ -305,8 +300,8 @@ impl Suggestor for DashboardBuilderAgent {
         "dashboard_builder"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -329,7 +324,6 @@ impl Suggestor for DashboardBuilderAgent {
                 || crate::payload_contains(trigger, "dashboard.update")
             {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", DASHBOARD_PREFIX, trigger.id()),
                     serde_json::json!({
@@ -358,8 +352,8 @@ impl Suggestor for ReportGeneratorAgent {
         "report_generator"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -382,7 +376,6 @@ impl Suggestor for ReportGeneratorAgent {
                 || crate::payload_contains(trigger, "report.schedule")
             {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", REPORT_PREFIX, trigger.id()),
                     serde_json::json!({
@@ -411,8 +404,8 @@ impl Suggestor for AlertEvaluatorAgent {
         "alert_evaluator"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -435,7 +428,6 @@ impl Suggestor for AlertEvaluatorAgent {
             if eval.id().starts_with(ANOMALY_PREFIX) {
                 // Parse anomaly count - in real impl would check if > 0
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Evaluations,
                     format!("{}evaluation:{}", ALERT_PREFIX, eval.id()),
                     serde_json::json!({
@@ -463,8 +455,8 @@ impl Suggestor for FreshnessMonitorAgent {
         "freshness_monitor"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -484,7 +476,6 @@ impl Suggestor for FreshnessMonitorAgent {
         for source in signals {
             if source.id().starts_with(SOURCE_PREFIX) {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Evaluations,
                     format!("freshness:{}", source.id()),
                     serde_json::json!({
@@ -513,8 +504,8 @@ impl Suggestor for MetricCalculatorAgent {
         "metric_calculator"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -541,7 +532,6 @@ impl Suggestor for MetricCalculatorAgent {
                 && crate::payload_contains(metric, "\"state\":\"active\"")
             {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Evaluations,
                     format!("calculated:{}", metric.id()),
                     serde_json::json!({

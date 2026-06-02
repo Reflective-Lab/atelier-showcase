@@ -54,14 +54,14 @@ kept here so a future regression has a checklist:
 2. **`ProposedFact::new` payload param** now requires
    `T: FactPayload + PartialEq`. Wrap raw `String` JSON payloads in
    `TextPayload::new(...)`.
-3. **`ProposedFact::new` provenance param** takes
-   `impl Into<Provenance>`. `Provenance: From<&'static str>` will
-   not accept a borrowed `self.name()` — provide a `&'static str`
-   constant per crate.
+3. **`ProposedFact::new` provenance param** takes a typed
+   `Provenance`. Provide a crate-local `ProvenanceSource` marker and
+   pass `MARKER.provenance()` or `MARKER.proposed_fact(...)`; do not
+   pass semantic strings.
 4. **`Suggestor::provenance()`** defaults to `""`; the kernel
    rejects facts with empty provenance at promotion
    (`EmptyProvenance`). Every fact-emitting `Suggestor` must
-   override `fn provenance(&self) -> &'static str`.
+   override `fn provenance(&self) -> Provenance`.
 
 ## Follow-ons absorbed in the same pass
 

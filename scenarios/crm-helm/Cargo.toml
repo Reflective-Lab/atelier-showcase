@@ -32,9 +32,9 @@ axum = "0.8"
 application-kernel = { path = "../../../bedrock-platform/helms/crates/application-kernel" }
 application-storage = { path = "../../../bedrock-platform/helms/crates/application-storage" }
 
-# Cross-repo: Runway app host
-runway-app-host = { path = "../../../../../reflective/runway/crates/runway-app-host" }
-runway-storage = { path = "../../../../../reflective/runway/crates/runway-storage" }
+# Cross-repo: Runtime Runway app host
+runway-app-host = { path = "../../../runtime-runway/crates/runway-app-host" }
+runway-storage = { path = "../../../runtime-runway/crates/runway-storage" }
 
 [build-dependencies]
 tonic-build = "0.12"

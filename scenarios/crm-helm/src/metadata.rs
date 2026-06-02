@@ -110,11 +110,9 @@ where
             .store
             .read(CrmKernel::list_object_definitions)
             .map_err(status_from_storage)?;
-        Ok(Response::new(
-            metadata_pb::ListObjectDefinitionsResponse {
-                objects: objects.into_iter().map(proto_object_definition).collect(),
-            },
-        ))
+        Ok(Response::new(metadata_pb::ListObjectDefinitionsResponse {
+            objects: objects.into_iter().map(proto_object_definition).collect(),
+        }))
     }
 
     async fn list_view_definitions(
@@ -127,11 +125,9 @@ where
             .store
             .read(|kernel| kernel.list_view_definitions(object_key))
             .map_err(status_from_storage)?;
-        Ok(Response::new(
-            metadata_pb::ListViewDefinitionsResponse {
-                views: views.into_iter().map(proto_view_definition).collect(),
-            },
-        ))
+        Ok(Response::new(metadata_pb::ListViewDefinitionsResponse {
+            views: views.into_iter().map(proto_view_definition).collect(),
+        }))
     }
 }
 

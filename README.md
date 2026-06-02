@@ -90,7 +90,11 @@ from 1.0.0.
 cargo check --workspace
 ```
 
-Converge platform crates resolve from crates.io. Do not add local `[patch.crates-io]` overrides unless a task explicitly requires testing unpublished foundation changes.
+In the root `~/dev/reflective` checkout, selected Converge, Organism, and
+Prism crates are patched to local sources under `../stack/` so Atelier can
+exercise unreleased foundation changes without forking the dependency graph.
+Keep those path patches aligned with the root workspace layout; remove them
+only when the corresponding published crate line contains the needed contract.
 
 ## License
 

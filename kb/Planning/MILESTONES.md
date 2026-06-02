@@ -3,7 +3,7 @@ source: mixed
 ---
 # Milestones
 
-> See `~/dev/reflective/stack/bedrock-platform/EPIC.md` for the coarse-grained outcomes these milestones advance.
+> See `~/dev/reflective/bedrock-platform/EPIC.md` for the coarse-grained outcomes these milestones advance.
 
 ## Released: v1.0.0 — Converge 3.8.1 Showcase Baseline
 
@@ -22,7 +22,7 @@ source: mixed
 
 ### Why this milestone exists
 
-v1.0.0 leans heavily on Arbiter and Ferrox. Embassy ports, Mnemos memory, Prism analytic packs + fuzzy inference, Manifold provider swap, and Crucible's training → registry → deployment loop are under-exercised by the showcase. Downstream apps consistently underestimate what's already callable; see `~/dev/reflective/stack/mosaic-extensions/kb/Capability Matrix.md` for the full reach.
+v1.0.0 leans heavily on Arbiter and Ferrox. Embassy ports, Mnemos memory, Prism analytic packs + fuzzy inference, Manifold provider swap, and Crucible's training → registry → deployment loop are under-exercised by the showcase. Downstream apps consistently underestimate what's already callable; see `~/dev/reflective/mosaic-extensions/kb/Capability Matrix.md` for the full reach.
 
 atelier's job is to make that reach visible *with specificity* — every scenario must name the exact Mosaic functions it pulls and demonstrate why a generic substitute (one LLM call, a hand-rolled `if`-tree, a single solver) cannot give the same guarantee. A scenario that could be replaced by "ask a chat model" without losing assurance does not belong in v1.1.0.
 
@@ -58,7 +58,7 @@ Theatre smell checklist:
 - [ ] Domain-specific enough that the "why this matters" passes atelier's specificity bar (atelier-showcase is one of the few places allowed to speak concretely about domains).
 - [ ] Declares its **pressure-test target** up front in the scenario README: the boundary, missing type, or wiring gap it expects to surface.
 - [ ] Carries a **Resource Declaration** up front in the scenario README and, for verbose demos, in runtime output. New atelier scenarios must be `REAL LIVE` for external-provider/Mosaic source-observation paths or `LOCAL REAL` for real local solvers, policy engines, and product logic. `CONTRACT-SHAPE`, `SIMULATED`, or fake-backed `MIXED` decision paths belong in `arena-tests`, not in a landed atelier scenario.
-- [ ] References the Capability Matrix by linking each pulled function with a valid path from the scenario README. For current scenario READMEs, use `[matrix](../../../mosaic-extensions/kb/Capability%20Matrix.md#<module-anchor>)`.
+- [ ] References the Capability Matrix by linking each pulled function with a valid path from the scenario README. For current scenario READMEs, use `[matrix](../../../stack/mosaic-extensions/kb/Capability%20Matrix.md#<module-anchor>)`.
 - [ ] Produces a finding entry in `kb/History/CHANGELOG.md` naming what broke during wiring, what was fixed, and what stayed as a documented gap with an issue link.
 - [ ] An equivalent "generic substitute" attempt is documented (one LLM, one solver, no policy) and shown to fail the assurance bar — otherwise the combinatory cost isn't justified.
 
@@ -102,9 +102,9 @@ Defer **cross-llm-adjudication** until the first four land. It is useful, but it
   10-K through the same live SEC provider, writes current and prior review
   profiles through `converge-storage`'s in-memory `ObjectStore`, reloads the
   bounded profile history, and runs Prism `SimilarityPack` through Converge.
-  The next gap is durable Runway/GCS-backed recurrence and a broader historical
+  The next gap is durable Runtime Runway/GCS-backed recurrence and a broader historical
   corpus.
-- [ ] **counterparty-kyc-convergence** — not landed in atelier until the Embassy leg is `REAL LIVE`. The first contract-shape slice proved the intended chain (Embassy `gleif`, `bolagsverket`, `ofac-sls`, `eu-sanctions` → Arbiter `ComplianceGateSuggestor` → Soter `SmtSuggestor` → Mnemos `agentic::causal` + `agentic::temporal`) and surfaced/fixed an upstream contract gap: Embassy lookup request payloads implemented `FactPayload` but not `PartialEq`, blocking direct downstream seeding through `ProposedFact::new`; request payloads now derive `PartialEq` upstream. A second contract-shape slice (2026-05-22) lives at `~/dev/reflective/stack/arena-tests/crates/counterparty-kyc-convergence`. It enforces REAL-by-default at the binary boundary: `cargo run` exits code 2 with a diagnostic naming the Embassy-stubs-only gap; `cargo run -- --mock-ok` runs end-to-end against `StubGleifProvider` + `StubOfacSlsProvider` and clearly labels every step as CONTRACT-SHAPE. *Next required fix:* implement or select live Embassy providers for the identity and sanctions sources, then move (or template a new) `REAL LIVE` scenario into atelier with a Resource Declaration.
+- [ ] **counterparty-kyc-convergence** — not landed in atelier until the Embassy leg is `REAL LIVE`. The first contract-shape slice proved the intended chain (Embassy `gleif`, `bolagsverket`, `ofac-sls`, `eu-sanctions` → Arbiter `ComplianceGateSuggestor` → Soter `SmtSuggestor` → Mnemos `agentic::causal` + `agentic::temporal`) and surfaced/fixed an upstream contract gap: Embassy lookup request payloads implemented `FactPayload` but not `PartialEq`, blocking direct downstream seeding through `ProposedFact::new`; request payloads now derive `PartialEq` upstream. A second contract-shape slice (2026-05-22) lives at `~/dev/reflective/arena-tests/crates/counterparty-kyc-convergence`. It enforces REAL-by-default at the binary boundary: `cargo run` exits code 2 with a diagnostic naming the Embassy-stubs-only gap; `cargo run -- --mock-ok` runs end-to-end against `StubGleifProvider` + `StubOfacSlsProvider` and clearly labels every step as CONTRACT-SHAPE. *Next required fix:* implement or select live Embassy providers for the identity and sanctions sources, then move (or template a new) `REAL LIVE` scenario into atelier with a Resource Declaration.
 - [ ] **drift-triggered-retrain-loop** — Crucible `MonitoringAgent` → Mnemos `agentic::temporal` recall of historical drift → Arbiter `BudgetGateSuggestor` + `ApprovalGateSuggestor` → Crucible `ModelRegistryAgent` + `DeploymentAgent`. *Pressure-tests:* the closed-loop "experience → drift → retrain → deploy" story end-to-end; forces the drift signal into a Converge fact shape; surfaces whether registry promotion authority crosses the Converge boundary cleanly. Extends `loan-application`.
 - [ ] **policy-constrained-allocation** — Prism `RankingPack` → Embassy (`sam-gov`, `ofac-sls`, `commerce-csl`) → Ferrox `HighsMipSuggestor` → Arbiter `ComplianceGateSuggestor` → Soter `CedarAnalysisSuggestor`. *Pressure-tests:* analytic-score → solver-objective coupling (does `UnitFraction` flow into HiGHS coefficients without a homemade conversion?); whether Soter can prove "no sanctioned counterparty is allocatable under any feasible input." Extends `vendor-selection` and `mip-facility-location`.
 - [ ] **fuzzy-gated-routing** — Prism `fuzzy::Mamdani` (urgency / time-pressure rules) → Ferrox `CpSatVrptwSuggestor` → Manifold `llm` (operator-readable explanation, **provider swapped mid-run** to validate uniformity). *Pressure-tests:* typed `MembershipDegree` → solver-weight conversion; Manifold provider-shape uniformity across at least three of the seven LLM backends; whether `prism::fuzzy` outputs are wireable into Ferrox without an adapter crate.

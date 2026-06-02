@@ -82,7 +82,7 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
       - uses: Swatinem/rust-cache@v2
       # TODO: install OR-tools. Mirror the source build in
-      # ../mosaic-extensions/ferrox-solvers/Dockerfile (stage `cpp-builder`),
+      # ../stack/mosaic-extensions/ferrox-solvers/Dockerfile (stage `cpp-builder`),
       # or pull a prebuilt artefact once one is published.
       - name: Install OR-tools
         run: |

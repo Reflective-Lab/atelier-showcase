@@ -63,7 +63,7 @@ use converge_kernel::formation::{
     StaticFormationTemplate, SuggestorCapability, SuggestorRole,
 };
 use converge_kernel::{AgentEffect, Context, ContextFact, ContextKey};
-use converge_pack::{ProvenanceSource, Suggestor, TextPayload};
+use converge_pack::{Provenance, ProvenanceSource, Suggestor, TextPayload};
 use converge_provider::{
     ChatBackendSelectionConfig, ChatMessage, ChatRequest, ChatRole, DynChatBackend, ResponseFormat,
 };
@@ -251,13 +251,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             key: ContextKey::Seeds,
             id: "work-seed".into(),
             content: "audit candidate plan #ALPHA-1".to_string(),
-            provenance: "atelier-showcase".to_string(),
+            provenance: ScenarioProvenance.provenance(),
         },
         Seed {
             key: ContextKey::Strategies,
             id: "candidate-plan".into(),
             content: serde_json::to_string(&candidate_plan)?,
-            provenance: "atelier-showcase".to_string(),
+            provenance: ScenarioProvenance.provenance(),
         },
     ];
     // Arbiter typed-policy gate. The bespoke ConstraintCheckerAgent
@@ -710,6 +710,12 @@ impl ProvenanceSource for ScenarioProvenance {
     }
 }
 
+impl ScenarioProvenance {
+    fn provenance(self) -> Provenance {
+        ProvenanceSource::provenance(self)
+    }
+}
+
 fn round_number_from_design_batch_id(batch_id: &str) -> Option<u8> {
     batch_id
         .strip_prefix(ROUND_SIGNAL_PREFIX)
@@ -894,8 +900,8 @@ impl Suggestor for EvidenceWeightedScorer {
             ContextKey::Diagnostic,
         ]
     }
-    fn provenance(&self) -> &'static str {
-        ScenarioProvenance.as_str()
+    fn provenance(&self) -> Provenance {
+        ScenarioProvenance.provenance()
     }
     fn accepts(&self, ctx: &dyn Context) -> bool {
         !self.pending_batches(ctx).is_empty()
@@ -1143,8 +1149,8 @@ impl Suggestor for ConvergenceJudge {
             ContextKey::Hypotheses,
         ]
     }
-    fn provenance(&self) -> &'static str {
-        ScenarioProvenance.as_str()
+    fn provenance(&self) -> Provenance {
+        ScenarioProvenance.provenance()
     }
     fn accepts(&self, ctx: &dyn Context) -> bool {
         !Self::pending(ctx).is_empty()
@@ -1286,8 +1292,8 @@ impl Suggestor for DecideRequestEmitter {
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Seeds]
     }
-    fn provenance(&self) -> &'static str {
-        ScenarioProvenance.as_str()
+    fn provenance(&self) -> Provenance {
+        ScenarioProvenance.provenance()
     }
     fn accepts(&self, ctx: &dyn Context) -> bool {
         ctx.has(ContextKey::Seeds)
@@ -1333,8 +1339,8 @@ impl Suggestor for RoundAdvancer {
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Diagnostic]
     }
-    fn provenance(&self) -> &'static str {
-        ScenarioProvenance.as_str()
+    fn provenance(&self) -> Provenance {
+        ScenarioProvenance.provenance()
     }
     fn accepts(&self, ctx: &dyn Context) -> bool {
         !Self::pending(ctx).is_empty()
@@ -1521,8 +1527,8 @@ impl Suggestor for ShortlistNoteEmitter {
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Diagnostic, ContextKey::Proposals]
     }
-    fn provenance(&self) -> &'static str {
-        ScenarioProvenance.as_str()
+    fn provenance(&self) -> Provenance {
+        ScenarioProvenance.provenance()
     }
     fn accepts(&self, ctx: &dyn Context) -> bool {
         !Self::pending(ctx).is_empty()
@@ -1781,8 +1787,8 @@ impl Suggestor for LlmCriticSuggestor {
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Strategies]
     }
-    fn provenance(&self) -> &'static str {
-        ScenarioProvenance.as_str()
+    fn provenance(&self) -> Provenance {
+        ScenarioProvenance.provenance()
     }
     fn accepts(&self, ctx: &dyn Context) -> bool {
         extract_drafts(ctx, ContextKey::Strategies)

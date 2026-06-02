@@ -10,6 +10,21 @@
 
 use std::sync::Arc;
 
+#[derive(Clone, Copy, Debug)]
+struct AtelierShowcaseProvenance;
+
+impl converge_kernel::ProvenanceSource for AtelierShowcaseProvenance {
+    fn as_str(&self) -> &'static str {
+        "atelier-showcase.arbiter-ferrox-solver-gallery"
+    }
+}
+
+const ATELIER_SHOWCASE_PROVENANCE: AtelierShowcaseProvenance = AtelierShowcaseProvenance;
+
+fn atelier_showcase_provenance() -> Provenance {
+    converge_kernel::ProvenanceSource::provenance(ATELIER_SHOWCASE_PROVENANCE)
+}
+
 #[cfg(test)]
 use arbiter::PolicyOutcome;
 use arbiter::{
@@ -17,6 +32,7 @@ use arbiter::{
     PolicyGateSuggestor, PrincipalIn, ResourceIn,
 };
 use async_trait::async_trait;
+use converge_kernel::Provenance;
 use converge_kernel::{
     AgentEffect, AuthorityLevel, Budget, Context, ContextFact, ContextKey, ContextState,
     ConvergeResult, Engine, FlowAction, FlowPhase, ProposedFact, Suggestor,
@@ -230,8 +246,8 @@ impl Suggestor for PolicyRequestFromCorePlans {
         "PolicyRequestFromCorePlans"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.arbiter-ferrox-solver-gallery"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -258,7 +274,7 @@ impl Suggestor for PolicyRequestFromCorePlans {
                 ContextKey::Signals,
                 POLICY_SIGNAL_ID,
                 request,
-                self.name().to_owned(),
+                self.provenance(),
             )
             .with_confidence(0.95),
         )

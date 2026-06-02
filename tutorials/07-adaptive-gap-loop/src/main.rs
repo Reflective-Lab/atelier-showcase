@@ -15,6 +15,22 @@
 
 use std::collections::BTreeSet;
 
+#[derive(Clone, Copy, Debug)]
+struct AtelierShowcaseProvenance;
+
+impl converge_kernel::ProvenanceSource for AtelierShowcaseProvenance {
+    fn as_str(&self) -> &'static str {
+        "atelier-showcase.adaptive-gap-loop"
+    }
+}
+
+const ATELIER_SHOWCASE_PROVENANCE: AtelierShowcaseProvenance = AtelierShowcaseProvenance;
+
+fn atelier_showcase_provenance() -> Provenance {
+    converge_kernel::ProvenanceSource::provenance(ATELIER_SHOWCASE_PROVENANCE)
+}
+
+use converge_kernel::Provenance;
 use converge_kernel::{
     AgentEffect, Budget, Context, ContextFact, ContextKey, ContextState, ConvergeResult, Engine,
     FactPayload, Suggestor, TextPayload,
@@ -108,8 +124,8 @@ impl Suggestor for ArtifactSurveySuggestor {
         "artifact-survey"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.adaptive-gap-loop"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -148,7 +164,7 @@ impl Suggestor for ArtifactSurveySuggestor {
                             ContextKey::Signals,
                             signal_id(&request.root, &request.target),
                             signal,
-                            self.name().to_owned(),
+                            self.provenance(),
                         )
                         .with_confidence(0.92),
                     );
@@ -169,7 +185,7 @@ impl Suggestor for ArtifactSurveySuggestor {
                             ContextKey::Signals,
                             signal_id(&request.root, &request.target),
                             signal,
-                            self.name().to_owned(),
+                            self.provenance(),
                         )
                         .with_confidence(0.7),
                     );
@@ -181,7 +197,7 @@ impl Suggestor for ArtifactSurveySuggestor {
                                 "{} had no catalog entry, so the loop treated it as a leaf",
                                 request.target
                             )),
-                            self.name().to_owned(),
+                            self.provenance(),
                         )
                         .with_confidence(0.75),
                     );
@@ -201,8 +217,8 @@ impl Suggestor for GapHuddleSuggestor {
         "gap-huddle"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.adaptive-gap-loop"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -249,7 +265,7 @@ impl Suggestor for GapHuddleSuggestor {
                         ContextKey::Hypotheses,
                         gap_id(&signal.root, &signal.target, dependency),
                         gap,
-                        self.name().to_owned(),
+                        self.provenance(),
                     )
                     .with_confidence(0.83),
                 );
@@ -258,7 +274,7 @@ impl Suggestor for GapHuddleSuggestor {
                         ContextKey::Strategies,
                         request_id(&signal.root, dependency),
                         request,
-                        self.name().to_owned(),
+                        self.provenance(),
                     )
                     .with_confidence(0.9),
                 );
@@ -277,8 +293,8 @@ impl Suggestor for ClosureSuggestor {
         "closure"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.adaptive-gap-loop"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -308,7 +324,7 @@ impl Suggestor for ClosureSuggestor {
                     ContextKey::Diagnostic,
                     summary_id(&root),
                     summary,
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(0.96),
             );
@@ -362,7 +378,7 @@ fn seed_root(root: &str) -> ContextState {
             ContextKey::Seeds,
             root_id(root),
             root,
-            "example:adaptive-gap-loop",
+            atelier_showcase_provenance(),
         )
         .expect("should stage root seed");
     context

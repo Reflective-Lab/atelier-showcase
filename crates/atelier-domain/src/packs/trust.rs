@@ -71,8 +71,8 @@ impl Suggestor for SessionValidatorAgent {
         "session_validator"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -92,7 +92,6 @@ impl Suggestor for SessionValidatorAgent {
         for trigger in triggers {
             if crate::payload_contains(trigger, "session.token") {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Signals,
                     format!("{}{}", SESSION_PREFIX, trigger.id()),
                     serde_json::json!({
@@ -124,8 +123,8 @@ impl Suggestor for RbacEnforcerAgent {
         "rbac_enforcer"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -153,7 +152,6 @@ impl Suggestor for RbacEnforcerAgent {
                 && crate::payload_contains(session, "\"valid\":true")
             {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", ACCESS_DECISION_PREFIX, session.id()),
                     serde_json::json!({
@@ -184,8 +182,8 @@ impl Suggestor for AuditWriterAgent {
         "audit_writer"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -205,7 +203,6 @@ impl Suggestor for AuditWriterAgent {
         for decision in proposals {
             if decision.id().starts_with(ACCESS_DECISION_PREFIX) {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", AUDIT_PREFIX, decision.id()),
                     serde_json::json!({
@@ -236,8 +233,8 @@ impl Suggestor for ProvenanceTrackerAgent {
         "provenance_tracker"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -263,7 +260,6 @@ impl Suggestor for ProvenanceTrackerAgent {
         for entry in proposals {
             if entry.id().starts_with(AUDIT_PREFIX) {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", PROVENANCE_PREFIX, entry.id()),
                     serde_json::json!({
@@ -294,8 +290,8 @@ impl Suggestor for ComplianceScannerAgent {
         "compliance_scanner"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -324,7 +320,6 @@ impl Suggestor for ComplianceScannerAgent {
         let violations_found = false; // Simplified
 
         AgentEffect::with_proposal(crate::json_record(
-            self.name(),
             ContextKey::Evaluations,
             format!("{}scan:latest", COMPLIANCE_PREFIX),
             serde_json::json!({
@@ -349,8 +344,8 @@ impl Suggestor for ViolationRemediatorAgent {
         "violation_remediator"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -372,7 +367,6 @@ impl Suggestor for ViolationRemediatorAgent {
                 && crate::payload_contains(violation, "\"state\":\"open\"")
             {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", REMEDIATION_PREFIX, violation.id()),
                     serde_json::json!({
@@ -422,8 +416,8 @@ impl Suggestor for ContractExecutionAgent {
         "contract_execution"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -498,7 +492,6 @@ impl Suggestor for ContractExecutionAgent {
             match decision.outcome {
                 FlowGateOutcome::Promote => {
                     facts.push(crate::json_record(
-                        self.name(),
                         ContextKey::Proposals,
                         format!("contract:executed:{}", contract.id()),
                         serde_json::json!({
@@ -511,7 +504,6 @@ impl Suggestor for ContractExecutionAgent {
                         }),
                     ));
                     facts.push(crate::json_record(
-                        self.name(),
                         ContextKey::Proposals,
                         format!("{AUDIT_PREFIX}{}", contract.id()),
                         serde_json::json!({
@@ -525,7 +517,6 @@ impl Suggestor for ContractExecutionAgent {
                 FlowGateOutcome::Escalate => {
                     if !contract_execution_request_exists(ctx, contract.id()) {
                         facts.push(crate::json_record(
-                            self.name(),
                             ContextKey::Proposals,
                             format!("contract:execution_request:{}", contract.id()),
                             serde_json::json!({
@@ -541,7 +532,6 @@ impl Suggestor for ContractExecutionAgent {
                     }
                 }
                 FlowGateOutcome::Reject => facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("contract:execution_rejected:{}", contract.id()),
                     serde_json::json!({
@@ -568,8 +558,8 @@ impl Suggestor for PiiRedactorAgent {
         "pii_redactor"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -589,7 +579,6 @@ impl Suggestor for PiiRedactorAgent {
         for trigger in triggers {
             if crate::payload_contains(trigger, "redaction.required") {
                 facts.push(crate::json_record(
-                    self.name(),
                     ContextKey::Proposals,
                     format!("{}{}", REDACTED_PREFIX, trigger.id()),
                     serde_json::json!({

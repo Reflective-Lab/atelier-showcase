@@ -19,8 +19,8 @@ impl Suggestor for DraftingResearchAgent {
         "DraftingResearchAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -44,7 +44,6 @@ impl Suggestor for DraftingResearchAgent {
             .join(" | ");
 
         AgentEffect::with_proposal(crate::text(
-            self.name(),
             ContextKey::Signals,
             format!("{DRAFT_RESEARCH_PREFIX}notes"),
             "drafting.research_notes",
@@ -62,8 +61,8 @@ impl Suggestor for DraftingComposerAgent {
         "DraftingComposerAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -90,7 +89,6 @@ impl Suggestor for DraftingComposerAgent {
             .join("\n");
 
         AgentEffect::with_proposal(crate::text(
-            self.name(),
             ContextKey::Strategies,
             format!("{DRAFT_OUTPUT_PREFIX}v0"),
             "drafting.output",

@@ -103,11 +103,9 @@ where
             .store
             .read(|kernel| kernel.list_opportunities(organization_id))
             .map_err(status_from_storage)?;
-        Ok(Response::new(
-            opportunities_pb::ListOpportunitiesResponse {
-                opportunities: opportunities.into_iter().map(proto_opportunity).collect(),
-            },
-        ))
+        Ok(Response::new(opportunities_pb::ListOpportunitiesResponse {
+            opportunities: opportunities.into_iter().map(proto_opportunity).collect(),
+        }))
     }
 }
 

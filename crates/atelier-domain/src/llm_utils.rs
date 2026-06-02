@@ -40,8 +40,8 @@ impl converge_core::Suggestor for ChatAgentSuggestor {
         &self.name
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -90,7 +90,7 @@ impl converge_core::Suggestor for ChatAgentSuggestor {
                     self.target_key,
                     format!("{}-result", self.name),
                     TextPayload::new(response.content),
-                    crate::ATELIER_DOMAIN_PROVENANCE,
+                    crate::ATELIER_DOMAIN_PROVENANCE.provenance(),
                 )
                 .with_confidence(self.default_confidence);
                 AgentEffect::with_proposal(proposal)

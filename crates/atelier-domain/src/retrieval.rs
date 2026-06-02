@@ -70,7 +70,8 @@ use converge_core::capability::{
     CapabilityError, EmbedInput, EmbedRequest, Embedding, RerankRequest, Reranking, VectorQuery,
     VectorRecall, VectorRecord,
 };
-use converge_core::{ContextKey, ProposedFact};
+use converge_core::{ContextKey, FactPayload, ProposedFact, UnitInterval};
+use serde::Serialize;
 use std::sync::Arc;
 
 // =============================================================================
@@ -201,8 +202,59 @@ pub struct RetrievalResult {
     pub final_score: f64,
 }
 
+/// Backend-specific retrieval score.
+///
+/// Vector stores and rerankers do not all expose calibrated unit-interval
+/// scores, so this type guards the invariant we can actually own here:
+/// retrieval scores must be finite numeric measurements.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(transparent)]
+pub struct RetrievalScore(f64);
+
+impl RetrievalScore {
+    #[must_use]
+    pub fn from_backend_score(value: f64) -> Self {
+        if value.is_finite() {
+            Self(value)
+        } else {
+            Self(0.0)
+        }
+    }
+
+    #[must_use]
+    pub fn as_f64(self) -> f64 {
+        self.0
+    }
+}
+
+/// Typed payload emitted for retrieved context candidates.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct RetrievalPayload {
+    /// Retrieved document content.
+    pub content: String,
+    /// Retrieved document metadata from the source index.
+    pub metadata: serde_json::Value,
+    /// Embedding backend that produced the query vector.
+    pub embedder: String,
+    /// Optional reranker backend that rescored the candidate.
+    pub reranker: Option<String>,
+    /// Vector similarity score from coarse recall.
+    pub vector_score: RetrievalScore,
+    /// Reranker score, when reranking was performed.
+    pub rerank_score: Option<RetrievalScore>,
+    /// Backend-specific final ranking score.
+    pub final_score: RetrievalScore,
+    /// Confidence normalized for Converge proposal handling.
+    pub proposal_confidence: UnitInterval,
+}
+
+impl FactPayload for RetrievalPayload {
+    const FAMILY: &'static str = "atelier.retrieval.result";
+    const VERSION: u16 = 1;
+}
+
 impl RetrievalResult {
-    /// Converts to a `ProposedFact` with retrieval provenance.
+    /// Converts to a `ProposedFact` with typed retrieval metadata.
     #[must_use]
     pub fn to_proposed_fact(
         &self,
@@ -210,28 +262,29 @@ impl RetrievalResult {
         embedder: &str,
         reranker: Option<&str>,
     ) -> ProposedFact {
-        let provenance = if let Some(reranker) = reranker {
-            format!(
-                "retrieval:embedder={},reranker={},vector_score={:.3},rerank_score={:.3}",
-                embedder,
-                reranker,
-                self.vector_score,
-                self.rerank_score.unwrap_or(0.0)
-            )
-        } else {
-            format!(
-                "retrieval:embedder={},vector_score={:.3}",
-                embedder, self.vector_score
-            )
+        let proposal_confidence = UnitInterval::clamped(self.final_score);
+        let payload = RetrievalPayload {
+            content: self.content.clone(),
+            metadata: self.metadata.clone(),
+            embedder: embedder.to_string(),
+            reranker: reranker.map(str::to_string),
+            vector_score: RetrievalScore::from_backend_score(self.vector_score),
+            rerank_score: self.rerank_score.map(RetrievalScore::from_backend_score),
+            final_score: RetrievalScore::from_backend_score(self.final_score),
+            proposal_confidence,
         };
 
+        let rerank_part = reranker
+            .map(|r| format!(",reranker={r}"))
+            .unwrap_or_default();
+        let prov = format!("retrieval:embedder={embedder}{rerank_part}");
         ProposedFact::new(
             target_key,
             format!("retrieved-{}", self.id),
-            crate::DomainTextPayload::new("retrieval.result", self.content.clone()),
-            provenance,
+            payload,
+            prov,
         )
-        .with_confidence(self.final_score)
+        .with_confidence(proposal_confidence.as_f64())
     }
 }
 

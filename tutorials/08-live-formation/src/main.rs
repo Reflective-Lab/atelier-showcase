@@ -25,7 +25,23 @@
 
 use std::sync::Arc;
 
+#[derive(Clone, Copy, Debug)]
+struct AtelierShowcaseProvenance;
+
+impl converge_kernel::ProvenanceSource for AtelierShowcaseProvenance {
+    fn as_str(&self) -> &'static str {
+        "atelier-showcase.live-formation"
+    }
+}
+
+const ATELIER_SHOWCASE_PROVENANCE: AtelierShowcaseProvenance = AtelierShowcaseProvenance;
+
+fn atelier_showcase_provenance() -> Provenance {
+    converge_kernel::ProvenanceSource::provenance(ATELIER_SHOWCASE_PROVENANCE)
+}
+
 use async_trait::async_trait;
+use converge_kernel::Provenance;
 use converge_kernel::{
     AgentEffect, Budget, Context, ContextKey, ContextState, Engine, FactPayload, ProposedFact,
     Suggestor,
@@ -157,8 +173,8 @@ impl Suggestor for OpportunitySeeder {
         "opportunity-seeder"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.live-formation"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -202,7 +218,7 @@ impl Suggestor for OpportunitySeeder {
                     ContextKey::Diagnostic,
                     "formation-template-miss:launch",
                     LiveFormationRecord::new("formation_template_miss", diagnostic),
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(1.0),
             );
@@ -231,25 +247,25 @@ impl Suggestor for OpportunitySeeder {
                 ContextKey::Seeds,
                 "market-signal",
                 LiveFormationRecord::new("market_signal", market_signal),
-                self.name().to_owned(),
+                self.provenance(),
             ),
             ProposedFact::new(
                 ContextKey::Seeds,
                 "formation-request:launch",
                 formation_req,
-                self.name().to_owned(),
+                self.provenance(),
             ),
             ProposedFact::new(
                 ContextKey::Diagnostic,
                 "formation-template:launch",
                 LiveFormationRecord::new("formation_template_selection", template_selection),
-                self.name().to_owned(),
+                self.provenance(),
             ),
             ProposedFact::new(
                 ContextKey::Seeds,
                 "provider-request:launch",
                 ProviderRequestPayload::new(provider_req),
-                self.name().to_owned(),
+                self.provenance(),
             ),
         ])
     }
@@ -301,8 +317,8 @@ impl Suggestor for MarketAnalyser {
         "market-analyser"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.live-formation"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -349,7 +365,7 @@ impl Suggestor for MarketAnalyser {
                 ContextKey::Evaluations,
                 "analysis:market",
                 LiveFormationRecord::new("market_analysis", analysis),
-                self.name().to_owned(),
+                self.provenance(),
             )
             .with_confidence(0.88),
         )
@@ -365,8 +381,8 @@ impl Suggestor for TrendForecaster {
         "trend-forecaster"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.live-formation"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -418,7 +434,7 @@ impl Suggestor for TrendForecaster {
                 ContextKey::Evaluations,
                 "eval:trend-forecast",
                 LiveFormationRecord::new("trend_forecast", forecast),
-                self.name().to_owned(),
+                self.provenance(),
             )
             .with_confidence(0.74),
         )
@@ -434,8 +450,8 @@ impl Suggestor for CompetitiveScanner {
         "competitive-scanner"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.live-formation"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -497,7 +513,7 @@ impl Suggestor for CompetitiveScanner {
                 ContextKey::Evaluations,
                 "eval:competitive-risk",
                 LiveFormationRecord::new("competitive_risk", eval),
-                self.name().to_owned(),
+                self.provenance(),
             )
             .with_confidence(0.82),
         )
@@ -514,8 +530,8 @@ impl Suggestor for InvestmentGuard {
         "investment-guard"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.live-formation"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -578,7 +594,7 @@ impl Suggestor for InvestmentGuard {
                 ContextKey::Constraints,
                 "risk-gate",
                 LiveFormationRecord::new("investment_gate", gate),
-                self.name().to_owned(),
+                self.provenance(),
             )
             .with_confidence(0.95),
         )
@@ -595,8 +611,8 @@ impl Suggestor for BudgetAllocator {
         "budget-allocator"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.live-formation"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -653,7 +669,7 @@ impl Suggestor for BudgetAllocator {
                 ContextKey::Hypotheses,
                 "plan:budget",
                 LiveFormationRecord::new("budget_plan", plan),
-                self.name().to_owned(),
+                self.provenance(),
             )
             .with_confidence(0.80),
         )
@@ -670,8 +686,8 @@ impl Suggestor for LaunchDirector {
         "launch-director"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.live-formation"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -760,7 +776,7 @@ impl Suggestor for LaunchDirector {
                 ContextKey::Proposals,
                 "recommendation:launch",
                 LiveFormationRecord::new("launch_recommendation", recommendation),
-                self.name().to_owned(),
+                self.provenance(),
             )
             .with_confidence(confidence),
         )

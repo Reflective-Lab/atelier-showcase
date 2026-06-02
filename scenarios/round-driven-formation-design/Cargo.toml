@@ -10,9 +10,9 @@ publish = false
 
 [dependencies]
 # Converge 3.9 — published on crates.io.
-converge-kernel = "3.9.1"
-converge-pack = "3.9.1"
-converge-provider = "3.9.1"
+converge-kernel = "3.9.2"
+converge-pack = "3.9.2"
+converge-provider = "3.9.2"
 
 # Organism 1.9.1 — all crates.io now.
 organism-adversarial = "1.9.1"
@@ -25,7 +25,7 @@ organism-dynamics = "1.9.1"
 # Suggestors do pass/fail; arbiter expresses typed invariants
 # ("permit promote when amount <= 5000 OR human approval present").
 arbiter.workspace = true
-converge-core = "3.9.1"
+converge-core = "3.9.2"
 
 # Manifold — provider-agnostic LLM selection. The code declares needs,
 # Manifold selects from its live chat adapter set.

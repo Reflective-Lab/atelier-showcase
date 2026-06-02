@@ -40,9 +40,7 @@ pub fn status_from_kernel(error: application_kernel::KernelError) -> Status {
         application_kernel::KernelError::NotFound { kind, id } => {
             Status::not_found(format!("{kind} not found: {id}"))
         }
-        application_kernel::KernelError::Invariant(message) => {
-            Status::failed_precondition(message)
-        }
+        application_kernel::KernelError::Invariant(message) => Status::failed_precondition(message),
         application_kernel::KernelError::Conflict(message) => Status::already_exists(message),
     }
 }
@@ -52,8 +50,7 @@ pub fn status_from_kernel(error: application_kernel::KernelError) -> Status {
 // ---------------------------------------------------------------------------
 
 pub fn parse_uuid(value: &str) -> Result<Uuid, Status> {
-    Uuid::parse_str(value)
-        .map_err(|_| Status::invalid_argument(format!("invalid uuid: {value}")))
+    Uuid::parse_str(value).map_err(|_| Status::invalid_argument(format!("invalid uuid: {value}")))
 }
 
 pub fn parse_optional_uuid(value: Option<String>) -> Result<Option<Uuid>, Status> {
@@ -193,8 +190,7 @@ pub fn proto_record_ref(reference: RecordRef) -> pb::RecordRef {
 // ---------------------------------------------------------------------------
 
 pub fn organization_lifecycle_from_proto(value: i32) -> OrganizationLifecycle {
-    match pb::OrganizationLifecycle::try_from(value)
-        .unwrap_or(pb::OrganizationLifecycle::Prospect)
+    match pb::OrganizationLifecycle::try_from(value).unwrap_or(pb::OrganizationLifecycle::Prospect)
     {
         pb::OrganizationLifecycle::Active => OrganizationLifecycle::Active,
         pb::OrganizationLifecycle::Dormant => OrganizationLifecycle::Dormant,
@@ -249,8 +245,7 @@ pub fn communication_channel_from_proto(value: i32) -> CommunicationChannel {
 }
 
 pub fn communication_direction_from_proto(value: i32) -> CommunicationDirection {
-    match pb::CommunicationDirection::try_from(value)
-        .unwrap_or(pb::CommunicationDirection::Inbound)
+    match pb::CommunicationDirection::try_from(value).unwrap_or(pb::CommunicationDirection::Inbound)
     {
         pb::CommunicationDirection::Outbound => CommunicationDirection::Outbound,
         pb::CommunicationDirection::Internal => CommunicationDirection::Internal,
@@ -285,9 +280,7 @@ pub fn relationship_type_from_proto(value: i32) -> application_kernel::Relations
     match pb::RelationshipType::try_from(value).unwrap_or(pb::RelationshipType::Other) {
         pb::RelationshipType::Employment => application_kernel::RelationshipType::Employment,
         pb::RelationshipType::Champion => application_kernel::RelationshipType::Champion,
-        pb::RelationshipType::DecisionMaker => {
-            application_kernel::RelationshipType::DecisionMaker
-        }
+        pb::RelationshipType::DecisionMaker => application_kernel::RelationshipType::DecisionMaker,
         pb::RelationshipType::Partner => application_kernel::RelationshipType::Partner,
         pb::RelationshipType::Competitor => application_kernel::RelationshipType::Competitor,
         pb::RelationshipType::Other | pb::RelationshipType::Unspecified => {
@@ -297,9 +290,7 @@ pub fn relationship_type_from_proto(value: i32) -> application_kernel::Relations
 }
 
 pub fn object_definition_kind_from_proto(value: i32) -> ObjectDefinitionKind {
-    match pb::ObjectDefinitionKind::try_from(value)
-        .unwrap_or(pb::ObjectDefinitionKind::Custom)
-    {
+    match pb::ObjectDefinitionKind::try_from(value).unwrap_or(pb::ObjectDefinitionKind::Custom) {
         pb::ObjectDefinitionKind::Standard => ObjectDefinitionKind::Standard,
         pb::ObjectDefinitionKind::Custom | pb::ObjectDefinitionKind::Unspecified => {
             ObjectDefinitionKind::Custom
@@ -392,15 +383,11 @@ pub fn proto_relationship(value: application_kernel::Relationship) -> pb::Relati
             application_kernel::RelationshipType::Employment => {
                 pb::RelationshipType::Employment as i32
             }
-            application_kernel::RelationshipType::Champion => {
-                pb::RelationshipType::Champion as i32
-            }
+            application_kernel::RelationshipType::Champion => pb::RelationshipType::Champion as i32,
             application_kernel::RelationshipType::DecisionMaker => {
                 pb::RelationshipType::DecisionMaker as i32
             }
-            application_kernel::RelationshipType::Partner => {
-                pb::RelationshipType::Partner as i32
-            }
+            application_kernel::RelationshipType::Partner => pb::RelationshipType::Partner as i32,
             application_kernel::RelationshipType::Competitor => {
                 pb::RelationshipType::Competitor as i32
             }
@@ -571,9 +558,7 @@ pub fn proto_timeline_entry(value: application_kernel::TimelineEntry) -> pb::Tim
     }
 }
 
-pub fn proto_account_summary(
-    value: application_kernel::AccountSummary,
-) -> pb::AccountSummary {
+pub fn proto_account_summary(value: application_kernel::AccountSummary) -> pb::AccountSummary {
     pb::AccountSummary {
         organization: Some(proto_organization(value.organization)),
         contacts: value.contacts.into_iter().map(proto_person).collect(),
@@ -602,9 +587,7 @@ pub fn proto_account_summary(
     }
 }
 
-pub fn proto_permission_grant(
-    value: application_kernel::PermissionGrant,
-) -> pb::PermissionGrant {
+pub fn proto_permission_grant(value: application_kernel::PermissionGrant) -> pb::PermissionGrant {
     pb::PermissionGrant {
         id: value.id.to_string(),
         subject: value.subject,
@@ -615,9 +598,7 @@ pub fn proto_permission_grant(
     }
 }
 
-pub fn field_definition_from_proto(
-    field: pb::FieldDefinition,
-) -> Result<FieldDefinition, Status> {
+pub fn field_definition_from_proto(field: pb::FieldDefinition) -> Result<FieldDefinition, Status> {
     Ok(FieldDefinition {
         id: parse_optional_uuid(Some(field.id))?.unwrap_or_else(Uuid::new_v4),
         key: field.key,
@@ -668,18 +649,14 @@ pub fn proto_field_definition(value: FieldDefinition) -> pb::FieldDefinition {
     }
 }
 
-pub fn proto_relationship_definition(
-    value: RelationshipDefinition,
-) -> pb::RelationshipDefinition {
+pub fn proto_relationship_definition(value: RelationshipDefinition) -> pb::RelationshipDefinition {
     pb::RelationshipDefinition {
         id: value.id.to_string(),
         target_object_key: value.target_object_key,
         cardinality: match value.cardinality {
             RelationshipCardinality::OneToOne => pb::RelationshipCardinality::OneToOne as i32,
             RelationshipCardinality::OneToMany => pb::RelationshipCardinality::OneToMany as i32,
-            RelationshipCardinality::ManyToMany => {
-                pb::RelationshipCardinality::ManyToMany as i32
-            }
+            RelationshipCardinality::ManyToMany => pb::RelationshipCardinality::ManyToMany as i32,
         },
         label: value.label,
     }

@@ -12,8 +12,8 @@ use tonic::{Request, Response, Status};
 
 use crate::proto::{common as pb, workflow as workflow_pb};
 use crate::shared::{
-    actor_from_proto, parse_uuid, proto_workflow_case, record_ref_from_proto,
-    status_from_storage, workflow_priority_from_proto, workflow_state_from_proto,
+    actor_from_proto, parse_uuid, proto_workflow_case, record_ref_from_proto, status_from_storage,
+    workflow_priority_from_proto, workflow_state_from_proto,
 };
 
 // ---------------------------------------------------------------------------

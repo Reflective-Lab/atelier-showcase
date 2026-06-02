@@ -10,8 +10,8 @@ default = []
 with-solver = ["ferrox/ortools"]
 
 [dependencies]
-converge-kernel = "3.9.1"
-converge-pack = "3.9.1"
+converge-kernel = "3.9.2"
+converge-pack = "3.9.2"
 ferrox = { package = "converge-ferrox-solver", path = "../../../mosaic-extensions/ferrox-solvers/crates/ferrox", version = "0.7.1", default-features = false }
 
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

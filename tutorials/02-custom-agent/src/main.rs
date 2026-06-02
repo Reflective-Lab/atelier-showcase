@@ -5,10 +5,26 @@
 //!
 //! Shows: Suggestor trait, accepts/execute contract, AgentEffect, ProposedFact.
 
+use converge_kernel::Provenance;
 use converge_kernel::{
     AgentEffect, Context, ContextFact, ContextKey, ContextState, Engine, ProposedFact, Suggestor,
     TextPayload,
 };
+
+#[derive(Clone, Copy, Debug)]
+struct AtelierShowcaseProvenance;
+
+impl converge_kernel::ProvenanceSource for AtelierShowcaseProvenance {
+    fn as_str(&self) -> &'static str {
+        "atelier-showcase.custom-agent"
+    }
+}
+
+const ATELIER_SHOWCASE_PROVENANCE: AtelierShowcaseProvenance = AtelierShowcaseProvenance;
+
+fn atelier_showcase_provenance() -> Provenance {
+    converge_kernel::ProvenanceSource::provenance(ATELIER_SHOWCASE_PROVENANCE)
+}
 
 const NO_DEPENDENCIES: [ContextKey; 0] = [];
 
@@ -30,8 +46,8 @@ impl Suggestor for SeedOnceSuggestor {
         self.name
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.custom-agent"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -48,7 +64,7 @@ impl Suggestor for SeedOnceSuggestor {
                 ContextKey::Seeds,
                 self.id,
                 TextPayload::new(self.content),
-                self.name,
+                self.provenance(),
             )
             .with_confidence(1.0),
         )
@@ -74,8 +90,8 @@ impl Suggestor for SummaryAgent {
         &self.agent_name
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.custom-agent"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -95,7 +111,7 @@ impl Suggestor for SummaryAgent {
                 ContextKey::Hypotheses,
                 format!("{}-summary", self.agent_name),
                 TextPayload::new(format!("Combined signal: {summary}")),
-                format!("agent:{}", self.agent_name),
+                self.provenance(),
             )
             .with_confidence(0.9),
         )

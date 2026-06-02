@@ -47,6 +47,7 @@ use arbiter::{
     ComplianceRule, Confidence,
 };
 use async_trait::async_trait;
+use converge_kernel::Provenance;
 use converge_kernel::{AgentEffect, Budget, Context, ContextState, Engine, ProposedFact};
 use converge_pack::{ContextKey, FactPayload, ProvenanceSource, Suggestor};
 use serde::{Deserialize, Serialize};
@@ -73,6 +74,19 @@ fn build_document() -> ComplianceDocumentPayload {
 }
 
 const DOC_ID: &str = "transfer-2026-05-19-001";
+
+#[derive(Clone, Copy, Debug)]
+struct ScenarioProvenance;
+
+impl ProvenanceSource for ScenarioProvenance {
+    fn as_str(&self) -> &'static str {
+        "atelier-layered-governance"
+    }
+}
+
+fn scenario_provenance() -> Provenance {
+    ScenarioProvenance.provenance()
+}
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -110,7 +124,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ContextKey::Strategies,
         DOC_ID,
         doc.clone(),
-        "atelier-layered-governance",
+        scenario_provenance(),
     ))?;
     // Approval gate reads ApprovalRiskPayload, not the document.
     // Emit one alongside the doc so the gate has something typed
@@ -126,7 +140,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ApprovalRiskPayload {
             confidence: Confidence::clamped(anomaly_score),
         },
-        "atelier-layered-governance",
+        scenario_provenance(),
     ))?;
 
     let result = engine.run(ctx).await?;
@@ -201,8 +215,8 @@ impl Suggestor for AnomalyGate {
     fn dependencies(&self) -> &[ContextKey] {
         &[ContextKey::Strategies]
     }
-    fn provenance(&self) -> &'static str {
-        AtelierLayeredProvenance.as_str()
+    fn provenance(&self) -> Provenance {
+        AtelierLayeredProvenance.provenance()
     }
     fn accepts(&self, ctx: &dyn Context) -> bool {
         ctx.has(ContextKey::Strategies)

@@ -4,10 +4,11 @@
 //! `integration:`, `diligence:`, `relationship:`, `contract_renewal:`
 
 use crate::{
-    fact_json_of,
+    ORGANISM_DOMAIN_PROVENANCE, fact_json_of,
     pack::{AgentMeta, ContextKey, InvariantClass, InvariantMeta},
     record,
 };
+use converge_pack::{Provenance, ProvenanceSource};
 
 pub const AGENTS: &[AgentMeta] = &[
     AgentMeta {
@@ -134,8 +135,8 @@ impl converge_pack::Suggestor for VendorDataSuggestor {
         "vendor_data"
     }
 
-    fn provenance(&self) -> &'static str {
-        "organism-domain"
+    fn provenance(&self) -> Provenance {
+        ORGANISM_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[converge_pack::ContextKey] {
@@ -170,7 +171,7 @@ impl converge_pack::Suggestor for VendorDataSuggestor {
                     converge_pack::ContextKey::Signals,
                     format!("vendor:{id}"),
                     record("vendor", vendor.clone()),
-                    "vendor_data",
+                    ORGANISM_DOMAIN_PROVENANCE.provenance(),
                 )
                 .with_confidence(1.0)
             })
@@ -191,8 +192,8 @@ impl converge_pack::Suggestor for VendorPriceEvaluatorSuggestor {
         "price_evaluator"
     }
 
-    fn provenance(&self) -> &'static str {
-        "organism-domain"
+    fn provenance(&self) -> Provenance {
+        ORGANISM_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[converge_pack::ContextKey] {
@@ -230,8 +231,8 @@ impl converge_pack::Suggestor for VendorComplianceEvaluatorSuggestor {
         "compliance_evaluator"
     }
 
-    fn provenance(&self) -> &'static str {
-        "organism-domain"
+    fn provenance(&self) -> Provenance {
+        ORGANISM_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[converge_pack::ContextKey] {
@@ -268,8 +269,8 @@ impl converge_pack::Suggestor for VendorRiskEvaluatorSuggestor {
         "risk_evaluator"
     }
 
-    fn provenance(&self) -> &'static str {
-        "organism-domain"
+    fn provenance(&self) -> Provenance {
+        ORGANISM_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[converge_pack::ContextKey] {
@@ -310,8 +311,8 @@ impl converge_pack::Suggestor for VendorTimelineEvaluatorSuggestor {
         "timeline_evaluator"
     }
 
-    fn provenance(&self) -> &'static str {
-        "organism-domain"
+    fn provenance(&self) -> Provenance {
+        ORGANISM_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[converge_pack::ContextKey] {
@@ -353,8 +354,8 @@ impl converge_pack::Suggestor for VendorConsensusSuggestor {
         "consensus"
     }
 
-    fn provenance(&self) -> &'static str {
-        "organism-domain"
+    fn provenance(&self) -> Provenance {
+        ORGANISM_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[converge_pack::ContextKey] {
@@ -412,7 +413,7 @@ impl converge_pack::Suggestor for VendorConsensusSuggestor {
                             "recommendation": if i == 0 { "recommended" } else { "alternative" }
                         }),
                     ),
-                    "consensus",
+                    ORGANISM_DOMAIN_PROVENANCE.provenance(),
                 )
                 .with_confidence(if i == 0 { 0.85 } else { 0.6 })
             })
@@ -449,7 +450,7 @@ where
                             "score": score,
                         }),
                     ),
-                    format!("{criterion}_evaluator"),
+                    ORGANISM_DOMAIN_PROVENANCE.provenance(),
                 )
                 .with_confidence(1.0),
             )
@@ -487,7 +488,7 @@ mod tests {
             ContextKey::Seeds,
             "rfp",
             crate::record("rfp", serde_json::json!({ "vendors": vendors })),
-            "partnerships-test",
+            converge_pack::ProvenanceSource::provenance(crate::ORGANISM_DOMAIN_PROVENANCE),
         ));
     }
 
@@ -542,7 +543,7 @@ mod tests {
             ContextKey::Seeds,
             "rfp",
             crate::record("rfp", serde_json::json!({})),
-            "partnerships-test",
+            converge_pack::ProvenanceSource::provenance(crate::ORGANISM_DOMAIN_PROVENANCE),
         ));
 
         let result = engine.run(ctx).await.expect("converge");
@@ -562,7 +563,7 @@ mod tests {
                 "expense",
                 serde_json::json!({ "vendors": [{ "id": "alpha", "price": 5_000 }] }),
             ),
-            "partnerships-test",
+            converge_pack::ProvenanceSource::provenance(crate::ORGANISM_DOMAIN_PROVENANCE),
         ));
 
         let result = engine.run(ctx).await.expect("converge");

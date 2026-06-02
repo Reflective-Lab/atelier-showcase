@@ -43,6 +43,19 @@ const BUDGET_LIMIT: f64 = 2.00;
 const APPROVAL_THRESHOLD: f64 = 0.90;
 const RATE_LIMIT_MAX: usize = 4;
 
+#[derive(Clone, Copy, Debug)]
+struct ScenarioProvenance;
+
+impl converge_pack::ProvenanceSource for ScenarioProvenance {
+    fn as_str(&self) -> &'static str {
+        "atelier-arbiter-governance"
+    }
+}
+
+fn scenario_provenance() -> converge_pack::Provenance {
+    converge_pack::ProvenanceSource::provenance(ScenarioProvenance)
+}
+
 #[derive(Debug, Clone)]
 struct SyntheticProposal {
     id: &'static str,
@@ -121,7 +134,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             CostEstimatePayload {
                 cost: CostUsd::clamped(p.cost),
             },
-            "atelier-arbiter-governance",
+            scenario_provenance(),
         ))
         .map_err(|e| format!("seed cost: {e:?}"))?;
         // Approval-risk fact (read by ApprovalGateSuggestor).
@@ -131,7 +144,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ApprovalRiskPayload {
                 confidence: Confidence::clamped(p.confidence),
             },
-            "atelier-arbiter-governance",
+            scenario_provenance(),
         ))
         .map_err(|e| format!("seed risk: {e:?}"))?;
         // Text fact (scanned by DataClassificationGateSuggestor).
@@ -139,7 +152,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             ContextKey::Strategies,
             format!("{}-text", p.id),
             TextPayload::new(p.text),
-            "atelier-arbiter-governance",
+            scenario_provenance(),
         ))
         .map_err(|e| format!("seed text: {e:?}"))?;
     }

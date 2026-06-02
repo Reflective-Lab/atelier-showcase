@@ -12,8 +12,8 @@ use tonic::{Request, Response, Status};
 
 use crate::proto::{common as pb, documents as documents_pb};
 use crate::shared::{
-    actor_from_proto, document_status_from_proto, proto_document, proto_note, record_ref_from_proto,
-    status_from_storage,
+    actor_from_proto, document_status_from_proto, proto_document, proto_note,
+    record_ref_from_proto, status_from_storage,
 };
 
 // ---------------------------------------------------------------------------

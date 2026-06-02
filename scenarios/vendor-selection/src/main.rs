@@ -12,6 +12,7 @@
 
 use arbiter::{PolicyEngine, VENDOR_SELECTION_POLICY};
 use atelier_domain::{DomainRecordPayload, json_value};
+use converge_kernel::Provenance;
 use converge_kernel::{
     AgentEffect, AuthorityLevel, Context, ContextFact, ContextKey, ContextState, Engine,
     EngineHitlPolicy, FlowAction, FlowGateAuthorizer, FlowGateContext, FlowGateInput,
@@ -20,6 +21,21 @@ use converge_kernel::{
 };
 use converge_pack::TextPayload;
 use std::sync::Arc;
+
+#[derive(Clone, Copy, Debug)]
+struct AtelierShowcaseProvenance;
+
+impl converge_kernel::ProvenanceSource for AtelierShowcaseProvenance {
+    fn as_str(&self) -> &'static str {
+        "atelier-showcase.vendor-selection"
+    }
+}
+
+const ATELIER_SHOWCASE_PROVENANCE: AtelierShowcaseProvenance = AtelierShowcaseProvenance;
+
+fn atelier_showcase_provenance() -> Provenance {
+    converge_kernel::ProvenanceSource::provenance(ATELIER_SHOWCASE_PROVENANCE)
+}
 
 fn record(record_type: &str, data: serde_json::Value) -> DomainRecordPayload {
     DomainRecordPayload::new(record_type, data)
@@ -136,8 +152,8 @@ impl Suggestor for VendorDataAgent {
         "VendorDataAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.vendor-selection"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -172,7 +188,7 @@ impl Suggestor for VendorDataAgent {
                         vendor.get("id").and_then(|v| v.as_str()).unwrap_or("?")
                     ),
                     record("vendor", vendor.clone()),
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(1.0),
             );
@@ -190,8 +206,8 @@ impl Suggestor for PriceEvaluatorAgent {
         "PriceEvaluatorAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.vendor-selection"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -234,7 +250,7 @@ impl Suggestor for PriceEvaluatorAgent {
                             "raw_value": price
                         }),
                     ),
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(1.0),
             );
@@ -252,8 +268,8 @@ impl Suggestor for ComplianceEvaluatorAgent {
         "ComplianceEvaluatorAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.vendor-selection"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -291,7 +307,7 @@ impl Suggestor for ComplianceEvaluatorAgent {
                             "raw_value": compliant
                         }),
                     ),
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(1.0),
             );
@@ -309,8 +325,8 @@ impl Suggestor for RiskEvaluatorAgent {
         "RiskEvaluatorAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.vendor-selection"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -356,7 +372,7 @@ impl Suggestor for RiskEvaluatorAgent {
                             "raw_value": years
                         }),
                     ),
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(1.0),
             );
@@ -374,8 +390,8 @@ impl Suggestor for TimelineEvaluatorAgent {
         "TimelineEvaluatorAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.vendor-selection"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -421,7 +437,7 @@ impl Suggestor for TimelineEvaluatorAgent {
                             "raw_value": weeks
                         }),
                     ),
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(1.0),
             );
@@ -439,8 +455,8 @@ impl Suggestor for ConsensusAgent {
         "ConsensusAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.vendor-selection"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -507,7 +523,7 @@ impl Suggestor for ConsensusAgent {
                             "recommendation": if i == 0 { "recommended" } else { "alternative" }
                         }),
                     ),
-                    "consensus-agent",
+                    self.provenance(),
                 )
                 .with_confidence(if i == 0 { 0.85 } else { 0.6 })
             })
@@ -529,8 +545,8 @@ impl Suggestor for ProcurementRoutingAgent {
         "ProcurementRoutingAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.vendor-selection"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -578,7 +594,7 @@ impl Suggestor for ProcurementRoutingAgent {
                 ContextKey::Constraints,
                 "vendor-procurement-routing",
                 record("vendor_procurement_routing", routing),
-                self.name().to_owned(),
+                self.provenance(),
             )
             .with_confidence(1.0),
         )
@@ -593,8 +609,8 @@ impl Suggestor for ProcurementApprovalSimulationAgent {
         "ProcurementApprovalSimulationAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.vendor-selection"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -631,7 +647,7 @@ impl Suggestor for ProcurementApprovalSimulationAgent {
                 ContextKey::Proposals,
                 "procurement-approval",
                 TextPayload::new("Approved by procurement"),
-                "procurement approval agent",
+                self.provenance(),
             )
             .with_confidence(0.95),
         )
@@ -654,8 +670,8 @@ impl Suggestor for VendorCommitDecisionAgent {
         "VendorCommitDecisionAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.vendor-selection"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -716,7 +732,7 @@ impl Suggestor for VendorCommitDecisionAgent {
                 ContextKey::Evaluations,
                 "vendor-commit-policy",
                 record("vendor_commit_policy", result),
-                self.name().to_owned(),
+                self.provenance(),
             )
             .with_confidence(1.0),
         )
@@ -786,7 +802,7 @@ async fn main() {
         ContextKey::Seeds,
         "rfp-1",
         record("vendor_rfp", rfp),
-        "example-vendor-selection",
+        atelier_showcase_provenance(),
     ));
 
     println!("Evaluating 3 vendors with swarm of 5 agents...\n");

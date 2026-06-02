@@ -85,8 +85,8 @@ impl Suggestor for FormSchemaAgent {
         "FormSchemaAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -108,7 +108,6 @@ impl Suggestor for FormSchemaAgent {
         });
 
         AgentEffect::with_proposal(crate::record(
-            self.name(),
             ContextKey::Signals,
             SCHEMA_FACT_ID,
             "form_filler.schema",
@@ -126,8 +125,8 @@ impl Suggestor for FieldMappingAgent {
         "FieldMappingAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -160,7 +159,6 @@ impl Suggestor for FieldMappingAgent {
 
         let payload = serde_json::json!({ "mappings": mappings });
         AgentEffect::with_proposal(crate::record(
-            self.name(),
             ContextKey::Hypotheses,
             MAPPINGS_FACT_ID,
             "form_filler.field_mappings",
@@ -178,8 +176,8 @@ impl Suggestor for NormalizationAgent {
         "NormalizationAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -211,7 +209,6 @@ impl Suggestor for NormalizationAgent {
 
         let payload = serde_json::json!({ "normalized": normalized });
         AgentEffect::with_proposal(crate::record(
-            self.name(),
             ContextKey::Hypotheses,
             NORMALIZED_FACT_ID,
             "form_filler.normalized_fields",
@@ -229,8 +226,8 @@ impl Suggestor for CompletenessAgent {
         "CompletenessAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -260,7 +257,6 @@ impl Suggestor for CompletenessAgent {
 
         let payload = CompletenessStatus { missing_fields };
         AgentEffect::with_proposal(crate::record(
-            self.name(),
             ContextKey::Constraints,
             COMPLETENESS_FACT_ID,
             "form_filler.completeness",
@@ -278,8 +274,8 @@ impl Suggestor for RiskClassifierAgent {
         "RiskClassifierAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -309,7 +305,6 @@ impl Suggestor for RiskClassifierAgent {
 
         let payload = RiskClassification { high_risk_fields };
         AgentEffect::with_proposal(crate::record(
-            self.name(),
             ContextKey::Constraints,
             RISK_FACT_ID,
             "form_filler.risk_classification",
@@ -327,8 +322,8 @@ impl Suggestor for FillPlanAgent {
         "FillPlanAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -383,7 +378,6 @@ impl Suggestor for FillPlanAgent {
         };
 
         AgentEffect::with_proposal(crate::record(
-            self.name(),
             ContextKey::Strategies,
             FILL_PLAN_FACT_ID,
             "form_filler.fill_plan",
@@ -401,8 +395,8 @@ impl Suggestor for ProposalEmitterAgent {
         "ProposalEmitterAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -439,7 +433,7 @@ impl Suggestor for ProposalEmitterAgent {
                             "risk": "unknown",
                         }),
                     ),
-                    crate::ATELIER_DOMAIN_PROVENANCE,
+                    crate::ATELIER_DOMAIN_PROVENANCE.provenance(),
                 )
                 .with_confidence(0.8)
             })

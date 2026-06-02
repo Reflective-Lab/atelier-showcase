@@ -1,6 +1,6 @@
 # scenario-round-driven-formation-design - local dev secrets.
 #
-# NOTE: the workspace-level `.envrc` at `stack/atelier-showcase/.envrc`
+# NOTE: the workspace-level `.envrc` at `atelier-showcase/.envrc`
 # already exports all provider keys via Keychain. direnv loads the
 # nearest `.envrc` going up, so most devs do NOT need a scenario-level
 # `.envrc` at all. Create one only if you want to override or restrict
@@ -11,7 +11,7 @@
 # key names and vendor-specific setup in Manifold or operator docs, not
 # in atelier examples.
 
-# source_up   # uncomment to inherit stack/atelier-showcase/.envrc
+# source_up   # uncomment to inherit atelier-showcase/.envrc
 
 # Optional: selection criteria.
 # CONVERGE_LLM_PROFILE selects the needs spec Manifold ranks against.

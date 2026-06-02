@@ -81,8 +81,8 @@ impl Suggestor for AvailabilityRetrievalAgent {
         "AvailabilityRetrievalAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -109,7 +109,6 @@ impl Suggestor for AvailabilityRetrievalAgent {
             let content = meeting_text(seed).unwrap_or_default();
             if content.contains("Alice") {
                 facts.push(crate::text(
-                    self.name(),
                     ContextKey::Signals,
                     "availability:alice",
                     "meeting.availability",
@@ -118,7 +117,6 @@ impl Suggestor for AvailabilityRetrievalAgent {
             }
             if content.contains("Bob") {
                 facts.push(crate::text(
-                    self.name(),
                     ContextKey::Signals,
                     "availability:bob",
                     "meeting.availability",
@@ -127,7 +125,6 @@ impl Suggestor for AvailabilityRetrievalAgent {
             }
             if content.contains("Carol") {
                 facts.push(crate::text(
-                    self.name(),
                     ContextKey::Signals,
                     "availability:carol",
                     "meeting.availability",
@@ -139,7 +136,6 @@ impl Suggestor for AvailabilityRetrievalAgent {
         // Always emit baseline availability if no specific data
         if facts.is_empty() {
             facts.push(crate::text(
-                self.name(),
                 ContextKey::Signals,
                 "availability:default",
                 "meeting.availability",
@@ -163,8 +159,8 @@ impl Suggestor for TimeZoneNormalizationAgent {
         "TimeZoneNormalizationAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -201,7 +197,6 @@ impl Suggestor for TimeZoneNormalizationAgent {
             // Normalize to UTC and find common windows
             // For simplicity, assume all are already in UTC and find overlap
             facts.push(crate::text(
-                self.name(),
                 ContextKey::Signals,
                 "normalized:common-window",
                 "meeting.normalized_window",
@@ -225,8 +220,8 @@ impl Suggestor for WorkingHoursConstraintAgent {
         "WorkingHoursConstraintAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -268,7 +263,6 @@ impl Suggestor for WorkingHoursConstraintAgent {
 
         if let Some(norm) = normalized {
             facts.push(crate::text(
-                self.name(),
                 ContextKey::Constraints,
                 "working-hours:policy",
                 "meeting.working_hours",
@@ -281,7 +275,6 @@ impl Suggestor for WorkingHoursConstraintAgent {
         } else {
             // Default constraint
             facts.push(crate::text(
-                self.name(),
                 ContextKey::Constraints,
                 "working-hours:default",
                 "meeting.working_hours",
@@ -305,8 +298,8 @@ impl Suggestor for SlotOptimizationAgent {
         "SlotOptimizationAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -353,7 +346,6 @@ impl Suggestor for SlotOptimizationAgent {
 
         for (start, end, rank) in slots {
             facts.push(crate::text(
-                self.name(),
                 ContextKey::Strategies,
                 format!("slot:{rank}"),
                 "meeting.candidate_slot",
@@ -377,8 +369,8 @@ impl Suggestor for ConflictDetectionAgent {
         "ConflictDetectionAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        crate::ATELIER_DOMAIN_PROVENANCE
+    fn provenance(&self) -> converge_core::Provenance {
+        crate::ATELIER_DOMAIN_PROVENANCE.provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -407,7 +399,6 @@ impl Suggestor for ConflictDetectionAgent {
                 let (score, rationale) = evaluate_slot(slot, i);
 
                 facts.push(crate::text(
-                    self.name(),
                     ContextKey::Evaluations,
                     format!(
                         "eval:{}",
@@ -430,7 +421,6 @@ impl Suggestor for ConflictDetectionAgent {
         // Ensure at least one valid slot
         if facts.is_empty() {
             facts.push(crate::text(
-                self.name(),
                 ContextKey::Evaluations,
                 "eval:no-slot",
                 "meeting.slot_evaluation",

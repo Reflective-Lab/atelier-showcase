@@ -82,6 +82,22 @@ const PUZZLE: [[u8; 9]; 9] = [
 #[cfg(feature = "with-solver")]
 const REQUEST_ID: &str = "sudoku-ai-escargot";
 
+#[cfg(feature = "with-solver")]
+#[derive(Clone, Copy, Debug)]
+struct ScenarioProvenance;
+
+#[cfg(feature = "with-solver")]
+impl converge_pack::ProvenanceSource for ScenarioProvenance {
+    fn as_str(&self) -> &'static str {
+        "atelier-sudoku-cp-sat"
+    }
+}
+
+#[cfg(feature = "with-solver")]
+fn scenario_provenance() -> converge_pack::Provenance {
+    converge_pack::ProvenanceSource::provenance(ScenarioProvenance)
+}
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     print_banner();
@@ -121,7 +137,7 @@ async fn run_solver() -> Result<(), Box<dyn std::error::Error>> {
         ContextKey::Seeds,
         format!("cpsat-request:{REQUEST_ID}"),
         request,
-        "atelier-sudoku-cp-sat",
+        scenario_provenance(),
     ))
     .map_err(|e| format!("seed proposal: {e:?}"))?;
 

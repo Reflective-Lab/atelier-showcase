@@ -10,10 +10,26 @@
 //! pack.
 
 use atelier_domain::{DomainRecordPayload, json_value};
+use converge_kernel::Provenance;
 use converge_kernel::{
     AgentEffect, Context, ContextFact, ContextKey, ContextState, Engine, EngineHitlPolicy,
     GateDecision, ProposedFact, RunResult, Suggestor, TimeoutAction, TimeoutPolicy,
 };
+
+#[derive(Clone, Copy, Debug)]
+struct AtelierShowcaseProvenance;
+
+impl converge_kernel::ProvenanceSource for AtelierShowcaseProvenance {
+    fn as_str(&self) -> &'static str {
+        "atelier-showcase.loan-application"
+    }
+}
+
+const ATELIER_SHOWCASE_PROVENANCE: AtelierShowcaseProvenance = AtelierShowcaseProvenance;
+
+fn atelier_showcase_provenance() -> Provenance {
+    converge_kernel::ProvenanceSource::provenance(ATELIER_SHOWCASE_PROVENANCE)
+}
 
 fn record(record_type: &str, data: serde_json::Value) -> DomainRecordPayload {
     DomainRecordPayload::new(record_type, data)
@@ -31,8 +47,8 @@ impl Suggestor for ApplicationIngestionAgent {
         "ApplicationIngestionAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.loan-application"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -54,7 +70,7 @@ impl Suggestor for ApplicationIngestionAgent {
                     ContextKey::Signals,
                     "application",
                     record("loan_application", app),
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(1.0),
             );
@@ -72,8 +88,8 @@ impl Suggestor for DocumentVerificationAgent {
         "DocumentVerificationAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.loan-application"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -104,7 +120,7 @@ impl Suggestor for DocumentVerificationAgent {
                         "score": if docs_complete { 1.0 } else { 0.0 },
                         "details": if docs_complete { "All required documents provided" } else { "Missing documents" }
                     })),
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(1.0),
             );
@@ -122,8 +138,8 @@ impl Suggestor for CreditCheckAgent {
         "CreditCheckAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.loan-application"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -190,7 +206,7 @@ impl Suggestor for CreditCheckAgent {
                             }
                         }),
                     ),
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(1.0),
             );
@@ -208,8 +224,8 @@ impl Suggestor for ComplianceAgent {
         "ComplianceAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.loan-application"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -263,7 +279,7 @@ impl Suggestor for ComplianceAgent {
                             }
                         }),
                     ),
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(1.0),
             );
@@ -281,8 +297,8 @@ impl Suggestor for RiskAssessmentAgent {
         "RiskAssessmentAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.loan-application"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -338,7 +354,7 @@ impl Suggestor for RiskAssessmentAgent {
                             }
                         }),
                     ),
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(1.0),
             );
@@ -356,8 +372,8 @@ impl Suggestor for LoanDecisionAgent {
         "LoanDecisionAgent"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.loan-application"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -407,7 +423,7 @@ impl Suggestor for LoanDecisionAgent {
                     "confidence": confidence
                 }),
             ),
-            "loan-decision-agent",
+            self.provenance(),
         )
         .with_confidence(confidence);
 
@@ -455,7 +471,7 @@ async fn main() {
         ContextKey::Seeds,
         "application-1",
         record("loan_application", application.clone()),
-        "example-loan-application",
+        atelier_showcase_provenance(),
     ));
 
     println!(

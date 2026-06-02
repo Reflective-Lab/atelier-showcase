@@ -74,4 +74,4 @@ Foundation models are an excellent ingredient. They are not, by themselves, the 
 
 ---
 
-For the full version with mathematical citations, business scenarios per crate, and an extended trace through the €25,000-invoice Formation, see `~/dev/reflective/stack/mosaic-extensions/kb/Architecture/Pluralist Reasoning Substrate.md`.
+For the full version with mathematical citations, business scenarios per crate, and an extended trace through the €25,000-invoice Formation, see `~/dev/reflective/mosaic-extensions/kb/Architecture/Pluralist Reasoning Substrate.md`.

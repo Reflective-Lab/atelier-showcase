@@ -16,6 +16,22 @@
 
 use std::sync::Arc;
 
+#[derive(Clone, Copy, Debug)]
+struct AtelierShowcaseProvenance;
+
+impl converge_kernel::ProvenanceSource for AtelierShowcaseProvenance {
+    fn as_str(&self) -> &'static str {
+        "atelier-showcase.intent-codec-loop"
+    }
+}
+
+const ATELIER_SHOWCASE_PROVENANCE: AtelierShowcaseProvenance = AtelierShowcaseProvenance;
+
+fn atelier_showcase_provenance() -> Provenance {
+    converge_kernel::ProvenanceSource::provenance(ATELIER_SHOWCASE_PROVENANCE)
+}
+
+use converge_kernel::Provenance;
 use converge_kernel::{
     AgentEffect, Budget, Context, ContextKey, ContextState, ConvergeResult, Engine, FactPayload,
     ProposedFact, Suggestor, TextPayload,
@@ -186,8 +202,8 @@ impl Suggestor for ProfiledMember {
         self.name
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.intent-codec-loop"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -247,7 +263,7 @@ impl Suggestor for ProfiledMember {
                         ContextKey::Constraints,
                         self.provider_gap_id(&request_id),
                         gap,
-                        self.name().to_owned(),
+                        self.provenance(),
                     )
                     .with_confidence(1.0),
                 );
@@ -269,7 +285,7 @@ impl Suggestor for ProfiledMember {
                     self.output_key(),
                     self.note_id(&request_id),
                     note,
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(f64::from(self.confidence_max)),
             );
@@ -287,8 +303,8 @@ impl Suggestor for IntentCodecSuggestor {
         "intent-codec"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.intent-codec-loop"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -346,7 +362,7 @@ impl Suggestor for IntentCodecSuggestor {
                     ContextKey::Seeds,
                     format!("{FORMATION_REQUEST_PREFIX}{request_id}"),
                     formation_request,
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(0.85),
             );
@@ -355,7 +371,7 @@ impl Suggestor for IntentCodecSuggestor {
                     ContextKey::Seeds,
                     format!("{PROVIDER_REQUEST_PREFIX}{request_id}"),
                     ProviderRequestPayload::new(provider_request),
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(0.85),
             );
@@ -364,7 +380,7 @@ impl Suggestor for IntentCodecSuggestor {
                     ContextKey::Strategies,
                     format!("{ROUTE_PREFIX}{request_id}"),
                     route,
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(0.8),
             );
@@ -382,8 +398,8 @@ impl Suggestor for LoopStatusSuggestor {
         "loop-status"
     }
 
-    fn provenance(&self) -> &'static str {
-        "atelier-showcase.intent-codec-loop"
+    fn provenance(&self) -> Provenance {
+        atelier_showcase_provenance()
     }
 
     fn dependencies(&self) -> &[ContextKey] {
@@ -485,7 +501,7 @@ impl Suggestor for LoopStatusSuggestor {
                     ContextKey::Diagnostic,
                     status_id,
                     content,
-                    self.name().to_owned(),
+                    self.provenance(),
                 )
                 .with_confidence(confidence),
             );

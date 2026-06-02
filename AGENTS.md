@@ -37,9 +37,10 @@ versioning) before tagging.
 
 ## Topology
 
-- **Foundation:** `~/dev/reflective/stack/bedrock-platform/converge`
-- **Sibling checkouts:** `~/dev/reflective/stack/mosaic-extensions/{atelier-showcase, arbiter-policy, embassy-ports, ferrox-solvers, manifold-adapters, mnemos-knowledge, prism-analytics}`
-- **Organism platform:** `~/dev/reflective/stack/bedrock-platform/organism` (path-patched into this
+- **Foundation:** `~/dev/reflective/bedrock-platform/converge`
+- **Showcase checkout:** `~/dev/reflective/atelier-showcase`
+- **Sibling Mosaic checkouts:** `~/dev/reflective/mosaic-extensions/{arbiter-policy, embassy-ports, ferrox-solvers, manifold-adapters, mnemos-knowledge, prism-analytics}`
+- **Organism platform:** `~/dev/reflective/bedrock-platform/organism` (path-patched into this
   workspace via `[patch.crates-io]` while organism crates remain
   unreleased)
 - **Templates:** `~/dev/reflective/templates/converge-extension` (this scaffold)
