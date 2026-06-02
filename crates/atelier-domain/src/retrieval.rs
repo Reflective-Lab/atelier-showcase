@@ -274,15 +274,11 @@ impl RetrievalResult {
             proposal_confidence,
         };
 
-        let rerank_part = reranker
-            .map(|r| format!(",reranker={r}"))
-            .unwrap_or_default();
-        let prov = format!("retrieval:embedder={embedder}{rerank_part}");
         ProposedFact::new(
             target_key,
             format!("retrieved-{}", self.id),
             payload,
-            prov,
+            crate::ATELIER_DOMAIN_PROVENANCE.provenance(),
         )
         .with_confidence(proposal_confidence.as_f64())
     }
@@ -851,13 +847,19 @@ mod tests {
 
         assert!(!proposals.is_empty());
 
-        // Verify ProposedFact structure
+        // Verify ProposedFact structure. Provenance is the coarse source
+        // identifier (the agent that produced the proposal); per-call
+        // lineage (embedder, reranker, scores) lives on the typed payload.
         let proposal = &proposals[0];
         assert_eq!(proposal.key, ContextKey::Signals);
         assert!(proposal.id.starts_with("retrieved-"));
-        assert!(proposal.provenance().contains("retrieval:"));
-        assert!(proposal.provenance().contains("embedder=mock-embedder"));
-        assert!(proposal.provenance().contains("reranker=mock-reranker"));
+        assert_eq!(proposal.provenance(), "atelier-domain");
+
+        let payload = proposal
+            .payload::<RetrievalPayload>()
+            .expect("retrieval proposal carries a RetrievalPayload");
+        assert_eq!(payload.embedder, "mock-embedder");
+        assert_eq!(payload.reranker.as_deref(), Some("mock-reranker"));
     }
 
     #[test]
