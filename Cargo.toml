@@ -3,6 +3,7 @@ resolver = "2"
 members = [
     "crates/atelier-domain",
     "crates/organism-domain",
+    "crates/quality-render",
 
     # Scenarios — full end-to-end domain demos
     "scenarios/expense-approval",

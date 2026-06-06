@@ -55,6 +55,10 @@ const NOTE_PREFIX: &str = "formation-note:";
 const PROVIDER_GAP_PREFIX: &str = "missing-provider:";
 const LOOP_STATUS_PREFIX: &str = "loop-status:";
 
+const DEFAULT_REQUEST_ID: &str = "dd-acme-metrics";
+const ACTIVATE_SUBSCRIPTION_REQUEST_ID: &str = "activate-subscription";
+const REFILL_PREPAID_AI_CREDITS_REQUEST_ID: &str = "refill-prepaid-ai-credits";
+
 const CONTEXT_KEYS: [ContextKey; 9] = [
     ContextKey::Seeds,
     ContextKey::Hypotheses,
@@ -140,6 +144,27 @@ struct CompiledIntent {
     required_roles: Vec<SuggestorRole>,
     required_provider_capabilities: Vec<Capability>,
     notes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct DemoMode {
+    label: &'static str,
+    request_id: &'static str,
+    spec: &'static str,
+    applet: Option<AppletBrief>,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct AppletBrief {
+    truth_key: &'static str,
+    functional_need: &'static str,
+    emotional_need: &'static str,
+    relational_need: &'static str,
+    authority_points: &'static [&'static str],
+    evidence_sources: &'static [&'static str],
+    runtime_needs: &'static [&'static str],
+    commercial_needs: &'static [&'static str],
+    projection: &'static str,
 }
 
 #[derive(Debug, Clone)]
@@ -542,17 +567,28 @@ impl Backend for MockBackend {
 
 #[tokio::main]
 async fn main() {
-    println!("=== Intent Codec: Due Diligence Loop ===\n");
-    let result = run_loop(default_spec(), profiled_members(), provider_pool())
-        .await
-        .expect("should converge");
+    let mode = mode_from_args();
+    println!("=== Intent Codec: {} ===\n", mode.label);
+    if let Some(applet) = mode.applet {
+        print_applet_brief(applet);
+    }
+
+    let result = run_loop(
+        mode.request_id,
+        mode.spec,
+        profiled_members(),
+        provider_pool(),
+    )
+    .await
+    .expect("should converge");
     assert!(result.converged);
+    let expected_status_id = format!("{LOOP_STATUS_PREFIX}{}", mode.request_id);
     assert!(
         result
             .context
             .get(ContextKey::Diagnostic)
             .iter()
-            .any(|fact| fact.id() == "loop-status:dd-acme-metrics")
+            .any(|fact| fact.id().as_str() == expected_status_id)
     );
 
     println!(
@@ -570,6 +606,112 @@ async fn main() {
     print_section("Diagnostic", result.context.get(ContextKey::Diagnostic));
 }
 
+fn mode_from_args() -> DemoMode {
+    match std::env::args().nth(1).as_deref() {
+        Some("activate-subscription" | "subscription" | "applet") => activate_subscription_mode(),
+        Some("refill-prepaid-ai-credits" | "prepaid-credits" | "credits") => {
+            refill_prepaid_ai_credits_mode()
+        }
+        Some("-h" | "--help" | "help") => {
+            print_usage();
+            std::process::exit(0);
+        }
+        Some(other) => {
+            eprintln!("Unknown mode '{other}'. Falling back to due-diligence.\n");
+            default_mode()
+        }
+        None => default_mode(),
+    }
+}
+
+fn print_usage() {
+    println!("Usage:");
+    println!("  cargo run -p example-intent-codec-loop");
+    println!("  cargo run -p example-intent-codec-loop -- activate-subscription");
+    println!("  cargo run -p example-intent-codec-loop -- refill-prepaid-ai-credits");
+}
+
+fn default_mode() -> DemoMode {
+    DemoMode {
+        label: "Due Diligence Loop",
+        request_id: DEFAULT_REQUEST_ID,
+        spec: default_spec(),
+        applet: None,
+    }
+}
+
+fn activate_subscription_mode() -> DemoMode {
+    DemoMode {
+        label: "Activate Subscription Applet",
+        request_id: ACTIVATE_SUBSCRIPTION_REQUEST_ID,
+        spec: activate_subscription_spec(),
+        applet: Some(AppletBrief {
+            truth_key: "activate-subscription",
+            functional_need: "Turn an agreed commercial plan into active subscription and entitlement state.",
+            emotional_need: "Avoid paid-but-locked customer embarrassment and premature access risk.",
+            relational_need: "Customer admin, support, finance, RevOps, and partner owner need the same explainable activation state.",
+            authority_points: &[
+                "payment confirmation required",
+                "manual review for non-standard terms",
+                "Helm approval owns blocked activation handoff",
+            ],
+            evidence_sources: &[
+                "Commerce Rails subscription contract",
+                "runtime or commerce payment confirmation envelope",
+                "catalog plan definition",
+            ],
+            runtime_needs: &[
+                "normalized commerce event ingress",
+                "secret handling outside the applet",
+                "activation telemetry",
+            ],
+            commercial_needs: &[
+                "subscription lifecycle state",
+                "catalog plan resolution",
+                "entitlement grant",
+                "opening ledger context",
+            ],
+            projection: "operator sees subscription, plan, activation state, entitlements, approval or stop reason",
+        }),
+    }
+}
+
+fn refill_prepaid_ai_credits_mode() -> DemoMode {
+    DemoMode {
+        label: "Refill Prepaid AI Credits Applet",
+        request_id: REFILL_PREPAID_AI_CREDITS_REQUEST_ID,
+        spec: refill_prepaid_ai_credits_spec(),
+        applet: Some(AppletBrief {
+            truth_key: "refill-prepaid-ai-credits",
+            functional_need: "Apply a settled top-up to prepaid AI credit balances with financial traceability.",
+            emotional_need: "Avoid service interruption from stale balance while preventing credit grants for risky or unsettled payment.",
+            relational_need: "Customer admin, finance, support, runtime metering, and partner owner need an explainable balance change.",
+            authority_points: &[
+                "payment settlement required",
+                "risk review for unusual top-up size or signal",
+                "Helm approval owns blocked refill handoff",
+            ],
+            evidence_sources: &[
+                "Commerce Rails verified top-up event",
+                "active subscription commercial commitment",
+                "ledger credit grant receipt",
+            ],
+            runtime_needs: &[
+                "normalized top-up event ingress",
+                "provider secret handling outside the applet",
+                "balance-change telemetry",
+            ],
+            commercial_needs: &[
+                "payment settlement state",
+                "subscription commitment",
+                "credit entitlement balance",
+                "ledger credit grant",
+            ],
+            projection: "operator sees payment status, grant amount, subscription, credit entitlement, ledger entry, approval or stop reason",
+        }),
+    }
+}
+
 fn default_spec() -> &'static str {
     r#"Feature: convergent due diligence
   Scenario: Monterro-style diligence for Acme Metrics
@@ -579,6 +721,51 @@ fn default_spec() -> &'static str {
     And analytics should rank evidence quality
     And policy gates should block non-compliant synthesis
     Then assemble a mixed loop instead of a fixed pipeline"#
+}
+
+fn activate_subscription_spec() -> &'static str {
+    r#"Feature: activate subscription applet
+  Scenario: activate paid subscription
+    Given functional need is "activate subscription and entitlement state from an agreed commercial plan"
+    And emotional need is "avoid customer embarrassment from paid-but-locked access"
+    And relational need is "support, finance, customer admin, and partner owner trust the same receipt"
+    And payment confirmation is required before activation
+    And non-standard plan terms require Helm approval
+    And runtime owns event ingress, secrets, and telemetry
+    And Commerce Rails owns subscription, entitlement, ledger, and reconciliation
+    Then assemble a governed applet loop instead of a billing dashboard"#
+}
+
+fn refill_prepaid_ai_credits_spec() -> &'static str {
+    r#"Feature: refill prepaid AI credits applet
+  Scenario: refill prepaid AI credits
+    Given functional need is "apply settled top-up to prepaid AI credit balances with financial traceability"
+    And emotional need is "avoid service interruption while preventing risky or unsettled credit grants"
+    And relational need is "customer admin, finance, support, runtime metering, and partner owner trust the same balance receipt"
+    And payment settlement is required before credit grant
+    And unusual top-up size or risk signal requires Helm approval
+    And runtime owns event ingress, secrets, and balance-change telemetry
+    And Commerce Rails owns settlement state, subscription commitment, ledger grant, and reconciliation
+    Then assemble a governed applet loop instead of a metering or billing dashboard"#
+}
+
+fn print_applet_brief(applet: AppletBrief) {
+    println!("Applet truth: {}", applet.truth_key);
+    println!("Functional:   {}", applet.functional_need);
+    println!("Emotional:    {}", applet.emotional_need);
+    println!("Relational:   {}", applet.relational_need);
+    print_list("Authority", applet.authority_points);
+    print_list("Evidence", applet.evidence_sources);
+    print_list("Runtime", applet.runtime_needs);
+    print_list("Commerce", applet.commercial_needs);
+    println!("Projection:   {}\n", applet.projection);
+}
+
+fn print_list(label: &str, values: &[&str]) {
+    println!("{label}:");
+    for value in values {
+        println!("  - {value}");
+    }
 }
 
 fn print_section(title: &str, facts: &[converge_kernel::ContextFact]) {
@@ -632,6 +819,17 @@ fn fact_preview(fact: &converge_kernel::ContextFact) -> String {
 
 fn compile_intent(spec: &str) -> CompiledIntent {
     let spec_lower = spec.to_ascii_lowercase();
+    if spec_lower.contains("activate subscription")
+        || spec_lower.contains("subscription and entitlement")
+    {
+        return compile_subscription_applet_intent();
+    }
+    if spec_lower.contains("refill prepaid ai credits")
+        || spec_lower.contains("prepaid ai credit balances")
+    {
+        return compile_prepaid_credit_applet_intent();
+    }
+
     let objective = extract_company(spec)
         .map(|company| format!("due diligence on {company}"))
         .unwrap_or_else(|| "due diligence".to_string());
@@ -698,6 +896,54 @@ fn compile_intent(spec: &str) -> CompiledIntent {
     }
 }
 
+fn compile_subscription_applet_intent() -> CompiledIntent {
+    compile_revenue_applet_intent(
+        "activate paid subscription",
+        "commerce concerns stay in Commerce Rails: subscription, entitlement, ledger",
+        "Helm owns approval and trust-transfer for blocked activation",
+    )
+}
+
+fn compile_prepaid_credit_applet_intent() -> CompiledIntent {
+    compile_revenue_applet_intent(
+        "refill prepaid AI credits",
+        "commerce concerns stay in Commerce Rails: settlement, subscription, credit balance, ledger",
+        "Helm owns approval and trust-transfer for blocked refill",
+    )
+}
+
+fn compile_revenue_applet_intent(
+    objective: &str,
+    commerce_note: &str,
+    helm_note: &str,
+) -> CompiledIntent {
+    CompiledIntent {
+        objective: objective.to_string(),
+        formation_kind: "governed_applet",
+        required_roles: vec![
+            SuggestorRole::Planning,
+            SuggestorRole::Constraint,
+            SuggestorRole::Evaluation,
+            SuggestorRole::Synthesis,
+        ],
+        required_provider_capabilities: vec![
+            Capability::GraphTraversal,
+            Capability::AccessControl,
+            Capability::RuleEvaluation,
+            Capability::Classification,
+            Capability::Reasoning,
+            Capability::StructuredOutput,
+            Capability::TextGeneration,
+        ],
+        notes: vec![
+            "Intent Codec captured functional, emotional, and relational JTBD".to_string(),
+            "runtime concerns stay outside the applet: ingress, secrets, telemetry".to_string(),
+            commerce_note.to_string(),
+            helm_note.to_string(),
+        ],
+    }
+}
+
 fn extract_company(spec: &str) -> Option<String> {
     let start = spec.find('"')?;
     let rest = &spec[start + 1..];
@@ -734,26 +980,27 @@ fn build_engine(members: Vec<ProfiledMember>, backends: Vec<Arc<dyn Backend>>) -
     engine
 }
 
-fn seed_spec(spec: &str) -> ContextState {
+fn seed_spec(request_id: &str, spec: &str) -> ContextState {
     let mut context = ContextState::new();
     context
         .add_input_with_provenance(
             ContextKey::Seeds,
-            "intent-spec:dd-acme-metrics",
+            format!("{SPEC_PREFIX}{request_id}"),
             spec,
-            "gherkin:human-dd",
+            "gherkin:human-intent",
         )
         .expect("should stage input");
     context
 }
 
 async fn run_loop(
+    request_id: &str,
     spec: &str,
     members: Vec<ProfiledMember>,
     backends: Vec<Arc<dyn Backend>>,
 ) -> Result<ConvergeResult, converge_kernel::ConvergeError> {
     let mut engine = build_engine(members, backends);
-    engine.run(seed_spec(spec)).await
+    engine.run(seed_spec(request_id, spec)).await
 }
 
 fn profiled_members() -> Vec<ProfiledMember> {
@@ -1043,6 +1290,29 @@ And policy gates should block non-compliant synthesis"#,
     }
 
     #[test]
+    fn prepaid_credit_applet_selects_governed_applet_loop() {
+        let compiled = compile_intent(refill_prepaid_ai_credits_spec());
+
+        assert_eq!(compiled.objective, "refill prepaid AI credits");
+        assert_eq!(compiled.formation_kind, "governed_applet");
+        assert!(compiled.required_roles.contains(&SuggestorRole::Planning));
+        assert!(compiled.required_roles.contains(&SuggestorRole::Constraint));
+        assert!(compiled.required_roles.contains(&SuggestorRole::Evaluation));
+        assert!(compiled.required_roles.contains(&SuggestorRole::Synthesis));
+        assert!(
+            compiled
+                .required_provider_capabilities
+                .contains(&Capability::RuleEvaluation)
+        );
+        assert!(
+            compiled
+                .notes
+                .iter()
+                .any(|note| note.contains("settlement, subscription, credit balance, ledger"))
+        );
+    }
+
+    #[test]
     fn profile_snapshot_registration_captures_member_name() {
         let member = profiled_members()
             .into_iter()
@@ -1074,9 +1344,14 @@ And policy gates should block non-compliant synthesis"#,
 
     #[tokio::test]
     async fn rerun_is_idempotent_for_routing_outputs() {
-        let first = run_loop(default_spec(), profiled_members(), provider_pool())
-            .await
-            .expect("first run should converge");
+        let first = run_loop(
+            DEFAULT_REQUEST_ID,
+            default_spec(),
+            profiled_members(),
+            provider_pool(),
+        )
+        .await
+        .expect("first run should converge");
         let expected_strategy_ids: HashSet<_> = first
             .context
             .get(ContextKey::Strategies)
@@ -1128,9 +1403,14 @@ And policy gates should block non-compliant synthesis"#,
             .filter(|backend| backend.name() != "schema-writer")
             .collect();
 
-        let result = run_loop(default_spec(), profiled_members(), limited_pool)
-            .await
-            .expect("run should converge");
+        let result = run_loop(
+            DEFAULT_REQUEST_ID,
+            default_spec(),
+            profiled_members(),
+            limited_pool,
+        )
+        .await
+        .expect("run should converge");
 
         let status = result
             .context
@@ -1157,9 +1437,14 @@ And policy gates should block non-compliant synthesis"#,
             .filter(|member| member.name != "policy-sentinel")
             .collect();
 
-        let result = run_loop(default_spec(), reduced_members, provider_pool())
-            .await
-            .expect("run should converge");
+        let result = run_loop(
+            DEFAULT_REQUEST_ID,
+            default_spec(),
+            reduced_members,
+            provider_pool(),
+        )
+        .await
+        .expect("run should converge");
 
         let plan = result
             .context

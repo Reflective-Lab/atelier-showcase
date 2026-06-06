@@ -39,6 +39,22 @@ fix-lint:
     cargo clippy --fix --allow-staged --allow-dirty --allow-no-vcs
     cargo fmt
 
+# ── Quality dashboard ──────────────────────────────────────────────────────
+#
+# Regenerate quality/dashboard.md from arena-tests/reports/history.jsonl.
+# Run after any new arena report (or just before reviewing the vault).
+
+render-dashboard:
+    cargo run --quiet -p quality-render
+
+# Run arena, persist the run to history, regenerate the dashboard. One-stop
+# command for "I want to know how we're doing right now."
+quality-cycle:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    (cd ../arena-tests && just report-write)
+    cargo run --quiet -p quality-render
+
 # ── Showcase scenarios ─────────────────────────────────────────────────────
 #
 # Each scenario is a runnable end-to-end demo under scenarios/. Some

@@ -37,6 +37,20 @@ the spine. Tutorials from here on assume you've seen this loop.
 cargo run -p example-intent-codec-loop
 ```
 
+The default run shows the original due-diligence loop. To run the applet-shaped
+commercial proof path:
+
+```sh
+cargo run -p example-intent-codec-loop -- activate-subscription
+cargo run -p example-intent-codec-loop -- refill-prepaid-ai-credits
+```
+
+That mode prints the functional, emotional, and relational JTBD frame before the
+engine compiles the intent into formation and provider requests. It is a
+showcase of how an applet stays small: Commerce Rails owns subscription,
+entitlement, credit, and ledger consequence; Runtime Runway owns event ingress,
+secrets, and telemetry; Helm owns approval and operator trust transfer.
+
 ## Next
 
 → [`05-fixed-point-vs-budget`](../05-fixed-point-vs-budget) — the two
