@@ -7,6 +7,12 @@ All notable changes to `atelier` are recorded here.
 
 ## [Unreleased]
 
+- Added `scenario-quorum-open-inquiry`, exercising `marquee-apps/quorum-sense`'s
+  applet-manifest spine end-to-end using the same manifest + flavor Quorum
+  ships. Loads `open-adaptive-inquiry.applet.json` (Axiom-validated), composes
+  via `quorum_app::manifest_mapper::compose_contract`, and converts to an
+  `InquiryContract`. No mocks, no copies. Companion to Plan 2 in
+  `marquee-apps/quorum-sense/docs/superpowers/plans/`.
 - Added `scenario-sec-edgar-live-filing`, a narrow `REAL LIVE` proof slice that
   fetches Apple Inc.'s 2025 Form 10-K from official SEC EDGAR through a
   Converge engine run: `SecEdgarRequest` is seeded into `ContextKey::Seeds`,
