@@ -7,6 +7,7 @@ Append an entry on every kb/ change. Format mirrors converge.
 
 | Date | File | Change | Author |
 |------|------|--------|--------|
+| 2026-06-07 | Cargo.toml, AGENTS.md, scenarios/quorum-open-inquiry, History/CHANGELOG.md | Remove the Quorum open-inquiry scenario and app path dependencies; clarify that Atelier must not depend on production app repos, with app-owned proofs staying in app repos and cross-repo regression coverage moving to arena-tests | llm |
 | 2026-05-31 | Home.md, Planning/MILESTONES.md | Update relative links after the checkout moved to `~/dev/reflective/atelier-showcase`; Mosaic remains under `stack/mosaic-extensions`, and arena tests now live at `~/dev/reflective/arena-tests` | llm |
 | 2026-05-23 | scenarios/sec-edgar-live-filing, History/CHANGELOG.md, Planning/MILESTONES.md | Add recurring SEC review analysis: fetch the prior-year Apple 2024 10-K live, persist current/prior review profiles through `converge-storage` in-memory `ObjectStore`, reload the bounded history, and run Prism `SimilarityPack` through Converge | llm |
 | 2026-05-23 | Architecture/Storage Memory and Analytics.md, Home.md, INDEX.md | Record the storage/memory/analytics boundary: use `converge-storage` object stores plus Polars/Prism for bounded review-profile history, with Runtime Runway/GCS as cloud backend and no time-series DB until operational telemetry requirements appear | llm |

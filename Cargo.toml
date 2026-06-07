@@ -23,7 +23,6 @@ members = [
     "scenarios/multi-plan-allocation",
     "scenarios/n-queens-cp-sat",
     "scenarios/network-flow-transport",
-    "scenarios/quorum-open-inquiry",
     "scenarios/round-driven-formation-design",
     "scenarios/sec-edgar-live-filing",
     "scenarios/sudoku-cp-sat",
@@ -88,11 +87,6 @@ organism-domain = { path = "crates/organism-domain" }
 
 # Axiom — Truth source parsing and IntentPacket compilation (patched to local).
 axiom-truth = "0.15.0"
-
-# Quorum — open-inquiry scenario (path-deps; not on crates-io).
-quorum-truths = { path = "../marquee-apps/quorum-sense/crates/quorum-truths" }
-quorum-app    = { path = "../marquee-apps/quorum-sense/crates/quorum-app" }
-quorum-domain = { path = "../marquee-apps/quorum-sense/crates/quorum-domain" }
 
 # Common
 anyhow = "1"
@@ -174,7 +168,5 @@ organism-runtime      = { path = "../bedrock-platform/organism/crates/runtime" }
 organism-dynamics     = { path = "../bedrock-platform/organism/crates/dynamics" }
 converge-prism-analytics = { path = "../mosaic-extensions/prism-analytics/crates/prism" }
 axiom-truth              = { path = "../bedrock-platform/axiom" }
-# ferrox patches unify quorum-app's transitive converge-ferrox-solver dep
-# with atelier's local copy so the `links = "ortools"` constraint is met.
 converge-ferrox-solver   = { path = "../mosaic-extensions/ferrox-solvers/crates/ferrox" }
 converge-ferrox-ortools-sys = { path = "../mosaic-extensions/ferrox-solvers/crates/ortools-sys" }

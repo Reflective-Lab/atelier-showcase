@@ -22,8 +22,11 @@ domain packs and reference agents) and `organism-domain` (organisational
 packs and blueprints). Everything in `tutorials/` and `scenarios/` is
 `publish = false`.
 
-The dependency arrow stays one-way: foundation contracts ← extensions ←
-products ← showcase.
+The dependency arrow stays one-way: foundation contracts → extensions →
+showcase. Atelier may demonstrate product-shaped outcomes, but it must not
+depend on production app repos such as `marquee-apps/` or `studio-apps/`.
+If an app needs an outside proof, keep that proof inside the app repo or
+move cross-repo regression coverage to `arena-tests`.
 
 ## Standards
 

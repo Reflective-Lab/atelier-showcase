@@ -20,17 +20,7 @@ checkout_reflective_repo() {
 
   mkdir -p "$(dirname "$dest")"
   echo "==> checkout Reflective-Lab/${repo} -> ${relative_path}"
-  if [[ "$repo" == "quorum-sense" && -z "${CI_REPO_TOKEN:-}" ]]; then
-    echo "error: Reflective-Lab/quorum-sense is private; set CI_REPO_TOKEN with read access before this CI job can clone it" >&2
-    exit 1
-  fi
-
-  local clone_url="https://github.com/Reflective-Lab/${repo}.git"
-  if [[ -n "${CI_REPO_TOKEN:-}" ]]; then
-    clone_url="https://x-access-token:${CI_REPO_TOKEN}@github.com/Reflective-Lab/${repo}.git"
-  fi
-
-  GIT_TERMINAL_PROMPT=0 git clone --depth=1 --quiet "$clone_url" "$dest"
+  GIT_TERMINAL_PROMPT=0 git clone --depth=1 --quiet "https://github.com/Reflective-Lab/${repo}.git" "$dest"
 }
 
 checkout_reflective_repo converge ../bedrock-platform/converge
@@ -47,4 +37,3 @@ checkout_reflective_repo soter-smt ../mosaic-extensions/soter-smt
 checkout_reflective_repo arena-tests ../arena-tests
 checkout_reflective_repo runtime-runway ../runtime-runway
 checkout_reflective_repo commerce-rails ../commerce-rails
-checkout_reflective_repo quorum-sense ../marquee-apps/quorum-sense
