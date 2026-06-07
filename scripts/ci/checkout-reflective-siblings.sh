@@ -20,7 +20,17 @@ checkout_reflective_repo() {
 
   mkdir -p "$(dirname "$dest")"
   echo "==> checkout Reflective-Lab/${repo} -> ${relative_path}"
-  GIT_TERMINAL_PROMPT=0 git clone --depth=1 --quiet "https://github.com/Reflective-Lab/${repo}.git" "$dest"
+  if [[ "$repo" == "quorum-sense" && -z "${CI_REPO_TOKEN:-}" ]]; then
+    echo "error: Reflective-Lab/quorum-sense is private; set CI_REPO_TOKEN with read access before this CI job can clone it" >&2
+    exit 1
+  fi
+
+  local clone_url="https://github.com/Reflective-Lab/${repo}.git"
+  if [[ -n "${CI_REPO_TOKEN:-}" ]]; then
+    clone_url="https://x-access-token:${CI_REPO_TOKEN}@github.com/Reflective-Lab/${repo}.git"
+  fi
+
+  GIT_TERMINAL_PROMPT=0 git clone --depth=1 --quiet "$clone_url" "$dest"
 }
 
 checkout_reflective_repo converge ../bedrock-platform/converge

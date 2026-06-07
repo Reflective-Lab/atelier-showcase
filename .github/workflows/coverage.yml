@@ -20,6 +20,8 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Checkout Reflective sibling dependencies
+        env:
+          CI_REPO_TOKEN: ${{ secrets.CI_REPO_TOKEN }}
         run: bash scripts/ci/checkout-reflective-siblings.sh
       - uses: dtolnay/rust-toolchain@stable
         with:
