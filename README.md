@@ -7,7 +7,7 @@
 [![Crates.io](https://img.shields.io/crates/v/converge-atelier-domain.svg)](https://crates.io/crates/converge-atelier-domain)
 [![docs.rs](https://docs.rs/converge-atelier-domain/badge.svg)](https://docs.rs/converge-atelier-domain)
 [![dependency status](https://deps.rs/repo/github/Reflective-Lab/atelier-showcase/status.svg)](https://deps.rs/repo/github/Reflective-Lab/atelier-showcase)
-![MSRV](https://img.shields.io/badge/MSRV-1.94.0-blue)
+![MSRV](https://img.shields.io/badge/MSRV-1.96.0-blue)
 <img alt="gitleaks badge" src="https://img.shields.io/badge/protected%20by-gitleaks-blue">
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
