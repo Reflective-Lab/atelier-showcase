@@ -18,6 +18,12 @@ Where Converge says *what's possible*, atelier says *here's how it looks*.
 Use it to learn the platform, seed a new engagement, or prove out an
 architectural idea.
 
+## Boundary
+
+> Owns: tutorial spine (numbered 01–19), scenario gallery (23 demo crates), reusable showcase domain packs (`atelier-domain`, `organism-domain`), and the `quality-render` dashboard tool. Does NOT own: production app surfaces (→ marquee/studio); platform contracts (→ Converge); cross-extension regression coverage (→ Arena Tests).
+
+— Canonical claim: [Atelier Showcase](https://github.com/Reflective-Lab/reflective/blob/main/KB/04-architecture/current-system-map.md#atelier-showcase) in the boundary registry. Update there first; this README quotes that source.
+
 ## Where to start
 
 - **New to Converge?** Walk `tutorials/` in order, starting at
