@@ -21,6 +21,6 @@ Steps to reproduce:
 ## Environment
 
 - OS: [e.g., macOS, Linux]
-- Rust version: [e.g., 1.94.0]
+- Rust version: [e.g., 1.96.0]
 - atelier version: [e.g., 1.0.0]
 - Converge head: [git SHA of `~/dev/reflective/bedrock-platform/converge` checkout]
