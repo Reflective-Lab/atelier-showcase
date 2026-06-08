@@ -34,7 +34,7 @@ jobs:
       - name: Generate coverage
         run: |
           cargo llvm-cov --workspace --lib --tests \
-            --ignore-filename-regex '(^|/)(tests|benches|examples)/' \
+            --ignore-filename-regex '(^|/)(tests|benches|tutorials|scenarios)/' \
             --json --summary-only --output-path coverage.json
       - name: Extract coverage percentage
         id: cov
