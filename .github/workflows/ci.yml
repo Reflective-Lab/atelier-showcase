@@ -22,6 +22,8 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
       - uses: Swatinem/rust-cache@v2
+      - name: Install protobuf compiler
+        run: bash scripts/ci/install-protobuf.sh
       - name: Check workspace
         run: cargo check --workspace
 
@@ -37,6 +39,8 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
       - uses: Swatinem/rust-cache@v2
+      - name: Install protobuf compiler
+        run: bash scripts/ci/install-protobuf.sh
       - name: Run tests
         run: cargo test --workspace --all-targets
 
@@ -53,6 +57,8 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           components: clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Install protobuf compiler
+        run: bash scripts/ci/install-protobuf.sh
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
@@ -68,7 +74,7 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           components: rustfmt
       - name: Check formatting
-        run: cargo fmt --all -- --check
+        run: cargo fmt --check
 
   # Cross-extension solver e2e — exercises ferrox CP-SAT alongside arbiter +
   # prism. Requires libortools to be built/installed on the runner, which is

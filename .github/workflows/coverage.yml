@@ -26,6 +26,8 @@ jobs:
           toolchain: ${{ env.RUST_VERSION }}
           components: llvm-tools-preview
       - uses: Swatinem/rust-cache@v2
+      - name: Install protobuf compiler
+        run: bash scripts/ci/install-protobuf.sh
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-llvm-cov

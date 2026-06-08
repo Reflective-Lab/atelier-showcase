@@ -26,7 +26,7 @@ jobs:
         with:
           tool: cargo-audit
       - name: Run cargo-audit (blocking)
-        run: cargo audit --deny warnings
+        run: bash scripts/ci/cargo-audit-blocking.sh
 
   deny:
     name: Cargo Deny

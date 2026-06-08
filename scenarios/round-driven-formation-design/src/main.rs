@@ -1573,12 +1573,14 @@ impl LlmSynthesisProducer {
 
 #[async_trait]
 impl SynthesisProducer for LlmSynthesisProducer {
+    type Payload = TextPayload;
+
     async fn synthesize(
         &self,
         round: u8,
         notes: &[ContextFact],
         _ctx: &dyn Context,
-    ) -> Result<String, String> {
+    ) -> Result<Self::Payload, String> {
         let note_block = notes
             .iter()
             .filter_map(|fact| fact.text())
@@ -1631,7 +1633,7 @@ impl SynthesisProducer for LlmSynthesisProducer {
             .chat(request)
             .await
             .map_err(|e| format!("chat backend error: {e}"))?;
-        Ok(response.content)
+        Ok(TextPayload::new(response.content))
     }
 }
 

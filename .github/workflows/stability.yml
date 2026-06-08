@@ -22,6 +22,8 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
       - uses: Swatinem/rust-cache@v2
+      - name: Install protobuf compiler
+        run: bash scripts/ci/install-protobuf.sh
       - name: Ensure benchmarks compile
         run: cargo bench --workspace --no-run
 
@@ -37,6 +39,8 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
       - uses: Swatinem/rust-cache@v2
+      - name: Install protobuf compiler
+        run: bash scripts/ci/install-protobuf.sh
       - name: Run benchmarks
         run: cargo bench --workspace
       - name: Extract baseline data
@@ -69,6 +73,8 @@ jobs:
         with:
           toolchain: ${{ env.RUST_VERSION }}
       - uses: Swatinem/rust-cache@v2
+      - name: Install protobuf compiler
+        run: bash scripts/ci/install-protobuf.sh
       - name: Run soak tests
         env:
           SOAK_CYCLES: "1000"
@@ -90,10 +96,7 @@ jobs:
         with:
           tool: cargo-audit
       - name: Run cargo-audit (blocking)
-        # Mirrors deny.toml [advisories].ignore — keep in lockstep.
-        run: >
-          cargo audit --deny warnings
-          --ignore RUSTSEC-2021-0141
+        run: bash scripts/ci/cargo-audit-blocking.sh
 
   deny:
     name: Cargo Deny
