@@ -1,0 +1,22 @@
+[package]
+name = "scenario-helm-realtime-stem-headless"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Headless multi-user realtime Session Intelligence Spine stress cases using helm-client and server loop coordination"
+
+[lib]
+name = "helm_realtime_stem_headless"
+path = "src/lib.rs"
+
+[[bin]]
+name = "helm-realtime-stem-headless"
+path = "src/main.rs"
+
+[dependencies]
+director-contracts = { path = "../../../bedrock-platform/helms/crates/director-contracts" }
+helm-client = { path = "../../../bedrock-platform/helms/crates/helm-client" }
+helm-session-contracts = { path = "../../../bedrock-platform/helms/crates/helm-session-contracts" }
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true

@@ -7,6 +7,12 @@ All notable changes to `atelier` are recorded here.
 
 ## [Unreleased]
 
+- Added `scenario-helm-realtime-stem-headless`, a headless multi-user
+  Session Intelligence Spine stress harness. Each interactive case drives real
+  `helm-client` `ClientHelm` instances per simulated participant, coordinated
+  with deterministic short-running and long-running server loop profiles for
+  offload, gate surfaces, and Marquee-shaped burst admission — without
+  depending on `marquee-apps/quorum-sense` or live SSE transport.
 - Removed `scenario-quorum-open-inquiry` from the Atelier workspace because
   Atelier must not depend on production app repos such as
   `marquee-apps/quorum-sense`. Quorum applet-manifest proofs should live in
