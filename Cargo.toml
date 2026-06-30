@@ -18,6 +18,7 @@ members = [
     "scenarios/mip-facility-location",
     "scenarios/solver-policy-allocation",
     "scenarios/high-risk-claim-portfolio",
+    "scenarios/helm-coordination-headless",
     "scenarios/jobshop-ft06",
     "scenarios/layered-governance",
     "scenarios/multi-plan-allocation",

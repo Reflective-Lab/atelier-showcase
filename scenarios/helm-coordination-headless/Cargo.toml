@@ -1,0 +1,22 @@
+[package]
+name = "scenario-helm-coordination-headless"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Demo: headless Helm coordination session with readiness receipts"
+
+[lib]
+name = "helm_coordination_headless"
+path = "src/lib.rs"
+
+[[bin]]
+name = "helm-coordination-headless"
+path = "src/main.rs"
+
+[dependencies]
+application-storage = { path = "../../../bedrock-platform/helms/crates/application-storage" }
+helm-module-contracts = { path = "../../../bedrock-platform/helms/crates/helm-module-contracts" }
+helm-operator-control = { path = "../../../bedrock-platform/helms/crates/helm-operator-control" }
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
