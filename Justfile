@@ -249,6 +249,9 @@ resource-declarations:
 # RUSTSEC-2026-0192 (ttf-parser unmaintained, via lopdf) are pinned
 # transitively via pdf-extract 0.10 -> organism-intelligence; no fixed
 # version reachable until pdf-extract moves to lopdf >=0.42.
+# 2026-07-02: RUSTSEC-2026-0194/-0195 (quick-xml 0.38.4 DoS-class, fix
+# >=0.41) pinned transitively via object_store 0.12.5 (semver-locked by
+# lancedb/surrealdb); no fix path until they move.
 # Output:
 #   target/security/audit.json   (cargo-audit JSON)
 #   target/security/deny.txt     (cargo-deny human report)
@@ -273,6 +276,8 @@ security-audit:
         --ignore RUSTSEC-2026-0002 \
         --ignore RUSTSEC-2026-0187 \
         --ignore RUSTSEC-2026-0192 \
+        --ignore RUSTSEC-2026-0194 \
+        --ignore RUSTSEC-2026-0195 \
         > "${out_dir}/audit.json" || true
     cargo audit --deny warnings \
         --ignore RUSTSEC-2023-0089 \
@@ -286,6 +291,8 @@ security-audit:
         --ignore RUSTSEC-2026-0002 \
         --ignore RUSTSEC-2026-0187 \
         --ignore RUSTSEC-2026-0192 \
+        --ignore RUSTSEC-2026-0194 \
+        --ignore RUSTSEC-2026-0195 \
         2>&1 | tee -a "${summary}"
     audit_human_status=${PIPESTATUS[0]}
     echo "" | tee -a "${summary}"
