@@ -16,7 +16,7 @@ jobs:
     name: just ci
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Checkout Reflective sibling dependencies
         run: bash scripts/ci/checkout-reflective-siblings.sh
       - uses: dtolnay/rust-toolchain@stable
@@ -43,7 +43,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     continue-on-error: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Checkout Reflective sibling dependencies
         run: bash scripts/ci/checkout-reflective-siblings.sh
       - uses: dtolnay/rust-toolchain@stable
