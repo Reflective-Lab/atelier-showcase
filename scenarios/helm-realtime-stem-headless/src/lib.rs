@@ -446,7 +446,7 @@ impl RealtimeStemRun {
                 }
             }),
         };
-        slot.helm.formation_completed(&loop_id, output);
+        slot.helm.formation_completed(&loop_id, output, None);
         let submissions = slot.helm.drain_submissions();
         self.emit(
             StemEventKind::LocalLoopCompleted,
