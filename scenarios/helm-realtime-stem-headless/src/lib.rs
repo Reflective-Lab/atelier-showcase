@@ -123,24 +123,24 @@ pub struct StemEvent {
     pub payload: Value,
 }
 
-struct ParticipantSlot {
-    display_name: String,
-    role: String,
-    helm: ClientHelm,
-    pending_local_spawn: bool,
-    pending_server_offload: Option<String>,
+pub struct ParticipantSlot {
+    pub display_name: String,
+    pub role: String,
+    pub helm: ClientHelm,
+    pub pending_local_spawn: bool,
+    pub pending_server_offload: Option<String>,
 }
 
 #[derive(Debug, Clone)]
-struct ServerLoopRecord {
-    server_formation_id: String,
-    participant_id: String,
-    formation_type: String,
-    profile: ServerLoopProfile,
-    started_at_ms: u64,
-    completes_at_ms: u64,
-    client_loop_id: Option<LoopId>,
-    completed: bool,
+pub struct ServerLoopRecord {
+    pub server_formation_id: String,
+    pub participant_id: String,
+    pub formation_type: String,
+    pub profile: ServerLoopProfile,
+    pub started_at_ms: u64,
+    pub completes_at_ms: u64,
+    pub client_loop_id: Option<LoopId>,
+    pub completed: bool,
 }
 
 /// Deterministic headless coordinator for multi-user realtime stem scenarios.
@@ -154,7 +154,7 @@ pub struct RealtimeStemRun {
     pub prepared_proposals: Vec<String>,
     pub admitted_fact_ids: Vec<String>,
     now_ms: u64,
-    start_ms: u64,
+    pub start_ms: u64,
     default_budget_ms: u64,
 }
 
@@ -847,19 +847,19 @@ fn normalize_loop_ids(
         Value::Object(map) => {
             let mut out = serde_json::Map::new();
             for (key, child) in map {
-                if key == "loop_id" {
-                    if let Some(id) = child.as_str() {
-                        let normalized = id_map
-                            .entry(id.to_string())
-                            .or_insert_with(|| {
-                                let label = format!("loop-{next}");
-                                *next += 1;
-                                label
-                            })
-                            .clone();
-                        out.insert(key.clone(), Value::String(normalized));
-                        continue;
-                    }
+                if key == "loop_id"
+                    && let Some(id) = child.as_str()
+                {
+                    let normalized = id_map
+                        .entry(id.to_string())
+                        .or_insert_with(|| {
+                            let label = format!("loop-{next}");
+                            *next += 1;
+                            label
+                        })
+                        .clone();
+                    out.insert(key.clone(), Value::String(normalized));
+                    continue;
                 }
                 out.insert(key.clone(), normalize_loop_ids(child, id_map, next));
             }
