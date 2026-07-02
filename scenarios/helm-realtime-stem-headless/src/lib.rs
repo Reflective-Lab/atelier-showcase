@@ -280,11 +280,7 @@ impl RealtimeStemRun {
     }
 
     /// Simulate the native layer spawning a fresh local formation after pause-and-inject.
-    pub fn spawn_fresh_local_loop(
-        &mut self,
-        participant_id: &str,
-        description: impl Into<String>,
-    ) {
+    pub fn spawn_fresh_local_loop(&mut self, participant_id: &str, description: impl Into<String>) {
         let description = description.into();
         let loop_id = {
             let slot = self
@@ -292,9 +288,7 @@ impl RealtimeStemRun {
                 .get_mut(participant_id)
                 .unwrap_or_else(|| panic!("unknown participant: {participant_id}"));
             let push = push_script(
-                self.session_id
-                    .as_deref()
-                    .unwrap_or("session"),
+                self.session_id.as_deref().unwrap_or("session"),
                 99,
                 self.now_ms + 1,
                 UrgencyIntent::Informational,
@@ -519,7 +513,8 @@ impl RealtimeStemRun {
             .first()
             .map(|view| view.gate_id.clone())
             .unwrap_or_else(|| panic!("no pending gate for {participant_id}"));
-        slot.helm.respond_to_gate(&GateId::from_string(gate_id.clone()), response);
+        slot.helm
+            .respond_to_gate(&GateId::from_string(gate_id.clone()), response);
         let submissions = slot.helm.drain_submissions();
         self.emit(
             StemEventKind::GateResponded,
@@ -866,10 +861,7 @@ fn normalize_loop_ids(
                         continue;
                     }
                 }
-                out.insert(
-                    key.clone(),
-                    normalize_loop_ids(child, id_map, next),
-                );
+                out.insert(key.clone(), normalize_loop_ids(child, id_map, next));
             }
             Value::Object(out)
         }
@@ -912,7 +904,12 @@ mod tests {
             json!({"objective": "server"}),
         );
         run.deliver_push("alice", disruptive);
-        run.ack_server_offload("alice", "srv-1", "dd-analysis", ServerLoopProfile::ShortProbe);
+        run.ack_server_offload(
+            "alice",
+            "srv-1",
+            "dd-analysis",
+            ServerLoopProfile::ShortProbe,
+        );
 
         let views = run.registry_views();
         let alice = views.get("alice").expect("alice");
@@ -931,9 +928,10 @@ mod tests {
     #[test]
     fn budget_exhaustion_marks_local_loop_failed() {
         let case = cases::run_case(InteractiveCaseId::BudgetExhaustion);
-        assert!(case
-            .events
-            .iter()
-            .any(|event| event.kind == StemEventKind::LocalLoopFailed));
+        assert!(
+            case.events
+                .iter()
+                .any(|event| event.kind == StemEventKind::LocalLoopFailed)
+        );
     }
 }

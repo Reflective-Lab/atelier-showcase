@@ -3,9 +3,7 @@
 
 //! Named interactive cases that stress the Session Intelligence Spine headlessly.
 
-use crate::{
-    InteractiveCaseId, RealtimeStemRun, ServerLoopProfile, push_script,
-};
+use crate::{InteractiveCaseId, RealtimeStemRun, ServerLoopProfile, push_script};
 use helm_session_contracts::urgency::UrgencyIntent;
 
 /// Run one named interactive case and return the deterministic artifact.
@@ -127,7 +125,11 @@ fn preemptive_pivot() -> RealtimeStemRun {
     run.complete_local_loop(
         "cyra",
         serde_json::json!({"conclusion": "segment-by-need", "dissent_preserved": true}),
-        Some(("need_more_evidence", "high", "quorum://hypothesis/segmentation")),
+        Some((
+            "need_more_evidence",
+            "high",
+            "quorum://hypothesis/segmentation",
+        )),
     );
     run.tick(4_000);
     run
