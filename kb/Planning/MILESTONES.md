@@ -53,6 +53,7 @@ Theatre smell checklist:
 - The README says "end-to-end" but no boundary break, missing type, or upstream issue emerges.
 
 ### Acceptance criteria for any scenario added under v1.1.0
+**Epic:** E7
 
 - [ ] Touches **three or more** Mosaic modules wired through Converge contracts, not bespoke glue.
 - [ ] Domain-specific enough that the "why this matters" passes atelier's specificity bar (atelier-showcase is one of the few places allowed to speak concretely about domains).
@@ -74,6 +75,7 @@ Build the first four v1.1.0 scenarios in the order that maximizes under-exercise
 Defer **cross-llm-adjudication** until the first four land. It is useful, but it has the highest risk of reading like model-vendor choreography unless the reflexion memory and approval quorum materially change a regulated decision. Keep **ip-counterparty-scoring** as the stretch failure case: only start it when the team is ready to grow skeleton Embassy ports through real missing entity shapes.
 
 ### Proposed scenarios
+**Epic:** E7
 
 - [x] **sec-edgar-live-filing** — landed 2026-05-22 as the first narrow
   `REAL LIVE` Mosaic source-observation proof slice. It fetches Apple Inc.'s
@@ -113,6 +115,7 @@ Defer **cross-llm-adjudication** until the first four land. It is useful, but it
 - [ ] **ip-counterparty-scoring** *(stretch — forces skeleton growth)* — Embassy skeletons (`uspto`, `epo`, `openalex`, `arxiv`) → Prism `SimilarityPack` + `RankingPack` → Soter SMT invariant "score ≥ X requires legal sign-off." *Pressure-tests:* the P1 skeleton ports — pulling on them must surface the missing entity shapes and grow them through real use, not paper over them. This is the scenario most likely to fail on first attempt; that failure is the point.
 
 ### Definition of done for v1.1.0
+**Epic:** E7
 
 - [ ] At least **four of the seven** proposed scenarios land with `just release-check` clean and coverage at or above v1.0.0's 83.3% floor.
 - [ ] Each landed scenario carries a Capability-Matrix back-link in its `README.md` naming which functions it pulls.
