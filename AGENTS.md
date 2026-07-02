@@ -71,9 +71,23 @@ Or `just release-check`. Archive the artefacts under `target/security/`,
 - `kb/Architecture/` — surface diagrams, ports, ADRs
 - `kb/Building/` — getting-started, release commands
 - `kb/History/CHANGELOG.md` — release notes
-- `kb/Planning/MILESTONES.md` — scheduled delivery
+- `kb/Planning/MILESTONES.md` — archived; open work lives in Linear
+  (team `RFL`, label `module:atelier-showcase`)
 
 Every kb/ page carries `source:` frontmatter (`human` / `llm` / `mixed`).
+
+## Floor versions
+
+This repository targets:
+
+- Converge >= 3.9.1
+- MSRV 1.96.0
+- Edition 2024
+- `unsafe_code = "forbid"`
+
+In the root `~/dev/reflective` checkout, selected Converge, Organism, and
+Prism crates are path-patched to local sources while unreleased contracts
+are exercised. Keep those patches aligned with `Cargo.toml`.
 
 ## What this repo is not
 
