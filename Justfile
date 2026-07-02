@@ -10,10 +10,16 @@ set dotenv-load := true
 # ── Compile gates ──────────────────────────────────────────────────────────
 
 # Run all four basic gates
-default: check lint test
+default: ci
+
+# Canonical CI aggregate (RP-CI-PARITY): CI runs exactly `just ci`.
+ci: fmt-check check lint test
+
+fmt-check:
+    cargo fmt --all -- --check
 
 check:
-    cargo check --workspace
+    cargo check --workspace --all-targets
 
 test:
     cargo test --workspace --all-targets
@@ -28,16 +34,15 @@ solver-check:
     cargo test -p example-solver-policy-allocation --features with-solver --test end_to_end
 
 lint:
-    cargo fmt --check
     cargo clippy --workspace --all-targets -- -D warnings
 
 fmt:
-    cargo fmt
+    cargo fmt --all
 
 # Auto-fix lint issues where possible
 fix-lint:
     cargo clippy --fix --allow-staged --allow-dirty --allow-no-vcs
-    cargo fmt
+    cargo fmt --all
 
 # ── Quality dashboard ──────────────────────────────────────────────────────
 #
@@ -239,6 +244,11 @@ resource-declarations:
 # ── The four release-grade gates ───────────────────────────────────────────
 
 # Gate 1: supply-chain audit. Mirrors foundation's security-audit.
+# Keep the ignore list in sync with scripts/ci/cargo-audit-blocking.sh.
+# 2026-07-02: RUSTSEC-2026-0187 (lopdf 0.38, fix >=0.42) and
+# RUSTSEC-2026-0192 (ttf-parser unmaintained, via lopdf) are pinned
+# transitively via pdf-extract 0.10 -> organism-intelligence; no fixed
+# version reachable until pdf-extract moves to lopdf >=0.42.
 # Output:
 #   target/security/audit.json   (cargo-audit JSON)
 #   target/security/deny.txt     (cargo-deny human report)
@@ -261,6 +271,8 @@ security-audit:
         --ignore RUSTSEC-2025-0141 \
         --ignore RUSTSEC-2025-0119 \
         --ignore RUSTSEC-2026-0002 \
+        --ignore RUSTSEC-2026-0187 \
+        --ignore RUSTSEC-2026-0192 \
         > "${out_dir}/audit.json" || true
     cargo audit --deny warnings \
         --ignore RUSTSEC-2023-0089 \
@@ -272,6 +284,8 @@ security-audit:
         --ignore RUSTSEC-2025-0141 \
         --ignore RUSTSEC-2025-0119 \
         --ignore RUSTSEC-2026-0002 \
+        --ignore RUSTSEC-2026-0187 \
+        --ignore RUSTSEC-2026-0192 \
         2>&1 | tee -a "${summary}"
     audit_human_status=${PIPESTATUS[0]}
     echo "" | tee -a "${summary}"
@@ -373,6 +387,7 @@ release-check:
     just coverage
     PERF_BASELINE="v$(grep -m1 '^version' Cargo.toml | sed -E 's/.*"(.*)".*/\1/')" just performance-profile
     SOAK_DURATION_MIN=5 just soak
+    just fmt-check
     just lint
     just resource-declarations
     cargo test --workspace
