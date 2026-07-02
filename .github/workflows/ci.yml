@@ -5,14 +5,15 @@ on:
     branches: ["main"]
   pull_request:
     branches: ["main"]
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
   RUST_VERSION: "1.96.0"
 
 jobs:
-  check:
-    name: Check
+  ci:
+    name: just ci
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -21,60 +22,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: ${{ env.RUST_VERSION }}
+          components: clippy, rustfmt
       - uses: Swatinem/rust-cache@v2
       - name: Install protobuf compiler
         run: bash scripts/ci/install-protobuf.sh
-      - name: Check workspace
-        run: cargo check --workspace
-
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    needs: check
-    steps:
-      - uses: actions/checkout@v6
-      - name: Checkout Reflective sibling dependencies
-        run: bash scripts/ci/checkout-reflective-siblings.sh
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-      - uses: Swatinem/rust-cache@v2
-      - name: Install protobuf compiler
-        run: bash scripts/ci/install-protobuf.sh
-      - name: Run tests
-        run: cargo test --workspace --all-targets
-
-  lint:
-    name: Lint
-    runs-on: ubuntu-latest
-    needs: check
-    steps:
-      - uses: actions/checkout@v6
-      - name: Checkout Reflective sibling dependencies
-        run: bash scripts/ci/checkout-reflective-siblings.sh
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
-      - name: Install protobuf compiler
-        run: bash scripts/ci/install-protobuf.sh
-      - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
-
-  format:
-    name: Format
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - name: Checkout Reflective sibling dependencies
-        run: bash scripts/ci/checkout-reflective-siblings.sh
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: ${{ env.RUST_VERSION }}
-          components: rustfmt
-      - name: Check formatting
-        run: cargo fmt --check
+      - uses: extractions/setup-just@v3
+      - run: just ci
 
   # Cross-extension solver e2e — exercises ferrox CP-SAT alongside arbiter +
   # prism. Requires libortools to be built/installed on the runner, which is

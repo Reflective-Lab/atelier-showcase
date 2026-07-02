@@ -123,24 +123,24 @@ pub struct StemEvent {
     pub payload: Value,
 }
 
-struct ParticipantSlot {
-    display_name: String,
-    role: String,
-    helm: ClientHelm,
-    pending_local_spawn: bool,
-    pending_server_offload: Option<String>,
+pub struct ParticipantSlot {
+    pub display_name: String,
+    pub role: String,
+    pub helm: ClientHelm,
+    pub pending_local_spawn: bool,
+    pub pending_server_offload: Option<String>,
 }
 
 #[derive(Debug, Clone)]
-struct ServerLoopRecord {
-    server_formation_id: String,
-    participant_id: String,
-    formation_type: String,
-    profile: ServerLoopProfile,
-    started_at_ms: u64,
-    completes_at_ms: u64,
-    client_loop_id: Option<LoopId>,
-    completed: bool,
+pub struct ServerLoopRecord {
+    pub server_formation_id: String,
+    pub participant_id: String,
+    pub formation_type: String,
+    pub profile: ServerLoopProfile,
+    pub started_at_ms: u64,
+    pub completes_at_ms: u64,
+    pub client_loop_id: Option<LoopId>,
+    pub completed: bool,
 }
 
 /// Deterministic headless coordinator for multi-user realtime stem scenarios.
@@ -154,7 +154,7 @@ pub struct RealtimeStemRun {
     pub prepared_proposals: Vec<String>,
     pub admitted_fact_ids: Vec<String>,
     now_ms: u64,
-    start_ms: u64,
+    pub start_ms: u64,
     default_budget_ms: u64,
 }
 
@@ -280,11 +280,7 @@ impl RealtimeStemRun {
     }
 
     /// Simulate the native layer spawning a fresh local formation after pause-and-inject.
-    pub fn spawn_fresh_local_loop(
-        &mut self,
-        participant_id: &str,
-        description: impl Into<String>,
-    ) {
+    pub fn spawn_fresh_local_loop(&mut self, participant_id: &str, description: impl Into<String>) {
         let description = description.into();
         let loop_id = {
             let slot = self
@@ -292,9 +288,7 @@ impl RealtimeStemRun {
                 .get_mut(participant_id)
                 .unwrap_or_else(|| panic!("unknown participant: {participant_id}"));
             let push = push_script(
-                self.session_id
-                    .as_deref()
-                    .unwrap_or("session"),
+                self.session_id.as_deref().unwrap_or("session"),
                 99,
                 self.now_ms + 1,
                 UrgencyIntent::Informational,
@@ -452,7 +446,7 @@ impl RealtimeStemRun {
                 }
             }),
         };
-        slot.helm.formation_completed(&loop_id, output);
+        slot.helm.formation_completed(&loop_id, output, None);
         let submissions = slot.helm.drain_submissions();
         self.emit(
             StemEventKind::LocalLoopCompleted,
@@ -519,7 +513,8 @@ impl RealtimeStemRun {
             .first()
             .map(|view| view.gate_id.clone())
             .unwrap_or_else(|| panic!("no pending gate for {participant_id}"));
-        slot.helm.respond_to_gate(&GateId::from_string(gate_id.clone()), response);
+        slot.helm
+            .respond_to_gate(&GateId::from_string(gate_id.clone()), response);
         let submissions = slot.helm.drain_submissions();
         self.emit(
             StemEventKind::GateResponded,
@@ -852,24 +847,21 @@ fn normalize_loop_ids(
         Value::Object(map) => {
             let mut out = serde_json::Map::new();
             for (key, child) in map {
-                if key == "loop_id" {
-                    if let Some(id) = child.as_str() {
-                        let normalized = id_map
-                            .entry(id.to_string())
-                            .or_insert_with(|| {
-                                let label = format!("loop-{next}");
-                                *next += 1;
-                                label
-                            })
-                            .clone();
-                        out.insert(key.clone(), Value::String(normalized));
-                        continue;
-                    }
+                if key == "loop_id"
+                    && let Some(id) = child.as_str()
+                {
+                    let normalized = id_map
+                        .entry(id.to_string())
+                        .or_insert_with(|| {
+                            let label = format!("loop-{next}");
+                            *next += 1;
+                            label
+                        })
+                        .clone();
+                    out.insert(key.clone(), Value::String(normalized));
+                    continue;
                 }
-                out.insert(
-                    key.clone(),
-                    normalize_loop_ids(child, id_map, next),
-                );
+                out.insert(key.clone(), normalize_loop_ids(child, id_map, next));
             }
             Value::Object(out)
         }
@@ -912,7 +904,12 @@ mod tests {
             json!({"objective": "server"}),
         );
         run.deliver_push("alice", disruptive);
-        run.ack_server_offload("alice", "srv-1", "dd-analysis", ServerLoopProfile::ShortProbe);
+        run.ack_server_offload(
+            "alice",
+            "srv-1",
+            "dd-analysis",
+            ServerLoopProfile::ShortProbe,
+        );
 
         let views = run.registry_views();
         let alice = views.get("alice").expect("alice");
@@ -931,9 +928,10 @@ mod tests {
     #[test]
     fn budget_exhaustion_marks_local_loop_failed() {
         let case = cases::run_case(InteractiveCaseId::BudgetExhaustion);
-        assert!(case
-            .events
-            .iter()
-            .any(|event| event.kind == StemEventKind::LocalLoopFailed));
+        assert!(
+            case.events
+                .iter()
+                .any(|event| event.kind == StemEventKind::LocalLoopFailed)
+        );
     }
 }
