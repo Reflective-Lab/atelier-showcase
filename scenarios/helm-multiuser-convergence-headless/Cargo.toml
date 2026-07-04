@@ -1,0 +1,25 @@
+[package]
+name = "scenario-helm-multiuser-convergence-headless"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Demo: multi-user realtime Helm coordination — real ClientHelm × 4, SessionRegistry, PresenceRegistry, DecisionLedger headless"
+
+[lib]
+name = "helm_multiuser_convergence_headless"
+path = "src/lib.rs"
+
+[[bin]]
+name = "helm-multiuser-convergence-headless"
+path = "src/main.rs"
+
+[dependencies]
+application-kernel = { path = "../../../bedrock-platform/helms/crates/application-kernel" }
+helm-client = { path = "../../../bedrock-platform/helms/crates/helm-client" }
+helm-coordination = { path = "../../../bedrock-platform/helms/crates/helm-coordination" }
+helm-session-contracts = { path = "../../../bedrock-platform/helms/crates/helm-session-contracts" }
+clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
