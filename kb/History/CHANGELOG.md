@@ -7,6 +7,17 @@ All notable changes to `atelier` are recorded here.
 
 ## [Unreleased]
 
+- Added `scenario-helm-multiuser-convergence-headless` (RFL-126): proves
+  multi-user realtime coordination using the real production coordination
+  primitives in-process. Four `ClientHelm` instances (Leader/Analyst/Skeptic/
+  Observer roles) share a `SessionRegistry`, `PresenceRegistry`, and
+  `DecisionLedger` through a 6-phase scripted arc (Orientation → Exploration →
+  Convergence → Gate → Integration → Closeout). Proves: Advisory/Disruptive/
+  Preemptive/Informational urgency routing per role; optimistic soft-claims by
+  two participants on the same subject; gate-decision idempotency and divergence
+  conflict; sessions closed with empty registry at closeout. Three CLI cases:
+  `full-session`, `solver-burst`, `gate-conflict`. 11 green tests.
+
 - Added `scenario-helm-realtime-stem-headless`, a headless multi-user
   Session Intelligence Spine stress harness. Each interactive case drives real
   `helm-client` `ClientHelm` instances per simulated participant, coordinated
