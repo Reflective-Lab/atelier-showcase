@@ -34,7 +34,7 @@ impl ParticipantRole {
             Self::Leader => "Leader",
             Self::Analyst => "Analyst",
             Self::Skeptic => "Skeptic",
-            Self::Observer => "Observer (agent)",
+            Self::Observer => "Observer",
         }
     }
 

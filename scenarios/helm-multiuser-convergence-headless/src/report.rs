@@ -5,6 +5,9 @@ use serde_json::json;
 
 use crate::session::{ConvergenceEventKind, MultiUserConvergenceSession, SessionPhase};
 
+// Used for ActorKind matching in participant list rendering.
+use application_kernel;
+
 pub fn markdown_report(session: &MultiUserConvergenceSession) -> String {
     let mut out = String::new();
 
@@ -18,15 +21,15 @@ pub fn markdown_report(session: &MultiUserConvergenceSession) -> String {
 
     out.push_str("## Participants\n\n");
     for p in &session.participants {
+        let kind = match p.role.actor_kind() {
+            application_kernel::ActorKind::Human => "human",
+            _ => "agent",
+        };
         out.push_str(&format!(
             "- `{}` — {} ({})\n",
             p.role.actor_id(),
             p.role.display_name(),
-            if matches!(p.role, crate::participant::ParticipantRole::Observer) {
-                "agent"
-            } else {
-                "human"
-            }
+            kind,
         ));
     }
     out.push('\n');
