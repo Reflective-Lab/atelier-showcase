@@ -2,8 +2,6 @@
 //!
 //! Moved from helms/crates/application-server/src/service.rs (WorkflowGrpc).
 
-use std::sync::Arc;
-
 use application_kernel::{WorkflowCaseAdvance, WorkflowCaseCreate};
 use application_storage::{AppKernelStore, InMemoryKernelStore, KernelStore};
 use async_trait::async_trait;
@@ -26,6 +24,7 @@ pub struct WorkflowGrpc<S = InMemoryKernelStore> {
 }
 
 impl<S> WorkflowGrpc<S> {
+    #[allow(dead_code)]
     pub fn new(store: S) -> Self {
         Self { store }
     }
@@ -89,15 +88,11 @@ where
 // HelmModule wrapper
 // ---------------------------------------------------------------------------
 
-pub struct WorkflowModule {
-    grpc: Arc<WorkflowGrpc<AppKernelStore>>,
-}
+pub struct WorkflowModule {}
 
 impl WorkflowModule {
-    pub fn new(store: AppKernelStore) -> Self {
-        Self {
-            grpc: Arc::new(WorkflowGrpc::new(store)),
-        }
+    pub fn new(_store: AppKernelStore) -> Self {
+        Self {}
     }
 
     #[allow(dead_code)]

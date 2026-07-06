@@ -2,8 +2,6 @@
 //!
 //! Moved from helms/crates/application-server/src/service.rs (MetadataGrpc).
 
-use std::sync::Arc;
-
 use application_kernel::{Actor, CrmKernel, ObjectDefinitionUpsert, ViewDefinitionUpsert};
 use application_storage::{AppKernelStore, InMemoryKernelStore, KernelStore};
 use async_trait::async_trait;
@@ -27,6 +25,7 @@ pub struct MetadataGrpc<S = InMemoryKernelStore> {
 }
 
 impl<S> MetadataGrpc<S> {
+    #[allow(dead_code)]
     pub fn new(store: S) -> Self {
         Self { store }
     }
@@ -135,15 +134,11 @@ where
 // HelmModule wrapper
 // ---------------------------------------------------------------------------
 
-pub struct MetadataModule {
-    grpc: Arc<MetadataGrpc<AppKernelStore>>,
-}
+pub struct MetadataModule {}
 
 impl MetadataModule {
-    pub fn new(store: AppKernelStore) -> Self {
-        Self {
-            grpc: Arc::new(MetadataGrpc::new(store)),
-        }
+    pub fn new(_store: AppKernelStore) -> Self {
+        Self {}
     }
 
     #[allow(dead_code)]

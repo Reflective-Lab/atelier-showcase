@@ -2,8 +2,6 @@
 //!
 //! Moved from helms/crates/application-server/src/service.rs (ConversationsGrpc).
 
-use std::sync::Arc;
-
 use application_kernel::{ActivityAppend, CommunicationRecord};
 use application_storage::{AppKernelStore, InMemoryKernelStore, KernelStore};
 use async_trait::async_trait;
@@ -29,6 +27,7 @@ pub struct ConversationsGrpc<S = InMemoryKernelStore> {
 }
 
 impl<S> ConversationsGrpc<S> {
+    #[allow(dead_code)]
     pub fn new(store: S) -> Self {
         Self { store }
     }
@@ -135,15 +134,11 @@ where
 // HelmModule wrapper
 // ---------------------------------------------------------------------------
 
-pub struct ConversationsModule {
-    grpc: Arc<ConversationsGrpc<AppKernelStore>>,
-}
+pub struct ConversationsModule {}
 
 impl ConversationsModule {
-    pub fn new(store: AppKernelStore) -> Self {
-        Self {
-            grpc: Arc::new(ConversationsGrpc::new(store)),
-        }
+    pub fn new(_store: AppKernelStore) -> Self {
+        Self {}
     }
 
     #[allow(dead_code)]

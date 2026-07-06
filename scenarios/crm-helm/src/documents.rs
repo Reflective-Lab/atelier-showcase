@@ -2,8 +2,6 @@
 //!
 //! Moved from helms/crates/application-server/src/service.rs (DocumentsGrpc).
 
-use std::sync::Arc;
-
 use application_kernel::{DocumentAttach, NoteAppend};
 use application_storage::{AppKernelStore, InMemoryKernelStore, KernelStore};
 use async_trait::async_trait;
@@ -26,6 +24,7 @@ pub struct DocumentsGrpc<S = InMemoryKernelStore> {
 }
 
 impl<S> DocumentsGrpc<S> {
+    #[allow(dead_code)]
     pub fn new(store: S) -> Self {
         Self { store }
     }
@@ -95,15 +94,11 @@ where
 // HelmModule wrapper
 // ---------------------------------------------------------------------------
 
-pub struct DocumentsModule {
-    grpc: Arc<DocumentsGrpc<AppKernelStore>>,
-}
+pub struct DocumentsModule {}
 
 impl DocumentsModule {
-    pub fn new(store: AppKernelStore) -> Self {
-        Self {
-            grpc: Arc::new(DocumentsGrpc::new(store)),
-        }
+    pub fn new(_store: AppKernelStore) -> Self {
+        Self {}
     }
 
     #[allow(dead_code)]

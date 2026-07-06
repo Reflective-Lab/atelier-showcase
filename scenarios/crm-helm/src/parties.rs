@@ -2,8 +2,6 @@
 //!
 //! Moved from helms/crates/application-server/src/service.rs (PartiesGrpc).
 
-use std::sync::Arc;
-
 use application_kernel::{CrmKernel, OrganizationUpsert, PersonUpsert, RelationshipLink};
 use application_storage::{AppKernelStore, InMemoryKernelStore, KernelStore};
 use async_trait::async_trait;
@@ -27,6 +25,7 @@ pub struct PartiesGrpc<S = InMemoryKernelStore> {
 }
 
 impl<S> PartiesGrpc<S> {
+    #[allow(dead_code)]
     pub fn new(store: S) -> Self {
         Self { store }
     }
@@ -168,15 +167,11 @@ where
 // HelmModule wrapper
 // ---------------------------------------------------------------------------
 
-pub struct PartiesModule {
-    grpc: Arc<PartiesGrpc<AppKernelStore>>,
-}
+pub struct PartiesModule {}
 
 impl PartiesModule {
-    pub fn new(store: AppKernelStore) -> Self {
-        Self {
-            grpc: Arc::new(PartiesGrpc::new(store)),
-        }
+    pub fn new(_store: AppKernelStore) -> Self {
+        Self {}
     }
 
     #[allow(dead_code)]
