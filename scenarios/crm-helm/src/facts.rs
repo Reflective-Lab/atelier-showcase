@@ -2,12 +2,10 @@
 //!
 //! Moved from helms/crates/application-server/src/service.rs (FactsGrpc).
 
-use std::sync::Arc;
-
 use application_kernel::FactRecord;
 use application_storage::{AppKernelStore, InMemoryKernelStore, KernelStore};
 use async_trait::async_trait;
-use runway_app_host::{HelmModule, HostContext, TonicService};
+use runway_app_host::HelmModule;
 use tonic::{Request, Response, Status};
 
 use crate::proto::{common as pb, facts as facts_pb};
@@ -26,6 +24,7 @@ pub struct FactsGrpc<S = InMemoryKernelStore> {
 }
 
 impl<S> FactsGrpc<S> {
+    #[allow(dead_code)]
     pub fn new(store: S) -> Self {
         Self { store }
     }
@@ -70,15 +69,11 @@ where
 // HelmModule wrapper
 // ---------------------------------------------------------------------------
 
-pub struct FactsModule {
-    grpc: Arc<FactsGrpc<AppKernelStore>>,
-}
+pub struct FactsModule {}
 
 impl FactsModule {
-    pub fn new(store: AppKernelStore) -> Self {
-        Self {
-            grpc: Arc::new(FactsGrpc::new(store)),
-        }
+    pub fn new(_store: AppKernelStore) -> Self {
+        Self {}
     }
 
     #[allow(dead_code)]
@@ -93,13 +88,7 @@ impl HelmModule for FactsModule {
         "crm.facts"
     }
 
-    async fn init(&self, _ctx: &HostContext) -> anyhow::Result<()> {
+    async fn init(&self) -> anyhow::Result<()> {
         Ok(())
-    }
-
-    fn grpc_services(self: Arc<Self>) -> Vec<TonicService> {
-        use facts_pb::facts_service_server::FactsServiceServer;
-        let svc = FactsServiceServer::new((*self.grpc).clone());
-        vec![TonicService::new(svc)]
     }
 }

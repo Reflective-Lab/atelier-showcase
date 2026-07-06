@@ -2,12 +2,10 @@
 //!
 //! Moved from helms/crates/application-server/src/service.rs (ConversationsGrpc).
 
-use std::sync::Arc;
-
 use application_kernel::{ActivityAppend, CommunicationRecord};
 use application_storage::{AppKernelStore, InMemoryKernelStore, KernelStore};
 use async_trait::async_trait;
-use runway_app_host::{HelmModule, HostContext, TonicService};
+use runway_app_host::HelmModule;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
@@ -29,6 +27,7 @@ pub struct ConversationsGrpc<S = InMemoryKernelStore> {
 }
 
 impl<S> ConversationsGrpc<S> {
+    #[allow(dead_code)]
     pub fn new(store: S) -> Self {
         Self { store }
     }
@@ -135,15 +134,11 @@ where
 // HelmModule wrapper
 // ---------------------------------------------------------------------------
 
-pub struct ConversationsModule {
-    grpc: Arc<ConversationsGrpc<AppKernelStore>>,
-}
+pub struct ConversationsModule {}
 
 impl ConversationsModule {
-    pub fn new(store: AppKernelStore) -> Self {
-        Self {
-            grpc: Arc::new(ConversationsGrpc::new(store)),
-        }
+    pub fn new(_store: AppKernelStore) -> Self {
+        Self {}
     }
 
     #[allow(dead_code)]
@@ -158,13 +153,7 @@ impl HelmModule for ConversationsModule {
         "crm.conversations"
     }
 
-    async fn init(&self, _ctx: &HostContext) -> anyhow::Result<()> {
+    async fn init(&self) -> anyhow::Result<()> {
         Ok(())
-    }
-
-    fn grpc_services(self: Arc<Self>) -> Vec<TonicService> {
-        use conversations_pb::conversations_service_server::ConversationsServiceServer;
-        let svc = ConversationsServiceServer::new((*self.grpc).clone());
-        vec![TonicService::new(svc)]
     }
 }

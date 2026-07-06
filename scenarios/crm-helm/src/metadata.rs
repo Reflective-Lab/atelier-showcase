@@ -2,12 +2,10 @@
 //!
 //! Moved from helms/crates/application-server/src/service.rs (MetadataGrpc).
 
-use std::sync::Arc;
-
 use application_kernel::{Actor, CrmKernel, ObjectDefinitionUpsert, ViewDefinitionUpsert};
 use application_storage::{AppKernelStore, InMemoryKernelStore, KernelStore};
 use async_trait::async_trait;
-use runway_app_host::{HelmModule, HostContext, TonicService};
+use runway_app_host::HelmModule;
 use tonic::{Request, Response, Status};
 
 use crate::proto::{common as pb, metadata as metadata_pb};
@@ -27,6 +25,7 @@ pub struct MetadataGrpc<S = InMemoryKernelStore> {
 }
 
 impl<S> MetadataGrpc<S> {
+    #[allow(dead_code)]
     pub fn new(store: S) -> Self {
         Self { store }
     }
@@ -135,15 +134,11 @@ where
 // HelmModule wrapper
 // ---------------------------------------------------------------------------
 
-pub struct MetadataModule {
-    grpc: Arc<MetadataGrpc<AppKernelStore>>,
-}
+pub struct MetadataModule {}
 
 impl MetadataModule {
-    pub fn new(store: AppKernelStore) -> Self {
-        Self {
-            grpc: Arc::new(MetadataGrpc::new(store)),
-        }
+    pub fn new(_store: AppKernelStore) -> Self {
+        Self {}
     }
 
     #[allow(dead_code)]
@@ -158,13 +153,7 @@ impl HelmModule for MetadataModule {
         "crm.metadata"
     }
 
-    async fn init(&self, _ctx: &HostContext) -> anyhow::Result<()> {
+    async fn init(&self) -> anyhow::Result<()> {
         Ok(())
-    }
-
-    fn grpc_services(self: Arc<Self>) -> Vec<TonicService> {
-        use metadata_pb::metadata_service_server::MetadataServiceServer;
-        let svc = MetadataServiceServer::new((*self.grpc).clone());
-        vec![TonicService::new(svc)]
     }
 }

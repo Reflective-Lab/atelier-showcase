@@ -2,12 +2,10 @@
 //!
 //! Moved from helms/crates/application-server/src/service.rs (PartiesGrpc).
 
-use std::sync::Arc;
-
 use application_kernel::{CrmKernel, OrganizationUpsert, PersonUpsert, RelationshipLink};
 use application_storage::{AppKernelStore, InMemoryKernelStore, KernelStore};
 use async_trait::async_trait;
-use runway_app_host::{HelmModule, HostContext, TonicService};
+use runway_app_host::HelmModule;
 use tonic::{Request, Response, Status};
 
 use crate::proto::{common as pb, parties as parties_pb};
@@ -27,6 +25,7 @@ pub struct PartiesGrpc<S = InMemoryKernelStore> {
 }
 
 impl<S> PartiesGrpc<S> {
+    #[allow(dead_code)]
     pub fn new(store: S) -> Self {
         Self { store }
     }
@@ -168,15 +167,11 @@ where
 // HelmModule wrapper
 // ---------------------------------------------------------------------------
 
-pub struct PartiesModule {
-    grpc: Arc<PartiesGrpc<AppKernelStore>>,
-}
+pub struct PartiesModule {}
 
 impl PartiesModule {
-    pub fn new(store: AppKernelStore) -> Self {
-        Self {
-            grpc: Arc::new(PartiesGrpc::new(store)),
-        }
+    pub fn new(_store: AppKernelStore) -> Self {
+        Self {}
     }
 
     #[allow(dead_code)]
@@ -191,13 +186,7 @@ impl HelmModule for PartiesModule {
         "crm.parties"
     }
 
-    async fn init(&self, _ctx: &HostContext) -> anyhow::Result<()> {
+    async fn init(&self) -> anyhow::Result<()> {
         Ok(())
-    }
-
-    fn grpc_services(self: Arc<Self>) -> Vec<TonicService> {
-        use parties_pb::parties_service_server::PartiesServiceServer;
-        let svc = PartiesServiceServer::new((*self.grpc).clone());
-        vec![TonicService::new(svc)]
     }
 }
