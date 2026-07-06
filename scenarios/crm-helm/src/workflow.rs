@@ -7,7 +7,7 @@ use std::sync::Arc;
 use application_kernel::{WorkflowCaseAdvance, WorkflowCaseCreate};
 use application_storage::{AppKernelStore, InMemoryKernelStore, KernelStore};
 use async_trait::async_trait;
-use runway_app_host::{HelmModule, HostContext, TonicService};
+use runway_app_host::HelmModule;
 use tonic::{Request, Response, Status};
 
 use crate::proto::{common as pb, workflow as workflow_pb};
@@ -112,13 +112,7 @@ impl HelmModule for WorkflowModule {
         "crm.workflow"
     }
 
-    async fn init(&self, _ctx: &HostContext) -> anyhow::Result<()> {
+    async fn init(&self) -> anyhow::Result<()> {
         Ok(())
-    }
-
-    fn grpc_services(self: Arc<Self>) -> Vec<TonicService> {
-        use workflow_pb::workflow_service_server::WorkflowServiceServer;
-        let svc = WorkflowServiceServer::new((*self.grpc).clone());
-        vec![TonicService::new(svc)]
     }
 }

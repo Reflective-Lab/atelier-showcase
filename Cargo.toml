@@ -159,6 +159,7 @@ converge-optimization = { path = "../bedrock-platform/converge/crates/optimizati
 converge-runtime      = { path = "../bedrock-platform/converge/crates/runtime" }
 converge-experience   = { path = "../bedrock-platform/converge/crates/experience" }
 converge-provider     = { path = "../bedrock-platform/converge/crates/provider" }
+converge-storage      = { path = "../bedrock-platform/converge/crates/storage" }
 organism-pack         = { path = "../bedrock-platform/organism/crates/pack" }
 organism-catalog      = { path = "../bedrock-platform/organism/crates/catalog" }
 organism-catalog-seed = { path = "../bedrock-platform/organism/crates/catalog-seed" }
@@ -169,7 +170,8 @@ organism-simulation   = { path = "../bedrock-platform/organism/crates/simulation
 organism-learning     = { path = "../bedrock-platform/organism/crates/learning" }
 organism-runtime      = { path = "../bedrock-platform/organism/crates/runtime" }
 organism-dynamics     = { path = "../bedrock-platform/organism/crates/dynamics" }
-converge-prism-analytics = { path = "../mosaic-extensions/prism-analytics/crates/prism" }
-axiom-truth              = { path = "../bedrock-platform/axiom" }
+converge-prism-analytics    = { path = "../mosaic-extensions/prism-analytics/crates/prism" }
+converge-manifold-adapters  = { path = "../mosaic-extensions/manifold-adapters/crates/manifold" }
+axiom-truth                 = { path = "../bedrock-platform/axiom" }
 converge-ferrox-solver   = { path = "../mosaic-extensions/ferrox-solvers/crates/ferrox" }
 converge-ferrox-ortools-sys = { path = "../mosaic-extensions/ferrox-solvers/crates/ortools-sys" }

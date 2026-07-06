@@ -7,7 +7,7 @@ use std::sync::Arc;
 use application_kernel::{DocumentAttach, NoteAppend};
 use application_storage::{AppKernelStore, InMemoryKernelStore, KernelStore};
 use async_trait::async_trait;
-use runway_app_host::{HelmModule, HostContext, TonicService};
+use runway_app_host::HelmModule;
 use tonic::{Request, Response, Status};
 
 use crate::proto::{common as pb, documents as documents_pb};
@@ -118,13 +118,7 @@ impl HelmModule for DocumentsModule {
         "crm.documents"
     }
 
-    async fn init(&self, _ctx: &HostContext) -> anyhow::Result<()> {
+    async fn init(&self) -> anyhow::Result<()> {
         Ok(())
-    }
-
-    fn grpc_services(self: Arc<Self>) -> Vec<TonicService> {
-        use documents_pb::documents_service_server::DocumentsServiceServer;
-        let svc = DocumentsServiceServer::new((*self.grpc).clone());
-        vec![TonicService::new(svc)]
     }
 }

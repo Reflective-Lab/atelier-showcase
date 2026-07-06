@@ -7,7 +7,7 @@ use std::sync::Arc;
 use application_kernel::FactRecord;
 use application_storage::{AppKernelStore, InMemoryKernelStore, KernelStore};
 use async_trait::async_trait;
-use runway_app_host::{HelmModule, HostContext, TonicService};
+use runway_app_host::HelmModule;
 use tonic::{Request, Response, Status};
 
 use crate::proto::{common as pb, facts as facts_pb};
@@ -93,13 +93,7 @@ impl HelmModule for FactsModule {
         "crm.facts"
     }
 
-    async fn init(&self, _ctx: &HostContext) -> anyhow::Result<()> {
+    async fn init(&self) -> anyhow::Result<()> {
         Ok(())
-    }
-
-    fn grpc_services(self: Arc<Self>) -> Vec<TonicService> {
-        use facts_pb::facts_service_server::FactsServiceServer;
-        let svc = FactsServiceServer::new((*self.grpc).clone());
-        vec![TonicService::new(svc)]
     }
 }
