@@ -11,6 +11,9 @@ permissions:
   contents: read
   security-events: write
 
+env:
+  REFLECTIVE_SIBLING_REF: ${{ github.head_ref || 'main' }}
+
 jobs:
   audit:
     name: Audit

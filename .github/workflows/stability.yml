@@ -9,6 +9,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   RUST_VERSION: "1.96.0"
+  REFLECTIVE_SIBLING_REF: ${{ github.head_ref || 'main' }}
 
 jobs:
   bench-compile:
