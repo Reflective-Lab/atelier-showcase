@@ -7,14 +7,15 @@
 //! artifact to prove against existing Helm readiness contracts before a
 //! `helm-coordination` crate is cut.
 
-use application_storage::AppConfig;
+use helm_module_contracts::operator_receipts::{
+    AdapterReceiptStatus, EvidenceReadinessStatus, JobEvidenceStatus, JobReadinessPacket,
+    JobReadinessPacketInput, JobVerdict, OperatorControlError, OperatorLedgerRecordKind,
+    ReceiptFamily, job_readiness_packet_ledger_entry, job_readiness_packet_payload_hash,
+};
 use helm_module_contracts::HelmModuleState;
 use helm_operator_control::{
-    AdapterReceiptStatus, EvidenceReadinessStatus, JobEvidenceStatus, JobReadinessPacket,
-    JobReadinessPacketInput, JobVerdict, LiveOperatorControlSnapshot, LiveReadinessEvidence,
-    OperatorControlError, OperatorControlModule, OperatorControlReadinessFeed,
-    OperatorLedgerRecordKind, ReceiptFamily, job_readiness_packet_ledger_entry,
-    job_readiness_packet_payload_hash,
+    LiveOperatorControlSnapshot, LiveReadinessEvidence, OperatorControlModule,
+    OperatorControlReadinessFeed,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -463,11 +464,11 @@ impl HeadlessCoordinationRun {
     }
 
     pub fn shell_module_state() -> HelmModuleState {
-        OperatorControlModule::new(AppConfig::default()).module_state()
+        OperatorControlModule::new().module_state()
     }
 
     pub fn live_module_state(&self) -> HelmModuleState {
-        OperatorControlModule::new(AppConfig::default())
+        OperatorControlModule::new()
             .with_live_readiness_feed(std::sync::Arc::new(StaticCoordinationFeed {
                 snapshots: vec![self.readiness_snapshot()],
             }))
