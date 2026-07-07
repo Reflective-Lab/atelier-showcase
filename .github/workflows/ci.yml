@@ -30,7 +30,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install protobuf compiler
         run: bash scripts/ci/install-protobuf.sh
-      - uses: extractions/setup-just@v3
+      - uses: extractions/setup-just@v4
       - run: just ci
 
   # Cross-extension solver e2e — exercises ferrox CP-SAT alongside arbiter +
