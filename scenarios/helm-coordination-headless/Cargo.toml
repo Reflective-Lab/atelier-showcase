@@ -14,7 +14,6 @@ name = "helm-coordination-headless"
 path = "src/main.rs"
 
 [dependencies]
-application-storage = { path = "../../../bedrock-platform/helms/crates/application-storage" }
 helm-module-contracts = { path = "../../../bedrock-platform/helms/contracts/crates/helm-module-contracts" }
 helm-operator-control = { path = "../../../bedrock-platform/helms/crates/helm-operator-control" }
 clap.workspace = true
