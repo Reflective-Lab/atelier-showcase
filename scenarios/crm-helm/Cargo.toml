@@ -1,16 +1,21 @@
 [package]
-name = "example-crm-helm-showcase"
+name = "scenario-crm-helm"
 version = "0.0.0"
 edition = "2024"
 publish = false
+description = "Headless CRM Helm scenario: 7 gRPC modules assembled over an in-memory kernel store, driven without TCP or RunwayAppHost"
+
+[lib]
+name = "scenario_crm_helm"
+path = "src/lib.rs"
 
 [[bin]]
-name = "crm-helm-showcase"
+name = "crm-helm"
 path = "src/main.rs"
 
 [dependencies]
-anyhow.workspace = true
-async-trait.workspace = true
+anyhow = "1"
+async-trait = "0.1"
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -28,13 +33,19 @@ prost-types = "0.13"
 # Axum — not in workspace deps
 axum = "0.8"
 
+# Tower for in-process request routing (oneshot)
+tower = { version = "0.5", features = ["util"] }
+http = "1"
+http-body-util = "0.1"
+
 # Cross-repo: Helms domain crates (no converge-* deps)
 application-kernel = { path = "../../../bedrock-platform/helms/crates/application-kernel" }
 application-storage = { path = "../../../bedrock-platform/helms/crates/application-storage" }
 
-# Cross-repo: Runtime Runway app host
-runway-app-host = { path = "../../../runtime-runway/crates/runway-app-host" }
-runway-storage = { path = "../../../runtime-runway/crates/runway-storage" }
+# Cross-repo: Helms contracts — HelmModule trait + substrate (memory + sse)
+# RP-HELMS-SUBSTRATE-SEAM (RFL-171 T7: headless atelier copy — no runway deps)
+helm-module-contracts = { path = "../../../bedrock-platform/helms/contracts/crates/helm-module-contracts" }
+helm-event-substrate = { path = "../../../bedrock-platform/helms/contracts/crates/helm-event-substrate", features = ["memory", "sse"] }
 
 [build-dependencies]
 tonic-build = "0.12"

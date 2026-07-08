@@ -5,7 +5,7 @@
 use application_kernel::{CrmKernel, OrganizationUpsert, PersonUpsert, RelationshipLink};
 use application_storage::{AppKernelStore, InMemoryKernelStore, KernelStore};
 use async_trait::async_trait;
-use runway_app_host::HelmModule;
+use helm_module_contracts::HelmModule;
 use tonic::{Request, Response, Status};
 
 use crate::proto::{common as pb, parties as parties_pb};
@@ -188,5 +188,13 @@ impl HelmModule for PartiesModule {
 
     async fn init(&self) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    fn router(self: std::sync::Arc<Self>) -> axum::Router {
+        use axum::{Json, routing::get};
+        axum::Router::new().route(
+            "/crm/parties/status",
+            get(|| async { Json(serde_json::json!({ "module": "crm.parties", "status": "ok" })) }),
+        )
     }
 }

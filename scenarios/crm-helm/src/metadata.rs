@@ -5,7 +5,7 @@
 use application_kernel::{Actor, CrmKernel, ObjectDefinitionUpsert, ViewDefinitionUpsert};
 use application_storage::{AppKernelStore, InMemoryKernelStore, KernelStore};
 use async_trait::async_trait;
-use runway_app_host::HelmModule;
+use helm_module_contracts::HelmModule;
 use tonic::{Request, Response, Status};
 
 use crate::proto::{common as pb, metadata as metadata_pb};
@@ -155,5 +155,15 @@ impl HelmModule for MetadataModule {
 
     async fn init(&self) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    fn router(self: std::sync::Arc<Self>) -> axum::Router {
+        use axum::{Json, routing::get};
+        axum::Router::new().route(
+            "/crm/metadata/status",
+            get(|| async {
+                Json(serde_json::json!({ "module": "crm.metadata", "status": "ok" }))
+            }),
+        )
     }
 }
