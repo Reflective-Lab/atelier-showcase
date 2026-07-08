@@ -5,7 +5,7 @@
 use application_kernel::{Money, OpportunityAdvance, OpportunityCreate};
 use application_storage::{AppKernelStore, InMemoryKernelStore, KernelStore};
 use async_trait::async_trait;
-use runway_app_host::HelmModule;
+use helm_module_contracts::HelmModule;
 use tonic::{Request, Response, Status};
 
 use crate::proto::{common as pb, opportunities as opportunities_pb};
@@ -133,5 +133,15 @@ impl HelmModule for OpportunitiesModule {
 
     async fn init(&self) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    fn router(self: std::sync::Arc<Self>) -> axum::Router {
+        use axum::{Json, routing::get};
+        axum::Router::new().route(
+            "/crm/opportunities/status",
+            get(|| async {
+                Json(serde_json::json!({ "module": "crm.opportunities", "status": "ok" }))
+            }),
+        )
     }
 }

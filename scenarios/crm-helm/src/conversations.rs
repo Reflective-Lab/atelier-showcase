@@ -5,7 +5,7 @@
 use application_kernel::{ActivityAppend, CommunicationRecord};
 use application_storage::{AppKernelStore, InMemoryKernelStore, KernelStore};
 use async_trait::async_trait;
-use runway_app_host::HelmModule;
+use helm_module_contracts::HelmModule;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status};
@@ -155,5 +155,15 @@ impl HelmModule for ConversationsModule {
 
     async fn init(&self) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    fn router(self: std::sync::Arc<Self>) -> axum::Router {
+        use axum::{Json, routing::get};
+        axum::Router::new().route(
+            "/crm/conversations/status",
+            get(|| async {
+                Json(serde_json::json!({ "module": "crm.conversations", "status": "ok" }))
+            }),
+        )
     }
 }
