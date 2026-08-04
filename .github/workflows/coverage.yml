@@ -29,7 +29,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install protobuf compiler
         run: bash scripts/ci/install-protobuf.sh
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@v2.85.6
         with:
           tool: cargo-llvm-cov
       - name: Generate coverage
